@@ -17,7 +17,7 @@
   import { goto } from "../lib/nav.svelte";
   import { showToast } from "../lib/toast.svelte";
   import { recordUtterance } from "../lib/mic";
-  import { speakQueued, stopSpeaking } from "../lib/speech";
+  import { isSpeaking, speakQueued, stopSpeaking } from "../lib/speech";
   import Icon from "../components/Icon.svelte";
   import DeckPicker from "../components/DeckPicker.svelte";
   import Pinyin from "../components/Pinyin.svelte";
@@ -135,6 +135,39 @@
     }).then((f) => (unlisten = f));
     return () => unlisten?.();
   });
+
+  // ---------- Say again: the selection only, or stop if something is being said ----------
+
+  /** Whether the tutor's voice is playing (polled: speech synthesis has no reliable event for "all done"). */
+  let speaking = $state(false);
+  onMount(() => {
+    const timer = setInterval(() => (speaking = isSpeaking()), 150);
+    return () => clearInterval(timer);
+  });
+
+  /** The part of the current selection that lies inside `el`, as text ("" if none). */
+  function selectedIn(el: Element | null): string {
+    const sel = window.getSelection();
+    if (!el || !sel || sel.isCollapsed || !sel.rangeCount) return "";
+    const r = sel.getRangeAt(0);
+    if (!r.intersectsNode(el)) return "";
+    const part = document.createRange();
+    part.selectNodeContents(el);
+    if (r.compareBoundaryPoints(Range.START_TO_START, part) > 0) part.setStart(r.startContainer, r.startOffset);
+    if (r.compareBoundaryPoints(Range.END_TO_END, part) < 0) part.setEnd(r.endContainer, r.endOffset);
+    return part.toString().trim();
+  }
+
+  function sayAgain(i: number, m: Msg) {
+    if (speaking || isSpeaking()) {
+      stopSpeaking();
+      speaking = false;
+      return;
+    }
+    const chosen = selectedIn(scroller?.querySelector(`[data-msg="${i}"]`) ?? null);
+    speakQueued(speakable(chosen || m.text), rate());
+    speaking = true;
+  }
 
   onDestroy(() => {
     recording?.abort();
@@ -523,12 +556,20 @@
                     {/each}
                   </div>
                 {/if}
-                <div class="text han" lang={hasChinese(m.text) ? "zh-CN" : undefined}>{m.text}</div>
+                <div class="text han" data-msg={i} lang={hasChinese(m.text) ? "zh-CN" : undefined}>{m.text}</div>
                 {#if m.english}<div class="english small">{m.english}</div>{/if}
               </div>
               {#if m.role === "tutor" && !(busy === "thinking" && i === messages.length - 1)}
                 <div class="tools">
-                  <button class="link small" onclick={() => (stopSpeaking(), speakQueued(speakable(m.text), rate()))}><Icon name="speaker" size={13} /> {t("tutor.replay")}</button>
+                  <button
+                    class="link small"
+                    title={t("tutor.replayHint")}
+                    onmousedown={(e) => e.preventDefault()}
+                    onclick={() => sayAgain(i, m)}
+                  >
+                    <Icon name={speaking ? "close" : "speaker"} size={13} />
+                    {speaking ? t("tutor.stopAudio") : t("tutor.replay")}
+                  </button>
                   <button class="link small" class:on={m.showPinyin} onclick={() => togglePinyin(m)}>{t("tutor.pinyin")}</button>
                   <button class="link small" class:on={m.english !== undefined} disabled={m.translating} onclick={() => translate(m)}>
                     {m.translating ? "…" : t("tutor.translate")}

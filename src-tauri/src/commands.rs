@@ -278,7 +278,7 @@ pub async fn speech_check_audio(
     words.retain(|w| *w != answer);
     words.insert(card_id.unsigned_abs() as usize % (words.len() + 1), answer);
     let prompt = format!("{}。", words.join("，"));
-    let text = run_whisper(&app, dir, model, pcm, prompt).await?;
+    let text = run_whisper(&app, dir, model, pcm, prompt, true).await?;
     blocking(app, move |conn| speech::judge_text(conn, &plan, &text)).await
 }
 
@@ -307,15 +307,26 @@ fn card_words(conn: &Connection) -> AppResult<Vec<String>> {
 /// Transcribe a learner speaking Mandarin with Whisper (raw text), favouring their card
 /// words. Keeps the last recording in the app's data folder (`last-recording.wav`,
 /// overwritten each time) so recognition problems can be checked.
-async fn run_whisper(app: &AppHandle, dir: PathBuf, model: String, pcm: Vec<f32>, prompt: String) -> AppResult<String> {
+/// `chinese_only`: block Latin letters and digits (drill answers); otherwise English is kept,
+/// and a recording that's clearly English is written in English (the tutor).
+async fn run_whisper(
+    app: &AppHandle,
+    dir: PathBuf,
+    model: String,
+    pcm: Vec<f32>,
+    prompt: String,
+    chinese_only: bool,
+) -> AppResult<String> {
     let bias_words = blocking(app.clone(), |conn| card_words(conn)).await?;
+    // English only with a model that handles it; smaller models garble it into Chinese
+    let chinese_only = chinese_only || !whisper::keeps_english(&model);
     tauri::async_runtime::spawn_blocking(move || {
         let _ = speech::write_wav(&dir.join("last-recording.wav"), &pcm);
         let opts = whisper::Options {
             prompt,
             bias_words,
             bias: CARD_WORD_BIAS,
-            chinese_only: true,
+            chinese_only,
             // On the CPU, encode the speech plus 2 s (at least 10 s) instead of a padded 30 s
             // window: about 3x faster with Whisper small and nearly as accurate. On the GPU
             // the full window costs ~0.2 s and is the most accurate (whisper_bench, 2026-11-09).
@@ -338,7 +349,8 @@ pub async fn speech_transcribe(app: AppHandle, pcm: Vec<f32>, prompt: Option<Str
     })
     .await?;
     let model = status.whisper_model.ok_or_else(|| AppError::msg("No Whisper model is downloaded."))?;
-    let text = run_whisper(&app, dir, model, pcm, prompt.unwrap_or_default()).await?;
+    // free speech (the tutor, the microphone test): English is kept
+    let text = run_whisper(&app, dir, model, pcm, prompt.unwrap_or_default(), false).await?;
     blocking(app, move |conn| speech::to_simplified(conn, &text)).await
 }
 

@@ -36,6 +36,23 @@ Status: **built** 2026-11-09. large-v3-turbo on the GPU is the model in use on t
   also makes it worse at hearing words that aren't on the cards (wrong answers). Turbo is the
   default here; without a usable GPU the app falls back to the largest CPU model.
 
+- **Turbo tuning** (2026-11-09, GPU, same clips; tutor = English allowed, drill = word-list
+  prompt + Chinese only; error rate / card words, clean then noisy):
+
+  | | tutor | drill | time |
+  |---|---|---|---|
+  | F16, bias 1.0, greedy (in use) | 10.4% 28/40 · 26.6% 16/40 | 9.7% 31/40 · 20.8% 24/40 | 0.27-0.28 s |
+  | bias 0 / 0.5 | fewer card words (24-25/40 clean) | same or worse | same |
+  | bias 1.5 / 2 | same clean, worse noisy | +1 card word clean, noisy error up to 28.6% | same |
+  | F32 weights | same | same or slightly worse | 0.43-0.44 s |
+  | beam 3 / beam 5 | 9.1% / 7.8% clean, 18/40 noisy | no gain | +0.05-0.25 s |
+  | drill without the prompt | | 10.4% 28/40 · 27.9% 17/40 | 0.26 s |
+
+  The settings in use are the most accurate that keep the speed. Beam 5 would make tutor
+  transcripts a little cleaner on clear audio for about +0.1 s; left off.
+- English is kept only with a large model (`whisper::keeps_english`); smaller models are
+  always Chinese-only.
+
 The original plan follows.
 
 ## Why

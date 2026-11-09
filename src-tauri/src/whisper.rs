@@ -426,6 +426,12 @@ pub struct DeviceInfo {
     pub using: String,
 }
 
+/// Whether a model reliably keeps English mixed into Chinese speech (measured: large-v3-turbo
+/// does; small and below mostly drop or garble it, so they stay Chinese-only).
+pub fn keeps_english(name: &str) -> bool {
+    name.starts_with("large")
+}
+
 /// Models too slow to use without a graphics card.
 pub fn needs_gpu(name: &str) -> bool {
     GPU_MODELS.contains(&name)
@@ -490,7 +496,9 @@ fn load(app_data: &Path, name: &str, kind: &'static str) -> AppResult<Engine> {
     let tokenizer = Tokenizer::load(&dir.join("tokenizer.json"))?;
     let (device, dtype) = if kind == "gpu" {
         // half precision on the GPU: half the memory, and the tensor cores do the work
-        (Device::new_cuda(0).map_err(err)?, DType::F16)
+        // F16 by default; WHISPER_GPU_F32=1 for comparisons (whisper_bench)
+        let dtype = if std::env::var_os("WHISPER_GPU_F32").is_some() { DType::F32 } else { DType::F16 };
+        (Device::new_cuda(0).map_err(err)?, dtype)
     } else {
         (Device::Cpu, m::DTYPE)
     };
@@ -627,6 +635,10 @@ fn score_run(e: &mut Engine, pcm: &[f32], opts: &Options, candidates: &[String])
     Ok(out)
 }
 
+/// How sure Whisper must be that a recording is English (rather than Chinese) to write it in
+/// English, when English is allowed.
+const ENGLISH_THRESHOLD: f32 = 0.8;
+
 /// Mel, encoder and the decoder's start tokens: (audio features, start tokens, end token).
 fn prepare(e: &mut Engine, pcm: &[f32], language: &str, opts: &Options) -> candle_core::Result<(Tensor, Vec<u32>, u32)> {
     let pcm = &pcm[..pcm.len().min(m::N_SAMPLES)];
@@ -650,7 +662,24 @@ fn prepare(e: &mut Engine, pcm: &[f32], language: &str, opts: &Options) -> candl
     else {
         return Err(candle_core::Error::Msg("tokenizer is missing Whisper's special tokens".into()));
     };
-    let lang = tok(&format!("<|{language}|>")).ok_or_else(|| candle_core::Error::Msg(format!("unknown language {language}")))?;
+    let mut lang = tok(&format!("<|{language}|>")).ok_or_else(|| candle_core::Error::Msg(format!("unknown language {language}")))?;
+    let features = e.encoder.forward(&mel)?;
+    // A learner may answer in English. When English is allowed and Whisper is fairly sure the
+    // recording is mostly English, transcribe it as English instead of translating it.
+    if language == "zh" && !opts.chinese_only {
+        if let Some(en) = tok("<|en|>") {
+            let mut state = e.decoder.start(&features)?;
+            let logits = e.decoder.step(&Tensor::new(&[sot], &e.device)?.unsqueeze(0)?, &mut state)?;
+            let logits = logits.to_dtype(DType::F32)?.squeeze(0)?.to_vec1::<f32>()?;
+            let p_en = 1.0 / (1.0 + (logits[lang as usize] - logits[en as usize]).exp());
+            if std::env::var_os("WHISPER_TIMING").is_some() {
+                eprintln!("whisper language: P(English vs Chinese) = {p_en:.2}");
+            }
+            if p_en > ENGLISH_THRESHOLD {
+                lang = en;
+            }
+        }
+    }
     let mut start = Vec::new();
     let prompt = opts.prompt.trim();
     if !prompt.is_empty() {
@@ -662,53 +691,15 @@ fn prepare(e: &mut Engine, pcm: &[f32], language: &str, opts: &Options) -> candl
         }
     }
     start.extend([sot, lang, transcribe, no_ts]);
-    Ok((e.encoder.forward(&mel)?, start, eot))
+    Ok((features, start, eot))
 }
 
 fn run(e: &mut Engine, pcm: &[f32], language: &str, opts: &Options) -> candle_core::Result<String> {
     let pcm = &pcm[..pcm.len().min(m::N_SAMPLES)];
-    let mel = audio::pcm_to_mel(&e.config, pcm, &e.filters);
-    let n_mels = e.config.num_mel_bins;
-    let frames = mel.len() / n_mels;
-    // Mel frames are 10 ms; the encoder halves them, so keep an even number.
-    let keep = match opts.trim {
-        Some((margin, min)) => {
-            let speech = pcm.len() / m::HOP_LENGTH;
-            let want = speech + (margin * 100.0) as usize;
-            want.max((min * 100.0) as usize).div_ceil(2) * 2
-        }
-        None => m::N_FRAMES,
-    };
-    let mel = Tensor::from_vec(mel, (1, n_mels, frames), &e.device)?
-        .narrow(2, 0, keep.min(frames).min(m::N_FRAMES))?
-        .to_dtype(e.dtype)?;
-
-    let tok = |s: &str| e.tokenizer.special.get(s).copied();
-    let (Some(sot), Some(eot), Some(transcribe), Some(no_ts)) =
-        (tok(m::SOT_TOKEN), tok(m::EOT_TOKEN), tok(m::TRANSCRIBE_TOKEN), tok(m::NO_TIMESTAMPS_TOKEN))
-    else {
-        return Err(candle_core::Error::Msg("tokenizer is missing Whisper's special tokens".into()));
-    };
-    let lang = tok(&format!("<|{language}|>"))
-        .ok_or_else(|| candle_core::Error::Msg(format!("unknown language {language}")))?;
-
     let t_enc = std::time::Instant::now();
-    let audio_features = e.encoder.forward(&mel)?;
+    let (audio_features, start, eot) = prepare(e, pcm, language, opts)?;
     let enc_ms = t_enc.elapsed().as_millis();
     let t_dec = std::time::Instant::now();
-
-    // <|startofprev|> prompt, then the usual start: language, transcribe, no timestamps.
-    let mut start = Vec::new();
-    let prompt = opts.prompt.trim();
-    if !prompt.is_empty() {
-        if let Some(prev) = tok("<|startofprev|>") {
-            let ids = e.tokenizer.encode(prompt);
-            let keep = ids.len().min(e.config.max_target_positions / 2 - 1);
-            start.push(prev);
-            start.extend_from_slice(&ids[ids.len() - keep..]);
-        }
-    }
-    start.extend([sot, lang, transcribe, no_ts]);
     let prompt_len = start.len();
     // About 10 tokens per second of audio is plenty for speech; more means it is looping.
     let max_new = (e.config.max_target_positions - prompt_len).min(96).min(12 + pcm.len() / 1600);
@@ -957,6 +948,35 @@ mod tests {
         }
     }
 
+    /// Mixed English/Chinese speech: prints what Whisper writes for each clip in MIXED_DIR
+    /// (list.txt + clean/N.wav) with Latin letters blocked (as for drill answers) and allowed.
+    /// WHISPER_DIR=<app data> MIXED_DIR=... cargo test --lib mixed_language_demo -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn mixed_language_demo() {
+        let (Ok(dir), Ok(mixed)) = (std::env::var("WHISPER_DIR"), std::env::var("MIXED_DIR")) else { return };
+        let conn = rusqlite::Connection::open(Path::new(&dir).join("hanzi-cards.db")).unwrap();
+        let cards: Vec<String> = {
+            let mut st = conn.prepare("SELECT DISTINCT hanzi FROM cards").unwrap();
+            let v: Vec<String> = st.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect();
+            v
+        };
+        let name = std::env::var("WHISPER_MODEL").unwrap_or_else(|_| "large-v3-turbo".into());
+        let mixed = Path::new(&mixed);
+        let list: Vec<String> = std::fs::read_to_string(mixed.join("list.txt")).unwrap().lines().map(String::from).collect();
+        let setups: [(&str, bool, f32); 3] = [("Chinese only (now)", true, 1.0), ("English allowed", false, 1.0), ("English allowed, no bias", false, 0.0)];
+        for (i, want) in list.iter().enumerate() {
+            let bytes = std::fs::read(mixed.join("clean").join(format!("{i}.wav"))).unwrap();
+            let pcm: Vec<f32> = bytes[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0).collect();
+            println!("SAID   {want}");
+            for (label, zh_only, bias) in setups {
+                let opts = Options { chinese_only: zh_only, bias, bias_words: cards.clone(), ..Default::default() };
+                let got = transcribe(Path::new(&dir), &name, &pcm, "zh", &opts).unwrap();
+                println!("  {label:26} {got}");
+            }
+        }
+    }
+
     /// Accuracy benchmark over a folder of clips (list.txt: one expected text per line;
     /// clean/N.wav, noisy/N.wav). Prints the character error rate per decoding setup.
     /// WHISPER_DIR=<app data> WHISPER_BENCH=<folder> cargo test --release --lib whisper_bench -- --ignored --nocapture
@@ -1001,15 +1021,36 @@ mod tests {
         };
         println!("{} card words", cards.len());
         let only: Vec<String> = std::env::var("BENCH_SETUPS").unwrap_or_default().split(',').filter(|s| !s.is_empty()).map(String::from).collect();
-        let setups: Vec<(&str, &str, f32, bool)> = vec![
-            ("greedy", "", 0.0, false),
-            ("zh", "", 0.0, true),
-            ("zh+bias1", "", 1.0, true),
-            ("zh+bias2", "", 2.0, true),
-            ("zh+prompt+bias1", comma_prompt.as_str(), 1.0, true),
-            ("zh+prompt+bias2", comma_prompt.as_str(), 2.0, true),
-        ];
-        let setups: Vec<_> = setups.into_iter().filter(|s| only.is_empty() || only.iter().any(|o| o == s.0)).collect();
+        // BENCH_GRID="label|prompt 0/1|bias|chinese-only 0/1|beams;..." (else the standard set)
+        let grid = std::env::var("BENCH_GRID").unwrap_or_default();
+        let mut setups: Vec<(String, String, f32, bool, usize)> = grid
+            .split(';')
+            .filter(|g| !g.trim().is_empty())
+            .map(|g| {
+                let f: Vec<&str> = g.split('|').collect();
+                let prompt = if f.get(1) == Some(&"1") { comma_prompt.clone() } else { String::new() };
+                (
+                    f[0].to_string(),
+                    prompt,
+                    f.get(2).and_then(|v| v.parse().ok()).unwrap_or(0.0),
+                    f.get(3) != Some(&"0"),
+                    f.get(4).and_then(|v| v.parse().ok()).unwrap_or(1),
+                )
+            })
+            .collect();
+        if setups.is_empty() {
+            for (label, prompt, bias, zh) in [
+                ("greedy", "", 0.0, false),
+                ("zh", "", 0.0, true),
+                ("zh+bias1", "", 1.0, true),
+                ("zh+bias2", "", 2.0, true),
+                ("zh+prompt+bias1", comma_prompt.as_str(), 1.0, true),
+                ("zh+prompt+bias2", comma_prompt.as_str(), 2.0, true),
+            ] {
+                setups.push((label.to_string(), prompt.to_string(), bias, zh, 1));
+            }
+        }
+        setups.retain(|s| only.is_empty() || only.iter().any(|o| *o == s.0));
         let sets = std::env::var("BENCH_SETS").unwrap_or_else(|_| "clean,noisy".into());
         let trims: Vec<(String, Option<(f32, f32)>)> = std::env::var("BENCH_TRIMS")
             .unwrap_or_else(|_| "full".into())
@@ -1021,8 +1062,9 @@ mod tests {
             .collect();
         for set in sets.split(',') {
           for (trim_label, trim) in &trims {
-            for &(label, prompt, bias, chinese_only) in &setups {
-                let opts = Options { prompt: prompt.to_string(), bias, bias_words: cards.clone(), chinese_only, trim: *trim, ..Default::default() };
+            for (label, prompt, bias, chinese_only, beams) in &setups {
+                let (label, bias, chinese_only, beams) = (label.as_str(), *bias, *chinese_only, *beams);
+                let opts = Options { prompt: prompt.clone(), bias, bias_words: cards.clone(), chinese_only, trim: *trim, beams, ..Default::default() };
                 let (mut errs, mut total) = (0, 0);
                 let mut groups = [0usize; 3];
                 let t0 = std::time::Instant::now();
