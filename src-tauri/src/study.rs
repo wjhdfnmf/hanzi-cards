@@ -7,7 +7,8 @@ use crate::models::{AnswerResult, IntervalPreview, Progress, SessionInfo, StudyF
 use crate::scheduler::{self, Memory};
 use rusqlite::{params, Connection, OptionalExtension};
 
-pub const DIRECTIONS: [&str; 3] = ["recognition", "recall", "listening"];
+/// "speaking" = see the meaning, say the Chinese (checked by speech recognition).
+pub const DIRECTIONS: [&str; 4] = ["recognition", "recall", "listening", "speaking"];
 
 fn check_direction(d: &str) -> AppResult<()> {
     if DIRECTIONS.contains(&d) {

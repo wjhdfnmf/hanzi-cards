@@ -39,4 +39,27 @@ export function speak(text: string) {
   s.speak(u);
 }
 
+/** Add a sentence to the queue without interrupting what is being said. */
+export function speakQueued(text: string, rate = settings.speechRate) {
+  const s = synth();
+  if (!s || !text.trim()) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "zh-CN";
+  u.rate = rate;
+  const voices = chineseVoices();
+  const voice = voices.find((v) => v.name === settings.voice) ?? voices[0];
+  if (voice) u.voice = voice;
+  s.speak(u);
+}
+
+export function stopSpeaking() {
+  synth()?.cancel();
+}
+
+/** Whether anything is being said or is waiting to be said. */
+export const isSpeaking = () => {
+  const s = synth();
+  return !!s && (s.speaking || s.pending);
+};
+
 export const speechAvailable = () => synth() !== null;

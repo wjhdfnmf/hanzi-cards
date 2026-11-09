@@ -4,3 +4,6 @@ src-tauri/target/
 src-tauri/gen/
 *.log
 .DS_Store
+
+# Personal word lists and exports (not part of the app)
+imports/

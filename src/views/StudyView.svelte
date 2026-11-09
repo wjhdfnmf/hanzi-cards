@@ -6,6 +6,8 @@
     type Deck,
     type Direction,
     type IntervalPreview,
+    type SpeechStatus,
+    type SpokenAnswer,
     type StudyItem,
     type StudyMode,
   } from "../lib/api";
@@ -17,10 +19,12 @@
   import Hanzi from "../components/Hanzi.svelte";
   import Pinyin from "../components/Pinyin.svelte";
   import Icon from "../components/Icon.svelte";
+  import DeckPicker from "../components/DeckPicker.svelte";
+  import { recordUtterance } from "../lib/mic";
 
   type Phase = "setup" | "session" | "done";
   const MODES: StudyMode[] = ["due", "new", "all", "difficult"];
-  const DIRS: Direction[] = ["recognition", "recall", "listening"];
+  const DIRS: Direction[] = ["recognition", "recall", "listening", "speaking"];
   const LIMITS = [10, 20, 50, 100, 0];
   const PREF_KEY = "study-selection";
 
@@ -53,6 +57,26 @@
   let result = $state({ reviewed: 0, correct: 0, ms: 0 });
   const current = $derived(queue[0] ?? null);
 
+  // Speaking: the learner says the answer; Windows speech recognition checks it.
+  let speech = $state<SpeechStatus>({
+    available: false,
+    reason: null,
+    engine: null,
+    windows: false,
+    whisperModels: [],
+    whisperModel: null,
+  });
+  let listening = $state(false);
+  /** Whisper is working out what was said. */
+  let thinking = $state(false);
+  /** Microphone level while recording (Whisper), 0..1. */
+  let level = $state(0);
+  let recording: AbortController | null = null;
+  let spoken = $state<SpokenAnswer | null>(null);
+  let attempts = 0;
+  /** Rating suggested from the spoken answer (highlighted; Enter accepts it). */
+  let suggested = $state<number | null>(null);
+
   onMount(async () => {
     try {
       const saved = JSON.parse(localStorage.getItem(PREF_KEY) ?? "null");
@@ -64,7 +88,13 @@
       sel.deckIds = nav.studyDeckIds;
       nav.studyDeckIds = null;
     }
-    [decks, tags] = await Promise.all([api.listDecks(), api.listTags()]);
+    [decks, tags, speech] = await Promise.all([
+      api.listDecks(),
+      api.listTags(),
+      api.speechStatus().catch(() => speech),
+    ]);
+    if (!speech.available) sel.directions = sel.directions.filter((d) => d !== "speaking");
+    if (!sel.directions.length) sel.directions = ["recognition"];
     // Forget decks/tags that no longer exist.
     sel.deckIds = sel.deckIds.filter((id) => decks.some((d) => d.id === id));
     sel.tags = sel.tags.filter((tg) => tags.includes(tg));
@@ -100,15 +130,6 @@
     return list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
   }
 
-  /** A deck inside a selected deck is studied too. */
-  function insideSelected(d: Deck): boolean {
-    const parent = new Map(decks.map((x) => [x.id, x.parentId]));
-    for (let p = d.parentId; p !== null && p !== undefined; p = parent.get(p) ?? null) {
-      if (sel.deckIds.includes(p)) return true;
-    }
-    return false;
-  }
-
   function shuffle<T>(a: T[]): T[] {
     const arr = [...a];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -131,6 +152,7 @@
       done = 0;
       result = { reviewed: 0, correct: 0, ms: 0 };
       phase = "session";
+      if (sel.directions.includes("speaking") && speech.engine === "whisper") api.speechWarmup().catch(() => {});
       await show();
     } catch (e) {
       error = errorText(e);
@@ -140,6 +162,9 @@
   async function show() {
     revealed = false;
     previews = [];
+    spoken = null;
+    suggested = null;
+    attempts = 0;
     const item = queue[0];
     if (!item) {
       phase = "done";
@@ -183,17 +208,84 @@
     }
   }
 
+  async function listen() {
+    if (!current || revealed || listening || current.direction !== "speaking") return;
+    const item = current;
+    listening = true;
+    error = "";
+    try {
+      // Other words in the session are offered as distractors.
+      const others = queue.slice(1, 40).map((i) => i.card.hanzi);
+      let res: SpokenAnswer;
+      if (speech.engine === "whisper") {
+        recording = new AbortController();
+        const pcm = await recordUtterance({ signal: recording.signal, onLevel: (l) => (level = l) });
+        const aborted = recording.signal.aborted;
+        recording = null;
+        level = 0;
+        if (aborted || current !== item) return;
+        if (!pcm) {
+          res = { status: "silence", heard: "", heardPinyin: "", confidence: "", correct: false, suggested: 1, note: "" };
+        } else {
+          listening = false;
+          thinking = true;
+          try {
+            res = await api.speechCheckAudio(item.card.id, others, pcm);
+          } finally {
+            thinking = false;
+          }
+        }
+      } else {
+        res = await api.speechListen(item.card.id, others);
+      }
+      if (current !== item || res.status === "cancelled") return;
+      attempts++;
+      spoken = res;
+      if (res.correct) {
+        suggested = attempts === 1 ? res.suggested : Math.min(res.suggested, 2);
+        reveal();
+      } else if (res.status === "heard" && attempts >= 2) {
+        suggested = 1;
+        reveal();
+      }
+    } catch (e) {
+      error = errorText(e);
+    } finally {
+      listening = false;
+    }
+  }
+
+  function stopListening() {
+    if (recording) recording.abort();
+    else if (listening) api.speechCancel();
+  }
+
   function endSession() {
+    stopListening();
     phase = result.reviewed ? "done" : "setup";
   }
 
   function onkeydown(e: KeyboardEvent) {
     if (phase !== "session" || e.ctrlKey || e.metaKey || e.altKey) return;
     if ((e.target as HTMLElement)?.closest("input, textarea, select")) return;
+    if (current?.direction === "speaking" && !revealed) {
+      if (e.key === " ") {
+        e.preventDefault();
+        listen();
+        return;
+      }
+      if (e.key === "Escape" && listening) {
+        e.preventDefault();
+        stopListening();
+        return;
+      }
+    }
     if (e.key === " " || e.key === "Enter") {
       e.preventDefault();
-      if (!revealed) reveal();
-      else rate(3);
+      if (!revealed) {
+        stopListening();
+        reveal();
+      } else rate(suggested ?? 3);
     } else if (revealed && ["1", "2", "3", "4"].includes(e.key)) {
       rate(Number(e.key));
     } else if (e.key.toLowerCase() === "r" && current) {
@@ -236,22 +328,7 @@
 
         <section>
           <h3>{t("study.decks")}</h3>
-          <div class="chips">
-            <button class="chip" class:on={sel.deckIds.length === 0} onclick={() => (sel.deckIds = [])}>
-              {t("study.allDecks")}
-            </button>
-            {#each decks as d (d.id)}
-              <button
-                class="chip"
-                class:on={sel.deckIds.includes(d.id)}
-                class:implied={!sel.deckIds.includes(d.id) && insideSelected(d)}
-                onclick={() => (sel.deckIds = toggle(sel.deckIds, d.id))}
-              >
-                {d.path}
-                <span class="faint">{d.totalCards}</span>
-              </button>
-            {/each}
-          </div>
+          <DeckPicker {decks} bind:selected={sel.deckIds} />
         </section>
 
         {#if tags.length}
@@ -274,9 +351,12 @@
           <h3>{t("study.directions")}</h3>
           <div class="chips">
             {#each DIRS as d (d)}
+              {@const off = d === "speaking" && !speech.available}
               <button
                 class="chip"
                 class:on={sel.directions.includes(d)}
+                disabled={off}
+                title={off ? (speech.reason ?? t("speech.unavailable")) : undefined}
                 onclick={() => (sel.directions = toggle(sel.directions, d))}
               >
                 {t(`dir.${d}`)}
@@ -338,6 +418,33 @@
             <Hanzi hanzi={c.hanzi} pinyin={c.pinyin} colored={revealed} size={c.hanzi.length > 4 ? 56 : 84} />
           {:else if dir === "recall"}
             <div class="meaning-q">{c.meaning || "—"}</div>
+          {:else if dir === "speaking"}
+            <div class="meaning-q">{c.meaning || "—"}</div>
+            {#if !revealed}
+              <button
+                class="mic"
+                class:live={listening}
+                disabled={thinking}
+                style="--level:{level}"
+                onclick={() => (listening ? stopListening() : listen())}
+                aria-label={listening ? t("speech.stop") : t("speech.speak")}
+              >
+                <Icon name="mic" size={34} />
+              </button>
+            {/if}
+            {#if spoken && spoken.status !== "cancelled"}
+              <div class="heard small" class:right={spoken.correct} class:wrong={!spoken.correct}>
+                {#if spoken.status === "silence"}
+                  {t("speech.silence")}
+                {:else if spoken.status === "unclear"}
+                  {t("speech.unclear")}
+                {:else}
+                  {t("speech.heard")} <span class="han">{spoken.heard}</span>
+                  {#if spoken.heardPinyin}<span class="faint">{spoken.heardPinyin}</span>{/if}
+                  · {spoken.correct ? t("speech.right") : spoken.note === "tone" ? t("speech.tone") : t("speech.wrong")}
+                {/if}
+              </div>
+            {/if}
           {:else}
             <button class="listen" onclick={() => speak(c.hanzi)} aria-label={t("study.play")}>
               <Icon name="speaker" size={40} />
@@ -345,7 +452,19 @@
           {/if}
           {#if !revealed}
             <p class="faint prompt">
-              {dir === "recognition" ? t("study.whatMeaning") : dir === "recall" ? t("study.howWrite") : t("study.whatHear")}
+              {dir === "recognition"
+                ? t("study.whatMeaning")
+                : dir === "recall"
+                  ? t("study.howWrite")
+                  : dir === "speaking"
+                    ? thinking
+                      ? t("speech.thinking")
+                      : listening
+                      ? t("speech.listening")
+                      : spoken && !spoken.correct
+                        ? t("speech.retry")
+                        : t("speech.prompt")
+                    : t("study.whatHear")}
             </p>
           {/if}
         </div>
@@ -361,7 +480,7 @@
                 <Icon name="speaker" />
               </button>
             </div>
-            {#if dir !== "recall"}<div class="meaning">{c.meaning}</div>{/if}
+            {#if dir !== "recall" && dir !== "speaking"}<div class="meaning">{c.meaning}</div>{/if}
             {#if c.notes}<div class="notes small muted">{c.notes}</div>{/if}
           </div>
         {/if}
@@ -373,7 +492,7 @@
         {:else}
           <div class="ratings">
             {#each RATINGS as r (r.n)}
-              <button class="rate {r.cls}" onclick={() => rate(r.n)}>
+              <button class="rate {r.cls}" class:suggested={suggested === r.n} onclick={() => rate(r.n)}>
                 <span class="ivl small">{previews[r.n - 1] ? intervalLabel(previews[r.n - 1].secs, previews[r.n - 1].days) : ""}</span>
                 <strong>{t(r.key)}</strong>
                 <span class="key faint">{r.n}</span>
@@ -381,7 +500,7 @@
             {/each}
           </div>
         {/if}
-        <p class="faint small keys">{t("study.keys")}</p>
+        <p class="faint small keys">{dir === "speaking" && !revealed ? t("speech.keys") : t("study.keys")}</p>
         {#if error}<div class="notice err small">{error}</div>{/if}
       </div>
     </div>
@@ -414,6 +533,54 @@
 {/if}
 
 <style>
+  .mic {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    background: var(--surface);
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    margin-top: 6px;
+  }
+  .mic:hover {
+    background: var(--accent-soft);
+  }
+  .mic.live {
+    background: var(--accent);
+    color: #fff;
+    animation: pulse 1.2s ease-in-out infinite;
+    transform: scale(calc(1 + var(--level, 0) * 0.25));
+    transition: transform 0.08s;
+  }
+  .mic:disabled {
+    opacity: 0.6;
+  }
+  @keyframes pulse {
+    50% {
+      box-shadow: 0 0 0 10px var(--accent-soft);
+    }
+  }
+  .heard {
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--surface-2);
+  }
+  .heard .han {
+    font-size: 18px;
+    margin: 0 4px;
+  }
+  .heard.right {
+    color: var(--ok);
+  }
+  .heard.wrong {
+    color: var(--accent);
+  }
+  .rate.suggested {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
   .setup {
     display: grid;
     grid-template-columns: 1fr 300px;

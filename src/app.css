@@ -242,6 +242,8 @@ button {
 }
 
 input[type="text"],
+input[type="password"],
+input:not([type]),
 input[type="search"],
 input[type="number"],
 textarea,
@@ -329,13 +331,6 @@ button.chip.on {
   border-color: var(--accent);
   color: var(--accent);
 }
-/* included because a deck it is inside is selected */
-button.chip.implied {
-  border-color: var(--accent);
-  border-style: dashed;
-  color: var(--accent);
-}
-
 .badge {
   display: inline-block;
   padding: 1px 8px;

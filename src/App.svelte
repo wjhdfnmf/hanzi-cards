@@ -11,6 +11,7 @@
   import DictionaryView from "./views/DictionaryView.svelte";
   import StatsView from "./views/StatsView.svelte";
   import SettingsView from "./views/SettingsView.svelte";
+  import TutorView from "./views/TutorView.svelte";
 
   let startupError = $state("");
 
@@ -24,6 +25,7 @@
 
   const items: { view: View; icon: string; key: Parameters<typeof t>[0] }[] = [
     { view: "study", icon: "study", key: "nav.study" },
+    { view: "tutor", icon: "chat", key: "nav.tutor" },
     { view: "decks", icon: "decks", key: "nav.decks" },
     { view: "dictionary", icon: "dictionary", key: "nav.dictionary" },
     { view: "stats", icon: "stats", key: "nav.stats" },
@@ -62,6 +64,7 @@
     {:else if settings.loaded}
       {#key nav.view}
         {#if nav.view === "study"}<StudyView />
+        {:else if nav.view === "tutor"}<TutorView />
         {:else if nav.view === "decks"}<DecksView />
         {:else if nav.view === "dictionary"}<DictionaryView />
         {:else if nav.view === "stats"}<StatsView />

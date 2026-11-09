@@ -11,6 +11,10 @@ export const settings = $state({
   speechRate: 0.9,
   autoplayAudio: false,
   voice: "",
+  /** "auto" | "windows" | "whisper" */
+  speechEngine: "auto",
+  whisperModel: "base",
+  tutorModel: "claude-opus-5-5",
 });
 
 const KEYS: Record<string, keyof typeof settings> = {
@@ -22,6 +26,9 @@ const KEYS: Record<string, keyof typeof settings> = {
   speech_rate: "speechRate",
   autoplay_audio: "autoplayAudio",
   voice: "voice",
+  speech_engine: "speechEngine",
+  whisper_model: "whisperModel",
+  tutor_model: "tutorModel",
 };
 
 function parse(field: keyof typeof settings, raw: string): unknown {

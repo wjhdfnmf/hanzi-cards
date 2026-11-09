@@ -1,4 +1,4 @@
-export type View = "study" | "decks" | "dictionary" | "stats" | "settings";
+export type View = "study" | "tutor" | "decks" | "dictionary" | "stats" | "settings";
 
 export const nav = $state({
   view: "study" as View,

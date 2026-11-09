@@ -1,7 +1,7 @@
 // Typed wrappers around the Rust commands (src-tauri/src/commands.rs).
 import { invoke } from "@tauri-apps/api/core";
 
-export type Direction = "recognition" | "recall" | "listening";
+export type Direction = "recognition" | "recall" | "listening" | "speaking";
 export type StudyMode = "due" | "new" | "all" | "difficult";
 
 export interface Deck {
@@ -150,7 +150,115 @@ export interface Segment {
   entry: DictEntry | null;
 }
 
+/** Whether spoken answers can be checked on this machine, and with which engine. */
+export interface SpeechStatus {
+  available: boolean;
+  reason: string | null;
+  /** "windows" | "whisper" */
+  engine: string | null;
+  windows: boolean;
+  whisperModels: string[];
+  whisperModel: string | null;
+}
+
+export interface WhisperModel {
+  name: string;
+  sizeMb: number;
+  installed: boolean;
+}
+
+/** One spoken attempt, judged against the card. */
+export interface SpokenAnswer {
+  /** "heard" | "silence" | "unclear" | "cancelled" */
+  status: string;
+  heard: string;
+  heardPinyin: string;
+  confidence: string;
+  correct: boolean;
+  /** Suggested rating 1-4. */
+  suggested: number;
+  /** "tone" when the syllables were right but a tone was wrong. */
+  note: string;
+}
+
 /** A word in an import file that is already in other decks. */
+export interface KeyStatus {
+  set: boolean;
+  /** Last four characters of the stored key. */
+  hint: string | null;
+}
+
+/** How the tutor behaves in one conversation. */
+export interface TutorOptions {
+  level: "hsk1" | "hsk2" | "hsk3";
+  length: "short" | "normal" | "long";
+  corrections: "off" | "gentle" | "every";
+  english: "never" | "asked" | "hints";
+  newWords: number;
+  lead: "tutor" | "learner";
+  onlyMyWords: boolean;
+  /** "" = the model chosen in Settings */
+  model: string;
+  notes: string;
+}
+
+export interface AiConversationCost {
+  /** null for a call outside a conversation */
+  sessionId: number | null;
+  startedAt: number;
+  endedAt: number;
+  model: string;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
+}
+
+/** What the AI tutor has cost (US dollars, estimated from token counts). */
+export interface AiSpending {
+  today: number;
+  last7Days: number;
+  thisMonth: number;
+  total: number;
+  conversations: number;
+  recent: AiConversationCost[];
+}
+
+export interface TutorGrade {
+  hanzi: string;
+  correct: boolean;
+  cardId: number | null;
+}
+
+export interface TutorSuggestion {
+  hanzi: string;
+  pinyin: string;
+  meaning: string;
+  /** Already a card in some deck. */
+  exists: boolean;
+}
+
+export type TutorEvent =
+  | { kind: "text"; text: string }
+  | { kind: "grade"; grade: TutorGrade }
+  | { kind: "suggestion"; suggestion: TutorSuggestion };
+
+export interface TutorTurn {
+  text: string;
+  /** "end_turn", "refusal", "max_tokens", "cancelled", ... */
+  stopReason: string;
+  /** Session cost so far, US dollars. */
+  cost: number;
+}
+
+export interface TutorSummary {
+  grades: TutorGrade[];
+  suggestions: TutorSuggestion[];
+  cost: number;
+  model: string;
+  turns: number;
+}
+
 export interface DuplicateWord {
   hanzi: string;
   decks: string[];
@@ -215,6 +323,32 @@ export const api = {
   moveCards: (ids: number[], deckId: number) => invoke<void>("move_cards", { ids, deckId }),
   listTags: () => invoke<string[]>("list_tags"),
   cardsByHanzi: (hanzi: string) => invoke<{ card: Card; deckName: string }[]>("cards_by_hanzi", { hanzi }),
+  speechStatus: () => invoke<SpeechStatus>("speech_status"),
+  speechListen: (cardId: number, others: string[]) => invoke<SpokenAnswer>("speech_listen", { cardId, others }),
+  speechCancel: () => invoke<void>("speech_cancel"),
+  speechCheckAudio: (cardId: number, others: string[], pcm: Float32Array) =>
+    invoke<SpokenAnswer>("speech_check_audio", { cardId, others, pcm: Array.from(pcm) }),
+  /** `prompt`: words or a previous line the speech probably contains or answers. */
+  speechTranscribe: (pcm: Float32Array, prompt: string | null = null) =>
+    invoke<string>("speech_transcribe", { pcm: Array.from(pcm), prompt }),
+  /** Load Whisper ahead of the first spoken answer (fire and forget). */
+  speechWarmup: () => invoke<void>("speech_warmup"),
+  whisperModels: () => invoke<WhisperModel[]>("whisper_models"),
+  whisperDownload: (name: string) => invoke<void>("whisper_download", { name }),
+  whisperDelete: (name: string) => invoke<void>("whisper_delete", { name }),
+  aiKeyStatus: () => invoke<KeyStatus>("ai_key_status"),
+  aiKeySet: (key: string) => invoke<void>("ai_key_set", { key }),
+  aiKeyClear: () => invoke<void>("ai_key_clear"),
+  tutorStart: (deckIds: number[], scenario: string, options: TutorOptions) =>
+    invoke<{ sessionId: number; words: number }>("tutor_start", { deckIds, scenario, options }),
+  tutorSend: (sessionId: number, text: string | null) => invoke<TutorTurn>("tutor_send", { sessionId, text }),
+  tutorTranscribe: (sessionId: number, pcm: Float32Array) =>
+    invoke<string>("tutor_transcribe", { sessionId, pcm: Array.from(pcm) }),
+  tutorCancel: (sessionId: number) => invoke<void>("tutor_cancel", { sessionId }),
+  tutorEnd: (sessionId: number) => invoke<TutorSummary>("tutor_end", { sessionId }),
+  tutorTranslate: (text: string, sessionId: number | null = null) => invoke<string>("tutor_translate", { text, sessionId }),
+  aiSpending: () => invoke<AiSpending>("ai_spending"),
+  aiSpendingExport: (path: string) => invoke<void>("ai_spending_export", { path }),
   importPreview: (deckId: number, path: string) => invoke<ImportPreview>("import_preview", { deckId, path }),
   importCards: (deckId: number, path: string, includeOtherDecks = false) =>
     invoke<ImportResult>("import_cards", { deckId, path, includeOtherDecks }),

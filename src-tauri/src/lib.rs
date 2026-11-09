@@ -1,3 +1,5 @@
+mod ai;
+mod billing;
 mod cards;
 mod commands;
 mod db;
@@ -8,8 +10,13 @@ mod models;
 mod pinyin;
 mod pleco;
 mod scheduler;
+mod speech;
 mod stats;
 mod study;
+mod tones;
+mod tutor;
+mod whisper;
+mod whisper_net;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -55,6 +62,26 @@ pub fn run() {
             commands::build_session,
             commands::preview_intervals,
             commands::answer_card,
+            commands::speech_status,
+            commands::speech_listen,
+            commands::speech_cancel,
+            commands::speech_check_audio,
+            commands::speech_transcribe,
+            commands::speech_warmup,
+            commands::whisper_models,
+            commands::whisper_download,
+            commands::whisper_delete,
+            commands::ai_key_status,
+            commands::ai_key_set,
+            commands::ai_key_clear,
+            commands::tutor_start,
+            commands::tutor_send,
+            commands::tutor_transcribe,
+            commands::tutor_cancel,
+            commands::tutor_end,
+            commands::tutor_translate,
+            commands::ai_spending,
+            commands::ai_spending_export,
             commands::get_stats,
             commands::dict_status,
             commands::dict_search,

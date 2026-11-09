@@ -12,7 +12,14 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   dictionary and update as you add characters. In the pinyin field, a digit after a syllable sets its tone
   (`ni3` → `nǐ`, `5` = neutral)
 - **Study** with FSRS-5 spaced repetition. Pick decks, tags, mode (due & new / new only / cram / difficult), session size, and directions:
-  characters → meaning, meaning → characters, and listening
+  characters → meaning, meaning → characters, listening, and **speaking**: say the answer and it is checked
+  by speech recognition, either Windows' built-in Mandarin recognizer or OpenAI Whisper run locally
+  (downloaded in Settings). Audio never leaves the computer
+- **AI conversation tutor** (optional, needs your own Anthropic API key): a spoken role-play with Claude
+  built from your decks' words. Speak (Whisper, on this computer) or type; it answers aloud, notes which of
+  your words you used correctly, suggests new words, and at the end records reviews and adds cards. Each
+  conversation can be tuned (level, corrections, English, reply length…), typing has a built-in pinyin
+  keyboard, and Settings keeps a record of what the tutor has cost
 - **Dictionary**: CC-CEDICT (~120k entries), searchable by characters, pinyin (with or without tones) or English; one click adds a word as a card. The card editor auto-fills pinyin and meaning from it
 - **Statistics**: reviews per day, retention, streaks, a 30-day forecast, card progress, an activity heatmap and the cards you forget most
 - **Tone colours** for characters and pinyin, OS text-to-speech for pronunciation

@@ -126,6 +126,27 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
              COMMIT;",
         )?;
     }
+    if version < 5 {
+        // v5: a record of AI tutor spending.
+        conn.execute_batch(
+            "BEGIN;
+             CREATE TABLE IF NOT EXISTS ai_usage (
+               id INTEGER PRIMARY KEY,
+               at INTEGER NOT NULL,
+               kind TEXT NOT NULL,
+               model TEXT NOT NULL,
+               session_id INTEGER,
+               input_tokens INTEGER NOT NULL DEFAULT 0,
+               output_tokens INTEGER NOT NULL DEFAULT 0,
+               cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+               cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+               cost REAL NOT NULL DEFAULT 0
+             );
+             CREATE INDEX IF NOT EXISTS idx_ai_usage_at ON ai_usage(at);
+             PRAGMA user_version = 5;
+             COMMIT;",
+        )?;
+    }
     Ok(())
 }
 
