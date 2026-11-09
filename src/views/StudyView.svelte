@@ -15,7 +15,8 @@
   import { intervalLabel, durationLabel, pct } from "../lib/format";
   import { nav } from "../lib/nav.svelte";
   import { settings } from "../lib/settings.svelte";
-  import { speak } from "../lib/speech";
+  import { speak, stopSpeaking } from "../lib/speech";
+  import { showToast } from "../lib/toast.svelte";
   import Hanzi from "../components/Hanzi.svelte";
   import Pinyin from "../components/Pinyin.svelte";
   import Icon from "../components/Icon.svelte";
@@ -96,17 +97,39 @@
     if (!revealed) reveal();
   }
 
-  onMount(async () => {
+  onMount(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(PREF_KEY) ?? "null");
       if (saved) sel = { ...sel, ...saved };
     } catch {
       /* storage unavailable */
     }
-    if (nav.studyDeckIds) {
-      sel.deckIds = nav.studyDeckIds;
-      nav.studyDeckIds = null;
+  });
+
+  // This page stays alive (hidden) when you switch pages, so a session can be continued.
+  // Answers are saved as you rate them; "End study" (or closing the app) ends the session.
+  const shown = $derived(nav.view === "study");
+  $effect(() => {
+    if (!shown) {
+      // leaving: stop listening and the voice; the session waits here
+      stopListening();
+      stopSpeaking();
+      return;
     }
+    if (phase === "setup") loadSetup();
+    else if (phase === "session") shownAt = Date.now(); // time away doesn't count as answer time
+  });
+
+  // "Study this deck" from Decks & Cards
+  $effect(() => {
+    const ids = nav.studyDeckIds;
+    if (!ids) return;
+    nav.studyDeckIds = null;
+    sel.deckIds = ids;
+    if (phase === "session") showToast(t("study.sessionRunning"));
+  });
+
+  async function loadSetup() {
     [decks, tags, speech] = await Promise.all([
       api.listDecks(),
       api.listTags(),
@@ -117,7 +140,7 @@
     // Forget decks/tags that no longer exist.
     sel.deckIds = sel.deckIds.filter((id) => decks.some((d) => d.id === id));
     sel.tags = sel.tags.filter((tg) => tags.includes(tg));
-  });
+  }
 
   // Recount matching cards whenever the selection changes.
   let countTimer: ReturnType<typeof setTimeout> | undefined;
@@ -302,6 +325,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
+    if (!shown) return; // another page is showing
     if (phase !== "session" || e.ctrlKey || e.metaKey || e.altKey) return;
     if ((e.target as HTMLElement)?.closest("input, textarea, select")) return;
     if (isSpoken(current?.direction) && !revealed) {
@@ -440,7 +464,10 @@
   {@const dir = current.direction}
   <div class="session">
     <div class="topbar">
-      <button class="btn ghost" onclick={endSession}>{t("study.end")}</button>
+      <button class="btn" onclick={endSession} title={t("study.endHint")}>
+        <Icon name="check" size={15} />
+        {t("study.end")}
+      </button>
       <div class="bar" aria-hidden="true"><div style="width:{total ? (done / total) * 100 : 0}%"></div></div>
       <span class="small muted">{t("study.progress", { done, total })}</span>
     </div>

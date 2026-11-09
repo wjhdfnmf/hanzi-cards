@@ -67,15 +67,16 @@
       <div class="page"><div class="notice err">{startupError}</div></div>
     {:else if settings.loaded}
       {#key nav.view}
-        {#if nav.view === "study"}<StudyView />
+        {#if nav.view === "study"}<!-- kept alive below -->
         {:else if nav.view === "tutor"}<!-- kept alive below -->
         {:else if nav.view === "decks"}<DecksView />
         {:else if nav.view === "dictionary"}<DictionaryView />
         {:else if nav.view === "stats"}<StatsView />
         {:else}<SettingsView />{/if}
       {/key}
-      <!-- The tutor page stays alive once opened, so a conversation survives switching pages
-           until it's ended or the app closes. -->
+      <!-- Study and the tutor stay alive when you switch pages, so a study session or a
+           conversation can be continued until it's ended or the app closes. -->
+      <div class="keep" class:hidden={nav.view !== "study"}><StudyView /></div>
       {#if tutorOpened}
         <div class="keep" class:hidden={nav.view !== "tutor"}><TutorView /></div>
       {/if}

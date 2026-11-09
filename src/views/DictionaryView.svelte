@@ -1,3 +1,8 @@
+<script module lang="ts">
+  // What was typed last: kept while the app runs, so switching pages doesn't lose it.
+  let lastQuery = "";
+</script>
+
 <script lang="ts">
   import { onMount } from "svelte";
   import { open } from "@tauri-apps/plugin-dialog";
@@ -12,7 +17,7 @@
   import CardEditor from "../components/CardEditor.svelte";
 
   let status = $state<DictStatus | null>(null);
-  let query = $state("");
+  let query = $state(lastQuery);
   let results = $state<DictEntry[]>([]);
   let searching = $state(false);
   let installing = $state(false);
@@ -24,10 +29,12 @@
   onMount(async () => {
     [status, decks] = await Promise.all([api.dictStatus(), api.listDecks()]);
     input?.focus();
+    input?.setSelectionRange(query.length, query.length);
   });
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
+    lastQuery = query;
     const q = query.trim();
     clearTimeout(timer);
     if (!q || !status?.entries) {
