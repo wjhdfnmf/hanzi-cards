@@ -20,6 +20,8 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   your words you used correctly, suggests new words, and at the end records reviews and adds cards. Each
   conversation can be tuned (level, corrections, English, reply length…), typing has a built-in pinyin
   keyboard, and Settings keeps a record of what the tutor has cost
+- **HSK tags**: new cards are tagged with their HSK 3.0 level (2026 syllabus, with the 2021 lists filling gaps;
+  combinations of list words get the highest level of their parts). The cards table sorts by any column
 - **Dictionary**: CC-CEDICT (~120k entries), searchable by characters, pinyin (with or without tones) or English; one click adds a word as a card. The card editor auto-fills pinyin and meaning from it
 - **Statistics**: reviews per day, retention, streaks, a 30-day forecast, card progress, an activity heatmap and the cards you forget most
 - **Tone colours** for characters and pinyin, OS text-to-speech for pronunciation
@@ -79,6 +81,9 @@ src-tauri/src/
 - FSRS default parameters from the [open-spaced-repetition](https://github.com/open-spaced-repetition) project.
 - `src-tauri/data/char_freq.tsv`: character reading frequencies from the Unicode Unihan database (`kHanyuPinlu`),
   © Unicode, Inc., [Unicode License](https://www.unicode.org/license.txt). Regenerate with `scripts/gen_char_freq.py`.
+- `src-tauri/data/hsk.tsv`: HSK 3.0 word levels (2026 syllabus and 2021 lists) from
+  [complete-hsk-vocabulary](https://github.com/drkameleon/complete-hsk-vocabulary) © Yanis Zafirópulos, MIT licence
+  (reproduced at the top of the file).
 
 ## Roadmap ideas
 

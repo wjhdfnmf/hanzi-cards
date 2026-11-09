@@ -8,6 +8,8 @@ export const settings = $state({
   desiredRetention: 0.9,
   newPerDay: 20,
   toneColors: true,
+  /** Tag new cards with their HSK level (2026 syllabus). */
+  hskAutotag: true,
   speechRate: 0.9,
   autoplayAudio: false,
   voice: "",
@@ -23,6 +25,7 @@ const KEYS: Record<string, keyof typeof settings> = {
   desired_retention: "desiredRetention",
   new_per_day: "newPerDay",
   tone_colors: "toneColors",
+  hsk_autotag: "hskAutotag",
   speech_rate: "speechRate",
   autoplay_audio: "autoplayAudio",
   voice: "voice",

@@ -67,6 +67,7 @@ pub fn get_card(conn: &Connection, id: i64) -> AppResult<Card> {
 
 pub fn create_card(conn: &Connection, input: &CardInput) -> AppResult<Card> {
     let (h, p, m, n, t) = normalise(input)?;
+    let t = crate::hsk::tags_for_new(conn, &t, &h);
     let ts = now();
     conn.execute(
         "INSERT INTO cards (deck_id, hanzi, pinyin, meaning, notes, tags, created_at, updated_at)
@@ -411,7 +412,7 @@ pub fn import_text(
         tx.execute(
             "INSERT INTO cards (deck_id, hanzi, pinyin, meaning, notes, tags, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
-            params![deck, c.hanzi, c.pinyin, c.meaning, c.notes, c.tags, ts + res.imported],
+            params![deck, c.hanzi, c.pinyin, c.meaning, c.notes, crate::hsk::tags_for_new(&tx, &c.tags, &c.hanzi), ts + res.imported],
         )?;
         dups.add(DeckRef::Id(deck), &c.hanzi);
         res.imported += 1;
@@ -524,7 +525,7 @@ mod tests {
         assert_eq!(export_file(&conn, Some(class), &out).unwrap(), 4);
         let text = std::fs::read_to_string(&out).unwrap();
         std::fs::remove_file(&out).ok();
-        assert!(text.contains("年,nián,year,,,Class 9"), "{text}");
-        assert!(text.contains("你好,nǐ hǎo,hello,,,\n"), "{text}");
+        assert!(text.contains("年,nián,year,,HSK1,Class 9"), "{text}"); // tagged with its HSK level
+        assert!(text.contains("你好,nǐ hǎo,hello,,HSK1,\n"), "{text}"); // 你 + 好, both HSK1
     }
 }

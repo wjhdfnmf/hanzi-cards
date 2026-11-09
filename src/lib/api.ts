@@ -322,6 +322,8 @@ export const api = {
   deleteCards: (ids: number[]) => invoke<void>("delete_cards", { ids }),
   moveCards: (ids: number[], deckId: number) => invoke<void>("move_cards", { ids, deckId }),
   listTags: () => invoke<string[]>("list_tags"),
+  /** Add HSK level tags to all cards that lack one; returns how many changed. */
+  hskTagAll: () => invoke<number>("hsk_tag_all"),
   cardsByHanzi: (hanzi: string) => invoke<{ card: Card; deckName: string }[]>("cards_by_hanzi", { hanzi }),
   speechStatus: () => invoke<SpeechStatus>("speech_status"),
   speechListen: (cardId: number, others: string[]) => invoke<SpokenAnswer>("speech_listen", { cardId, others }),

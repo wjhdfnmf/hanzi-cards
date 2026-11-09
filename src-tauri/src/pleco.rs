@@ -478,8 +478,8 @@ pub fn import(conn: &mut Connection, cards: &[PlecoCard], opts: &ImportOptions) 
         for deck in to_add {
             tx.execute(
                 "INSERT INTO cards (deck_id, hanzi, pinyin, meaning, notes, tags, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, '', '', ?5, ?6)",
-                params![deck, hanzi, pinyin_text, meaning, created, card.modified.unwrap_or(created)],
+                 VALUES (?1, ?2, ?3, ?4, '', ?7, ?5, ?6)",
+                params![deck, hanzi, pinyin_text, meaning, created, card.modified.unwrap_or(created), crate::hsk::tags_for_new(&tx, "", &hanzi)],
             )?;
             used_decks.insert(deck);
             result.imported += 1;

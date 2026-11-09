@@ -85,6 +85,20 @@
     await refreshSpeech();
   }
 
+  // ---------- HSK tags ----------
+
+  let hskBusy = $state(false);
+  async function tagAllHsk() {
+    hskBusy = true;
+    try {
+      showToast(t("settings.hskTagged", { n: await api.hskTagAll() }));
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      hskBusy = false;
+    }
+  }
+
   // ---------- AI tutor ----------
 
   let aiKey = $state<KeyStatus | null>(null);
@@ -214,6 +228,22 @@
         onchange={(e) => saveSetting("newPerDay", Math.max(0, Math.round(Number(e.currentTarget.value) || 0)))}
       />
     </label>
+    <label class="row">
+      <span>
+        {t("settings.hskAutotag")}
+        <small class="faint block">{t("settings.hskAutotagHint")}</small>
+      </span>
+      <input
+        type="checkbox"
+        class="toggle"
+        checked={settings.hskAutotag}
+        onchange={(e) => saveSetting("hskAutotag", e.currentTarget.checked)}
+      />
+    </label>
+    <div class="row">
+      <span class="small muted">{t("settings.hskTagAllHint")}</span>
+      <button class="btn small" disabled={hskBusy} onclick={tagAllHsk}>{t("settings.hskTagAll")}</button>
+    </div>
   </section>
 
   <h2>{t("settings.audio")}</h2>
@@ -523,6 +553,10 @@
   .spend-table .num-c {
     text-align: right;
     font-variant-numeric: tabular-nums;
+  }
+  .block {
+    display: block;
+    margin-top: 2px;
   }
   .key-state {
     display: flex;

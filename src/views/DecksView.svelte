@@ -19,6 +19,7 @@
   import Icon from "../components/Icon.svelte";
   import Modal from "../components/Modal.svelte";
   import CardEditor from "../components/CardEditor.svelte";
+  import { stripTones, syllables, toneOf } from "../lib/pinyin";
 
   let decks = $state<Deck[]>([]);
   let selectedDeck = $state<number | null>(null); // null = all cards
@@ -26,6 +27,67 @@
   let search = $state("");
   let checked = $state<number[]>([]);
   let loading = $state(true);
+
+  // ---------- sorting by column (click a header: ascending, descending, off) ----------
+  type SortKey = "hanzi" | "pinyin" | "meaning" | "deck" | "tags" | "status" | "next";
+  type Sort = { key: SortKey; dir: 1 | -1 } | null;
+  let sort = $state<Sort>(
+    (() => {
+      try {
+        return JSON.parse(localStorage.getItem("decks.sort") ?? "null") as Sort;
+      } catch {
+        return null;
+      }
+    })(),
+  );
+  function sortBy(key: SortKey) {
+    sort = sort?.key !== key ? { key, dir: 1 } : sort.dir === 1 ? { key, dir: -1 } : null;
+    try {
+      localStorage.setItem("decks.sort", JSON.stringify(sort));
+    } catch {}
+  }
+  const zh = new Intl.Collator("zh-CN"); // characters in pinyin order
+  const text = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+  const STATUS_ORDER = { new: 0, learning: 1, review: 2 } as const;
+  /** Pinyin without tone marks, then by tone: ma1 < ma2 < ma3 < ma4. */
+  const pinyinKey = (p: string) => {
+    const syl = syllables(p.toLowerCase());
+    return { bare: stripTones(p.toLowerCase()).replace(/\s+/g, " ").trim(), tones: syl.map(toneOf).join("") };
+  };
+  const sortedCards = $derived.by(() => {
+    if (!sort) return cards;
+    const { key, dir } = sort;
+    // empty values always go last, whichever the direction
+    const blank = (c: CardRow) =>
+      key === "pinyin" ? !c.pinyin : key === "meaning" ? !c.meaning : key === "tags" ? !c.tags.length : key === "next" ? c.nextDue === null : false;
+    const cmp = (a: CardRow, b: CardRow): number => {
+      switch (key) {
+        case "hanzi":
+          return zh.compare(a.hanzi, b.hanzi);
+        case "pinyin": {
+          const x = pinyinKey(a.pinyin);
+          const y = pinyinKey(b.pinyin);
+          return text.compare(x.bare, y.bare) || x.tones.localeCompare(y.tones);
+        }
+        case "meaning":
+          return text.compare(a.meaning, b.meaning);
+        case "deck":
+          return text.compare(deckPath.get(a.deckId) ?? "", deckPath.get(b.deckId) ?? "");
+        case "tags":
+          return text.compare(a.tags.join(", "), b.tags.join(", "));
+        case "status":
+          return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+        case "next":
+          return (a.nextDue ?? 0) - (b.nextDue ?? 0);
+      }
+    };
+    return [...cards].sort((a, b) => {
+      const ba = blank(a);
+      const bb = blank(b);
+      if (ba !== bb) return ba ? 1 : -1;
+      return dir * cmp(a, b) || zh.compare(a.hanzi, b.hanzi);
+    });
+  });
 
   let editing = $state<{ card: Card | null } | null>(null);
   let deckForm = $state<{ id: number | null; name: string; description: string; parentId: number | null } | null>(
@@ -397,17 +459,24 @@
           <thead>
             <tr>
               <th class="cb"><input type="checkbox" checked={allChecked} onchange={toggleAll} aria-label="Select all" /></th>
-              <th>{t("col.hanzi")}</th>
-              <th>{t("col.pinyin")}</th>
-              <th class="wide">{t("col.meaning")}</th>
-              {#if showDeckColumn}<th>{t("decks.colDeck")}</th>{/if}
-              <th>{t("col.tags")}</th>
-              <th>{t("col.status")}</th>
-              <th>{t("col.next")}</th>
+              {#snippet head(key: SortKey, label: string, cls = "")}
+                <th class={cls} aria-sort={sort?.key === key ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
+                  <button class="sorthead" class:on={sort?.key === key} onclick={() => sortBy(key)} title={t("decks.sortHint")}>
+                    {label}<span class="arrow" aria-hidden="true">{sort?.key === key ? (sort.dir === 1 ? "▲" : "▼") : "↕"}</span>
+                  </button>
+                </th>
+              {/snippet}
+              {@render head("hanzi", t("col.hanzi"))}
+              {@render head("pinyin", t("col.pinyin"))}
+              {@render head("meaning", t("col.meaning"), "wide")}
+              {#if showDeckColumn}{@render head("deck", t("decks.colDeck"))}{/if}
+              {@render head("tags", t("col.tags"))}
+              {@render head("status", t("col.status"))}
+              {@render head("next", t("col.next"))}
             </tr>
           </thead>
           <tbody>
-            {#each cards as c (c.id)}
+            {#each sortedCards as c (c.id)}
               <tr onclick={() => (editing = { card: c })} class:checked={checked.includes(c.id)}>
                 <td class="cb" onclick={(e) => e.stopPropagation()}>
                   <input type="checkbox" checked={checked.includes(c.id)} onchange={() => toggleOne(c.id)} aria-label="Select" />
@@ -639,6 +708,30 @@
   table {
     width: 100%;
     border-collapse: collapse;
+  }
+  .sorthead {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .sorthead:hover,
+  .sorthead.on {
+    color: var(--text);
+  }
+  .sorthead .arrow {
+    font-size: 9px;
+    opacity: 0.35;
+  }
+  .sorthead.on .arrow {
+    opacity: 1;
+    color: var(--accent);
   }
   th {
     text-align: left;

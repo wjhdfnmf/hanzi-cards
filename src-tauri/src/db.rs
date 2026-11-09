@@ -147,6 +147,27 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
              COMMIT;",
         )?;
     }
+    if version < 6 {
+        // v6: tag existing cards with their HSK level (2026 syllabus); only adds tags.
+        let tx = conn.unchecked_transaction()?;
+        crate::hsk::tag_all(&tx).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.to_string().into()))?;
+        tx.execute_batch("PRAGMA user_version = 6")?;
+        tx.commit()?;
+    }
+    if version < 7 {
+        // v7: combinations of list words are tagged too (highest level of their parts).
+        let tx = conn.unchecked_transaction()?;
+        crate::hsk::tag_all(&tx).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.to_string().into()))?;
+        tx.execute_batch("PRAGMA user_version = 7")?;
+        tx.commit()?;
+    }
+    if version < 8 {
+        // v8: words missing from the 2026 syllabus take their 2021 HSK 3.0 level.
+        let tx = conn.unchecked_transaction()?;
+        crate::hsk::tag_all(&tx).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.to_string().into()))?;
+        tx.execute_batch("PRAGMA user_version = 8")?;
+        tx.commit()?;
+    }
     Ok(())
 }
 

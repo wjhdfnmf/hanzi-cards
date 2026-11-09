@@ -40,6 +40,7 @@ pub fn get_settings(state: State<AppState>) -> AppResult<HashMap<String, String>
         ("desired_retention", db::DEFAULT_RETENTION.to_string()),
         ("new_per_day", db::DEFAULT_NEW_PER_DAY.to_string()),
         ("tone_colors", "true".to_string()),
+        ("hsk_autotag", "true".to_string()),
         ("speech_rate", "0.9".to_string()),
         ("autoplay_audio", "false".to_string()),
         ("speech_engine", "auto".to_string()),
@@ -120,6 +121,12 @@ pub fn delete_cards(state: State<AppState>, ids: Vec<i64>) -> AppResult<()> {
 #[tauri::command]
 pub fn move_cards(state: State<AppState>, ids: Vec<i64>, deck_id: i64) -> AppResult<()> {
     cards::move_cards(&mut lock(&state), &ids, deck_id)
+}
+
+/// Add HSK level tags to every card that lacks one; returns how many cards changed.
+#[tauri::command]
+pub async fn hsk_tag_all(app: AppHandle) -> AppResult<usize> {
+    blocking(app, |conn| crate::hsk::tag_all(conn)).await
 }
 
 #[tauri::command]

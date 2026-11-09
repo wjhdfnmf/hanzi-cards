@@ -6,6 +6,7 @@ mod db;
 mod decks;
 mod dictionary;
 mod error;
+mod hsk;
 mod models;
 mod pinyin;
 mod pleco;
@@ -52,6 +53,7 @@ pub fn run() {
             commands::delete_cards,
             commands::move_cards,
             commands::list_tags,
+            commands::hsk_tag_all,
             commands::cards_by_hanzi,
             commands::import_preview,
             commands::import_cards,
