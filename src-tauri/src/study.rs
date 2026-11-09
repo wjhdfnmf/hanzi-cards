@@ -7,8 +7,10 @@ use crate::models::{AnswerResult, IntervalPreview, Progress, SessionInfo, StudyF
 use crate::scheduler::{self, Memory};
 use rusqlite::{params, Connection, OptionalExtension};
 
-/// "speaking" = see the meaning, say the Chinese (checked by speech recognition).
-pub const DIRECTIONS: [&str; 4] = ["recognition", "recall", "listening", "speaking"];
+/// "speaking" = see the meaning, say the Chinese; "read_aloud" = see the characters, say
+/// them in Chinese; "say_meaning" = see the characters, say the meaning in English (all
+/// checked by speech recognition).
+pub const DIRECTIONS: [&str; 6] = ["recognition", "recall", "listening", "speaking", "read_aloud", "say_meaning"];
 
 fn check_direction(d: &str) -> AppResult<()> {
     if DIRECTIONS.contains(&d) {
@@ -101,19 +103,23 @@ pub fn build_session(conn: &Connection, f: &StudyFilter) -> AppResult<SessionInf
     let new_remaining_today = (new_per_day - new_studied_today(conn)?).max(0);
     let limit = if f.limit <= 0 { usize::MAX } else { f.limit as usize };
 
+    // Each mode picks a group of cards; when the session size can't take the whole group,
+    // the session gets a random sample of it rather than the first cards in some order.
     let mut picked: Vec<StudyItem> = match f.mode.as_str() {
         "due" => {
+            // due reviews first (so new cards never crowd them out), then today's new cards
             let mut due: Vec<StudyItem> = items.iter().filter(|i| is_due(i)).cloned().collect();
-            due.sort_by_key(|i| i.progress.as_ref().map(|p| p.due).unwrap_or(0));
-            let new: Vec<StudyItem> = items
-                .iter()
-                .filter(|i| i.progress.is_none())
-                .take(new_remaining_today as usize)
-                .cloned()
-                .collect();
+            shuffle(&mut due);
+            let mut new: Vec<StudyItem> = items.iter().filter(|i| i.progress.is_none()).cloned().collect();
+            shuffle(&mut new);
+            new.truncate(new_remaining_today as usize);
             due.into_iter().chain(new).collect()
         }
-        "new" => items.into_iter().filter(|i| i.progress.is_none()).collect(),
+        "new" => {
+            let mut new: Vec<StudyItem> = items.into_iter().filter(|i| i.progress.is_none()).collect();
+            shuffle(&mut new);
+            new
+        }
         "difficult" => {
             let mut hard: Vec<StudyItem> = items
                 .into_iter()
@@ -123,14 +129,18 @@ pub fn build_session(conn: &Connection, f: &StudyFilter) -> AppResult<SessionInf
                         .is_some_and(|p| p.lapses >= 2 || p.difficulty >= 7.0)
                 })
                 .collect();
-            hard.sort_by(|a, b| {
-                let da = a.progress.as_ref().map(|p| p.difficulty).unwrap_or(0.0);
-                let db = b.progress.as_ref().map(|p| p.difficulty).unwrap_or(0.0);
-                db.total_cmp(&da)
-            });
+            shuffle(&mut hard);
             hard
         }
-        "all" => items,
+        "all" => {
+            // Cram: the cards gone longest without a review first (never reviewed counts as
+            // longest), in random order among equals, so limited sessions rotate through the
+            // whole selection instead of always taking the oldest cards.
+            let mut all = items;
+            shuffle(&mut all);
+            all.sort_by_key(|i| i.progress.as_ref().map(|p| p.last_review).unwrap_or(0));
+            all
+        }
         other => return Err(AppError::msg(format!("Unknown study mode: {other}"))),
     };
     picked.truncate(limit);
@@ -145,6 +155,23 @@ pub fn build_session(conn: &Connection, f: &StudyFilter) -> AppResult<SessionInf
 
 /// The same word in several decks is studied once: keep one card per set of characters
 /// (the one furthest along, else the oldest) and show the meanings of all copies.
+/// Fisher-Yates shuffle with a small xorshift generator seeded from the clock (no extra crate).
+fn shuffle<T>(items: &mut [T]) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SALT: AtomicU64 = AtomicU64::new(0x9E37_79B9_7F4A_7C15);
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1);
+    let mut x = nanos ^ SALT.fetch_add(0x9E37_79B9_7F4A_7C15, Ordering::Relaxed) | 1;
+    let mut next = move || {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        x
+    };
+    for i in (1..items.len()).rev() {
+        items.swap(i, (next() % (i as u64 + 1)) as usize);
+    }
+}
+
 fn merge_duplicates(items: Vec<StudyItem>) -> Vec<StudyItem> {
     let mut groups: Vec<Vec<StudyItem>> = Vec::new();
     let mut index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
@@ -336,6 +363,89 @@ mod tests {
         both.limit = 5;
         assert_eq!(build_session(&conn, &both).unwrap().items.len(), 5);
         assert!(answer(&mut conn, card, "sideways", 3, 0).is_err());
+    }
+
+    #[test]
+    fn cram_rotates_through_the_selection() {
+        let mut conn = db::open_in_memory().unwrap();
+        let deck: i64 = conn
+            .query_row("INSERT INTO decks (name, created_at) VALUES ('Cram', 0) RETURNING id", [], |r| r.get(0))
+            .unwrap();
+        for i in 0..20 {
+            conn.execute(
+                "INSERT INTO cards (deck_id, hanzi, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)",
+                params![deck, format!("字{i}"), i],
+            )
+            .unwrap();
+        }
+        let filter = StudyFilter {
+            deck_ids: vec![deck],
+            tags: vec![],
+            directions: vec!["recognition".into()],
+            mode: "all".into(),
+            limit: 5,
+        };
+        let names = |s: &SessionInfo| s.items.iter().map(|i| i.card.hanzi.clone()).collect::<Vec<_>>();
+        // review the first five; the next cram session must pick other cards
+        let first = build_session(&conn, &filter).unwrap();
+        for item in &first.items {
+            answer_at(&mut conn, item.card.id, "recognition", 3, 1000, now()).unwrap();
+        }
+        let second = build_session(&conn, &filter).unwrap();
+        assert!(names(&second).iter().all(|h| !names(&first).contains(h)), "{:?} then {:?}", names(&first), names(&second));
+        // and the picks aren't simply the oldest cards in order
+        let orders: std::collections::HashSet<Vec<String>> = (0..8).map(|_| names(&build_session(&conn, &filter).unwrap())).collect();
+        assert!(orders.len() > 1, "random among equally-unreviewed cards");
+    }
+
+    #[test]
+    fn other_modes_sample_randomly_within_their_group() {
+        let mut conn = db::open_in_memory().unwrap();
+        db::set_setting(&conn, "new_per_day", "100").unwrap();
+        let deck: i64 = conn
+            .query_row("INSERT INTO decks (name, created_at) VALUES ('Mix', 0) RETURNING id", [], |r| r.get(0))
+            .unwrap();
+        let mut ids = Vec::new();
+        for i in 0..30 {
+            let id: i64 = conn
+                .query_row(
+                    "INSERT INTO cards (deck_id, hanzi, created_at, updated_at) VALUES (?1, ?2, ?3, ?3) RETURNING id",
+                    params![deck, format!("词{i}"), i],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            ids.push(id);
+        }
+        // ten cards reviewed long ago: due now
+        for &id in &ids[..10] {
+            answer_at(&mut conn, id, "recognition", 3, 1000, now() - 400 * 86400).unwrap();
+        }
+        let filter = |mode: &str| StudyFilter {
+            deck_ids: vec![deck],
+            tags: vec![],
+            directions: vec!["recognition".into()],
+            mode: mode.into(),
+            limit: 4,
+        };
+        let pick = |conn: &Connection, mode: &str| -> Vec<i64> {
+            build_session(conn, &filter(mode)).unwrap().items.iter().map(|i| i.card.id).collect()
+        };
+        // due mode: only due cards fit in 4, and which ones varies
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..10 {
+            let p = pick(&conn, "due");
+            assert!(p.iter().all(|id| ids[..10].contains(id)), "due before new");
+            seen.insert(p);
+        }
+        assert!(seen.len() > 1, "a random sample of the due cards");
+        // new-only mode: random new cards, not the first-added ones every time
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..10 {
+            let p = pick(&conn, "new");
+            assert!(p.iter().all(|id| ids[10..].contains(id)));
+            seen.insert(p);
+        }
+        assert!(seen.len() > 1);
     }
 
     #[test]

@@ -52,6 +52,90 @@ pub struct SpokenAnswer {
     pub note: String,
 }
 
+// ---------- saying the meaning in English ----------
+
+const FILLER: [&str; 22] = [
+    "to", "a", "an", "the", "of", "be", "is", "are", "sb", "sth", "someone", "something", "one", "ones",
+    "it", "its", "etc", "or", "and", "for", "in", "on",
+];
+
+/// Lowercase words without punctuation, with simple plural/verb endings removed.
+fn english_words(s: &str) -> Vec<String> {
+    let cleaned: String =
+        s.to_lowercase().chars().map(|c| if c.is_alphanumeric() || c == '\'' { c } else { ' ' }).collect();
+    cleaned
+        .split_whitespace()
+        .map(|w| w.trim_matches('\'').trim_end_matches("'s").to_string())
+        .filter(|w| !w.is_empty())
+        .map(|w| stem(&w))
+        .collect()
+}
+
+fn stem(w: &str) -> String {
+    for (suffix, keep) in [("ies", "y"), ("ing", ""), ("ed", ""), ("es", ""), ("s", "")] {
+        if w.len() > suffix.len() + 2 {
+            if let Some(base) = w.strip_suffix(suffix) {
+                return format!("{base}{keep}");
+            }
+        }
+    }
+    w.to_string()
+}
+
+fn content(words: &[String]) -> Vec<String> {
+    words.iter().filter(|w| !FILLER.contains(&w.as_str())).cloned().collect()
+}
+
+/// The senses a meaning lists ("to like; to be fond of" -> two), without bracketed notes.
+pub fn meaning_senses(meaning: &str) -> Vec<String> {
+    let mut no_brackets = String::new();
+    let mut depth = 0;
+    for c in meaning.chars() {
+        match c {
+            '(' | '[' | '（' => depth += 1,
+            ')' | ']' | '）' => depth = (depth - 1).max(0),
+            _ if depth == 0 => no_brackets.push(c),
+            _ => {}
+        }
+    }
+    no_brackets
+        .split([';', ',', '/', '；', '，'])
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Judge an English answer against a card's meaning: right when it says one of the senses
+/// (all of that sense's words, or the answer's words all belong to one sense and cover at
+/// least half of it). Lenient on purpose: the learner can always rate it themselves.
+pub fn judge_meaning(meaning: &str, heard: &str) -> SpokenAnswer {
+    let said = content(&english_words(heard));
+    let mut answer = SpokenAnswer {
+        status: if said.is_empty() { "unclear" } else { "heard" }.into(),
+        heard: heard.trim().to_string(),
+        heard_pinyin: String::new(),
+        confidence: String::new(),
+        correct: false,
+        suggested: 1,
+        note: String::new(),
+    };
+    if said.is_empty() {
+        return answer;
+    }
+    let right = meaning_senses(meaning).iter().any(|sense| {
+        let want = content(&english_words(sense));
+        if want.is_empty() {
+            return false;
+        }
+        let all_said = want.iter().all(|w| said.contains(w));
+        let hits = said.iter().filter(|w| want.contains(w)).count();
+        all_said || (hits == said.len() && hits * 2 >= want.len())
+    });
+    answer.correct = right;
+    answer.suggested = if right { 3 } else { 1 };
+    answer
+}
+
 /// Spoken forms that count as the card's answer: its characters, with and without
 /// optional parts ("点（钟）" -> 点钟, 点). Punctuation and Latin letters are dropped.
 pub fn answer_forms(hanzi: &str) -> Vec<String> {
@@ -527,6 +611,25 @@ mod tests {
         assert_eq!(answer_forms("块(钱)"), ["块钱", "块"]);
         assert_eq!(answer_forms("太…了"), ["太了"]);
         assert!(answer_forms("OK").is_empty());
+    }
+
+    #[test]
+    fn judges_english_meanings() {
+        let m = "to like; to be fond of (sth)";
+        assert!(judge_meaning(m, "like").correct);
+        assert!(judge_meaning(m, "To like.").correct);
+        assert!(judge_meaning(m, "be fond of").correct);
+        assert!(judge_meaning(m, "I like it").correct, "extra filler words are fine");
+        assert!(!judge_meaning(m, "hate").correct);
+        let m = "hello; hi";
+        assert!(judge_meaning(m, "Hi!").correct);
+        assert!(judge_meaning("teacher", "teachers").correct, "plural");
+        assert!(judge_meaning("to study; to learn", "learning").correct);
+        assert!(!judge_meaning("Chinese (language)", "language").correct, "notes in brackets don't count");
+        assert!(judge_meaning("Chinese (language)", "Chinese").correct);
+        assert!(judge_meaning("red wine", "wine").correct, "half of a two-word sense");
+        assert!(!judge_meaning("red wine", "red car").correct);
+        assert_eq!(judge_meaning("hello", "").status, "unclear");
     }
 
     #[test]

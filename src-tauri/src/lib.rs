@@ -71,6 +71,7 @@ pub fn run() {
             commands::speech_listen,
             commands::speech_cancel,
             commands::speech_check_audio,
+            commands::speech_check_english,
             commands::speech_transcribe,
             commands::speech_warmup,
             commands::whisper_models,

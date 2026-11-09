@@ -85,7 +85,7 @@ pub struct StudyFilter {
     /// Empty = any tag. Otherwise a card must have at least one of these tags.
     #[serde(default)]
     pub tags: Vec<String>,
-    /// Any of "recognition", "recall", "listening", "speaking".
+    /// Any of "recognition", "recall", "listening", "speaking", "read_aloud", "say_meaning".
     pub directions: Vec<String>,
     /// "due" | "new" | "all" | "difficult"
     pub mode: String,

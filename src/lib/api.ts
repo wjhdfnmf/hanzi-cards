@@ -1,7 +1,7 @@
 // Typed wrappers around the Rust commands (src-tauri/src/commands.rs).
 import { invoke } from "@tauri-apps/api/core";
 
-export type Direction = "recognition" | "recall" | "listening" | "speaking";
+export type Direction = "recognition" | "recall" | "listening" | "speaking" | "read_aloud" | "say_meaning";
 export type StudyMode = "due" | "new" | "all" | "difficult";
 
 export interface Deck {
@@ -342,6 +342,9 @@ export const api = {
   speechCheckAudio: (cardId: number, others: string[], pcm: Float32Array) =>
     invoke<SpokenAnswer>("speech_check_audio", { cardId, others, pcm: Array.from(pcm) }),
   /** `prompt`: words or a previous line the speech probably contains or answers. */
+  /** "Say the meaning": judge an English answer against the card's meaning. */
+  speechCheckEnglish: (cardId: number, pcm: Float32Array) =>
+    invoke<SpokenAnswer>("speech_check_english", { cardId, pcm: Array.from(pcm) }),
   speechTranscribe: (pcm: Float32Array, prompt: string | null = null) =>
     invoke<string>("speech_transcribe", { pcm: Array.from(pcm), prompt }),
   /** Load Whisper ahead of the first spoken answer (fire and forget). */

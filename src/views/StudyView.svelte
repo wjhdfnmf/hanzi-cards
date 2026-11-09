@@ -24,7 +24,9 @@
 
   type Phase = "setup" | "session" | "done";
   const MODES: StudyMode[] = ["due", "new", "all", "difficult"];
-  const DIRS: Direction[] = ["recognition", "recall", "listening", "speaking"];
+  const DIRS: Direction[] = ["recognition", "recall", "listening", "speaking", "read_aloud", "say_meaning"];
+  /** Directions answered by speaking (checked by speech recognition). */
+  const isSpoken = (d: Direction | undefined) => d === "speaking" || d === "read_aloud" || d === "say_meaning";
   const LIMITS = [10, 20, 50, 100, 0];
   const PREF_KEY = "study-selection";
 
@@ -54,6 +56,8 @@
   let previews = $state<IntervalPreview[]>([]);
   let shownAt = 0;
   let busy = false;
+  /** The mode the running session was started with. */
+  let sessionMode: StudyMode = "due";
   let result = $state({ reviewed: 0, correct: 0, ms: 0 });
   const current = $derived(queue[0] ?? null);
 
@@ -77,6 +81,21 @@
   /** Rating suggested from the spoken answer (highlighted; Enter accepts it). */
   let suggested = $state<number | null>(null);
 
+  /** Why a direction can't be studied on this computer ("" = it can). */
+  function dirOff(d: Direction): string {
+    if (d === "speaking" || d === "read_aloud") return speech.available ? "" : (speech.reason ?? t("speech.unavailable"));
+    if (d === "say_meaning") return speech.whisperModels.length ? "" : t("speech.needWhisper");
+    return "";
+  }
+
+  /** The learner overrules the recognizer: they did say it right. */
+  function markRight() {
+    if (!spoken) return;
+    spoken = { ...spoken, correct: true, note: "overridden" };
+    suggested = 3;
+    if (!revealed) reveal();
+  }
+
   onMount(async () => {
     try {
       const saved = JSON.parse(localStorage.getItem(PREF_KEY) ?? "null");
@@ -93,7 +112,7 @@
       api.listTags(),
       api.speechStatus().catch(() => speech),
     ]);
-    if (!speech.available) sel.directions = sel.directions.filter((d) => d !== "speaking");
+    sel.directions = sel.directions.filter((d) => !dirOff(d));
     if (!sel.directions.length) sel.directions = ["recognition"];
     // Forget decks/tags that no longer exist.
     sel.deckIds = sel.deckIds.filter((id) => decks.some((d) => d.id === id));
@@ -139,6 +158,17 @@
     return arr;
   }
 
+  /** Keep the same word (in another direction) from coming up twice in a row. */
+  function spreadSameWords(items: StudyItem[]): StudyItem[] {
+    const arr = [...items];
+    for (let i = 1; i < arr.length; i++) {
+      if (arr[i].card.hanzi !== arr[i - 1].card.hanzi) continue;
+      const j = arr.findIndex((x, k) => k > i && x.card.hanzi !== arr[i - 1].card.hanzi);
+      if (j > 0) [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
   async function start() {
     error = "";
     try {
@@ -147,12 +177,14 @@
         error = t("study.nothing");
         return;
       }
-      queue = sel.shuffle ? shuffle(info.items) : info.items;
+      sessionMode = sel.mode;
+      queue = spreadSameWords(sel.shuffle ? shuffle(info.items) : info.items);
       total = queue.length;
       done = 0;
       result = { reviewed: 0, correct: 0, ms: 0 };
       phase = "session";
-      if (sel.directions.includes("speaking") && speech.engine === "whisper") api.speechWarmup().catch(() => {});
+      if (sel.directions.some((d) => (isSpoken(d) && speech.engine === "whisper") || d === "say_meaning"))
+        api.speechWarmup().catch(() => {});
       await show();
     } catch (e) {
       error = errorText(e);
@@ -192,8 +224,8 @@
       result.ms += Math.min(ms, 10 * 60 * 1000);
       if (rating > 1) result.correct++;
       const rest = queue.slice(1);
-      // Short learning steps come back later in this session.
-      if (res.days === null && res.intervalSecs < 30 * 60) {
+      // Short learning steps come back later in this session (in cram, only a missed card).
+      if (res.days === null && res.intervalSecs < 30 * 60 && (sessionMode !== "all" || rating === 1)) {
         const pos = Math.min(rest.length, 3 + Math.floor(Math.random() * 3));
         rest.splice(pos, 0, item);
       } else {
@@ -209,7 +241,7 @@
   }
 
   async function listen() {
-    if (!current || revealed || listening || current.direction !== "speaking") return;
+    if (!current || revealed || listening || !isSpoken(current.direction)) return;
     const item = current;
     listening = true;
     error = "";
@@ -217,7 +249,8 @@
       // Other words in the session are offered as distractors.
       const others = queue.slice(1, 40).map((i) => i.card.hanzi);
       let res: SpokenAnswer;
-      if (speech.engine === "whisper") {
+      // English answers always go to Whisper; Chinese ones to the chosen engine.
+      if (item.direction === "say_meaning" || speech.engine === "whisper") {
         recording = new AbortController();
         const pcm = await recordUtterance({ signal: recording.signal, onLevel: (l) => (level = l) });
         const aborted = recording.signal.aborted;
@@ -230,7 +263,10 @@
           listening = false;
           thinking = true;
           try {
-            res = await api.speechCheckAudio(item.card.id, others, pcm);
+            res =
+              item.direction === "say_meaning"
+                ? await api.speechCheckEnglish(item.card.id, pcm)
+                : await api.speechCheckAudio(item.card.id, others, pcm);
           } finally {
             thinking = false;
           }
@@ -268,7 +304,7 @@
   function onkeydown(e: KeyboardEvent) {
     if (phase !== "session" || e.ctrlKey || e.metaKey || e.altKey) return;
     if ((e.target as HTMLElement)?.closest("input, textarea, select")) return;
-    if (current?.direction === "speaking" && !revealed) {
+    if (isSpoken(current?.direction) && !revealed) {
       if (e.key === " ") {
         e.preventDefault();
         listen();
@@ -351,12 +387,12 @@
           <h3>{t("study.directions")}</h3>
           <div class="chips">
             {#each DIRS as d (d)}
-              {@const off = d === "speaking" && !speech.available}
+              {@const off = dirOff(d) !== ""}
               <button
                 class="chip"
                 class:on={sel.directions.includes(d)}
                 disabled={off}
-                title={off ? (speech.reason ?? t("speech.unavailable")) : undefined}
+                title={off ? dirOff(d) : undefined}
                 onclick={() => (sel.directions = toggle(sel.directions, d))}
               >
                 {t(`dir.${d}`)}
@@ -418,8 +454,12 @@
             <Hanzi hanzi={c.hanzi} pinyin={c.pinyin} colored={revealed} size={c.hanzi.length > 4 ? 56 : 84} />
           {:else if dir === "recall"}
             <div class="meaning-q">{c.meaning || "—"}</div>
-          {:else if dir === "speaking"}
-            <div class="meaning-q">{c.meaning || "—"}</div>
+          {:else if isSpoken(dir)}
+            {#if dir === "speaking"}
+              <div class="meaning-q">{c.meaning || "—"}</div>
+            {:else}
+              <Hanzi hanzi={c.hanzi} pinyin={c.pinyin} colored={revealed} size={c.hanzi.length > 4 ? 56 : 84} />
+            {/if}
             {#if !revealed}
               <button
                 class="mic"
@@ -439,11 +479,25 @@
                 {:else if spoken.status === "unclear"}
                   {t("speech.unclear")}
                 {:else}
-                  {t("speech.heard")} <span class="han">{spoken.heard}</span>
+                  {t("speech.heard")}
+                  {#if dir === "say_meaning"}<span>“{spoken.heard}”</span>{:else}<span class="han">{spoken.heard}</span>{/if}
                   {#if spoken.heardPinyin}<span class="faint">{spoken.heardPinyin}</span>{/if}
-                  · {spoken.correct ? t("speech.right") : spoken.note === "tone" ? t("speech.tone") : t("speech.wrong")}
+                  ·
+                  {spoken.note === "overridden"
+                    ? t("speech.overridden")
+                    : spoken.correct
+                      ? t("speech.right")
+                      : spoken.note === "tone"
+                        ? t("speech.tone")
+                        : t("speech.wrong")}
                 {/if}
               </div>
+              {#if !spoken.correct && (spoken.status === "heard" || spoken.status === "unclear")}
+                <button class="btn ghost small override" onclick={markRight} title={t("speech.overrideHint")}>
+                  <Icon name="check" size={14} />
+                  {t("speech.override")}
+                </button>
+              {/if}
             {/if}
           {:else}
             <button class="listen" onclick={() => speak(c.hanzi)} aria-label={t("study.play")}>
@@ -456,14 +510,18 @@
                 ? t("study.whatMeaning")
                 : dir === "recall"
                   ? t("study.howWrite")
-                  : dir === "speaking"
+                  : isSpoken(dir)
                     ? thinking
                       ? t("speech.thinking")
                       : listening
                       ? t("speech.listening")
                       : spoken && !spoken.correct
                         ? t("speech.retry")
-                        : t("speech.prompt")
+                        : dir === "read_aloud"
+                          ? t("speech.promptRead")
+                          : dir === "say_meaning"
+                            ? t("speech.promptMeaning")
+                            : t("speech.prompt")
                     : t("study.whatHear")}
             </p>
           {/if}
@@ -471,7 +529,7 @@
 
         {#if revealed}
           <div class="back">
-            {#if dir !== "recognition"}
+            {#if dir !== "recognition" && dir !== "read_aloud" && dir !== "say_meaning"}
               <Hanzi hanzi={c.hanzi} pinyin={c.pinyin} size={c.hanzi.length > 4 ? 48 : 72} />
             {/if}
             <div class="py-line">
@@ -500,7 +558,7 @@
             {/each}
           </div>
         {/if}
-        <p class="faint small keys">{dir === "speaking" && !revealed ? t("speech.keys") : t("study.keys")}</p>
+        <p class="faint small keys">{isSpoken(dir) && !revealed ? t("speech.keys") : t("study.keys")}</p>
         {#if error}<div class="notice err small">{error}</div>{/if}
       </div>
     </div>
@@ -576,6 +634,15 @@
   }
   .heard.wrong {
     color: var(--accent);
+  }
+  .override {
+    margin-top: 6px;
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
   }
   .rate.suggested {
     outline: 2px solid var(--focus);

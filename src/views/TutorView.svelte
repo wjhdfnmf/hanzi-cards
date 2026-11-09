@@ -14,7 +14,7 @@
     type TutorSummary,
   } from "../lib/api";
   import { t } from "../lib/i18n.svelte";
-  import { goto } from "../lib/nav.svelte";
+  import { goto, nav } from "../lib/nav.svelte";
   import { showToast } from "../lib/toast.svelte";
   import { recordUtterance } from "../lib/mic";
   import { isSpeaking, speakQueued, stopSpeaking } from "../lib/speech";
@@ -112,7 +112,20 @@
   // Text that has streamed in but isn't a whole sentence yet (for speaking aloud).
   let pending = "";
 
-  onMount(async () => {
+  // This page stays alive (hidden) when you switch pages, so a conversation lasts until you
+  // end it or close the app. The setup data is refreshed each time the page is shown.
+  let shown = $derived(nav.view === "tutor");
+  $effect(() => {
+    if (shown) {
+      if (phase === "setup") loadSetup();
+    } else {
+      // leaving the page: stop the microphone and the voice, keep the conversation
+      recording?.abort();
+      stopSpeaking();
+    }
+  });
+
+  async function loadSetup() {
     try {
       const [key, speech, ds] = await Promise.all([api.aiKeyStatus(), api.speechStatus(), api.listDecks()]);
       keySet = key.set;
@@ -120,12 +133,12 @@
       canSpeak = speech.whisperModels.length > 0;
       if (canSpeak) api.speechWarmup().catch(() => {});
       decks = ds;
-      addDeck = ds[0]?.id ?? null;
+      if (addDeck === null || !ds.some((d) => d.id === addDeck)) addDeck = ds[0]?.id ?? null;
     } catch (e) {
       error = errorText(e);
       keySet = false;
     }
-  });
+  }
 
   onMount(() => {
     let unlisten: (() => void) | undefined;
@@ -203,11 +216,11 @@
     let used = 0;
     while ((m = re.exec(pending))) {
       used = re.lastIndex;
-      if (hasChinese(m[0])) speakQueued(speakable(m[0]), rate());
+      if (hasChinese(m[0]) && shown) speakQueued(speakable(m[0]), rate());
     }
     pending = pending.slice(used);
     if (flush) {
-      if (hasChinese(pending)) speakQueued(speakable(pending), rate());
+      if (hasChinese(pending) && shown) speakQueued(speakable(pending), rate());
       pending = "";
     }
   }
@@ -394,7 +407,7 @@
   });
 
   function onKey(e: KeyboardEvent) {
-    if (phase !== "chat") return;
+    if (phase !== "chat" || nav.view !== "tutor") return;
     const typing = (e.target as HTMLElement)?.tagName === "INPUT" || (e.target as HTMLElement)?.tagName === "TEXTAREA";
     if (e.key === "Escape") {
       e.preventDefault();

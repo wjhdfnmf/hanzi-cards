@@ -14,6 +14,10 @@
   import TutorView from "./views/TutorView.svelte";
 
   let startupError = $state("");
+  let tutorOpened = $state(false);
+  $effect(() => {
+    if (nav.view === "tutor") tutorOpened = true;
+  });
 
   onMount(async () => {
     try {
@@ -64,12 +68,17 @@
     {:else if settings.loaded}
       {#key nav.view}
         {#if nav.view === "study"}<StudyView />
-        {:else if nav.view === "tutor"}<TutorView />
+        {:else if nav.view === "tutor"}<!-- kept alive below -->
         {:else if nav.view === "decks"}<DecksView />
         {:else if nav.view === "dictionary"}<DictionaryView />
         {:else if nav.view === "stats"}<StatsView />
         {:else}<SettingsView />{/if}
       {/key}
+      <!-- The tutor page stays alive once opened, so a conversation survives switching pages
+           until it's ended or the app closes. -->
+      {#if tutorOpened}
+        <div class="keep" class:hidden={nav.view !== "tutor"}><TutorView /></div>
+      {/if}
     {/if}
   </main>
 </div>
@@ -166,6 +175,9 @@
   main {
     overflow-y: auto;
     min-width: 0;
+  }
+  .keep.hidden {
+    display: none;
   }
   .toast {
     position: fixed;

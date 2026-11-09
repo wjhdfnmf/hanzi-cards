@@ -304,6 +304,29 @@ fn card_words(conn: &Connection) -> AppResult<Vec<String>> {
     Ok(out)
 }
 
+/// Judge a recorded English answer ("say the meaning") with Whisper.
+#[tauri::command]
+pub async fn speech_check_english(app: AppHandle, card_id: i64, pcm: Vec<f32>) -> AppResult<speech::SpokenAnswer> {
+    let dir = app_data(&app)?;
+    let (card, status) = blocking(app.clone(), {
+        let dir = dir.clone();
+        move |conn| Ok((cards::get_card(conn, card_id)?, speech::engine_status(conn, &dir)))
+    })
+    .await?;
+    let model = status.whisper_model.ok_or_else(|| AppError::msg("No Whisper model is downloaded."))?;
+    let text = tauri::async_runtime::spawn_blocking(move || {
+        let _ = speech::write_wav(&dir.join("last-recording.wav"), &pcm);
+        let opts = whisper::Options {
+            trim: if whisper::using_gpu() { None } else { Some(SPEECH_WINDOW) },
+            ..Default::default()
+        };
+        whisper::transcribe(&dir, &model, &pcm, "en", &opts)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))??;
+    Ok(speech::judge_meaning(&card.meaning, &text))
+}
+
 /// Transcribe a learner speaking Mandarin with Whisper (raw text), favouring their card
 /// words. Keeps the last recording in the app's data folder (`last-recording.wav`,
 /// overwritten each time) so recognition problems can be checked.
