@@ -55,6 +55,11 @@ npm run check          # type-check the front end
 cd src-tauri && cargo test   # Rust unit tests (scheduler, pinyin, cards, study, stats, dictionary)
 ```
 
+### GPU (optional, NVIDIA)
+
+With the CUDA Toolkit installed, `scripts/dev-gpu.ps1` runs the app with Whisper on the graphics card
+(`--features gpu`); a spoken answer then takes about 0.2 s instead of 1-3 s. See `docs/gpu-whisper-plan.md`.
+
 ## Layout
 
 ```

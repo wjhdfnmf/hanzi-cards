@@ -5,7 +5,7 @@
 //! Hugging Face (openai/whisper-*, Apache-2.0) into the app's data folder.
 
 use crate::error::{AppError, AppResult};
-use candle_core::{Device, Tensor, D};
+use candle_core::{DType, Device, Tensor, D};
 use candle_nn::VarBuilder;
 use candle_transformers::models::whisper::{self as m, audio, Config};
 use serde::Serialize;
@@ -15,11 +15,19 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 /// (name, Hugging Face repo, approximate download size in MB)
-pub const MODELS: [(&str, &str, u64); 3] = [
+pub const MODELS: [(&str, &str, u64); 4] = [
     ("tiny", "openai/whisper-tiny", 151),
     ("base", "openai/whisper-base", 290),
     ("small", "openai/whisper-small", 967),
+    // much better at Chinese; its 32-layer encoder wants a graphics card
+    ("large-v3-turbo", "openai/whisper-large-v3-turbo", 1620),
 ];
+
+/// Models that are too slow without a graphics card.
+const GPU_MODELS: [&str; 1] = ["large-v3-turbo"];
+
+/// Fetched when the repository has it: newer models keep their suppressed tokens here.
+const OPTIONAL_FILES: [&str; 1] = ["generation_config.json"];
 const FILES: [&str; 3] = ["config.json", "tokenizer.json", "model.safetensors"];
 
 #[derive(Debug, Clone, Serialize)]
@@ -28,6 +36,8 @@ pub struct WhisperModel {
     pub name: String,
     pub size_mb: u64,
     pub installed: bool,
+    /// Too slow without a graphics card.
+    pub gpu_recommended: bool,
 }
 
 pub fn models_dir(app_data: &Path) -> PathBuf {
@@ -48,7 +58,12 @@ pub fn is_installed(app_data: &Path, name: &str) -> bool {
 pub fn list(app_data: &Path) -> Vec<WhisperModel> {
     MODELS
         .iter()
-        .map(|(name, _, mb)| WhisperModel { name: name.to_string(), size_mb: *mb, installed: is_installed(app_data, name) })
+        .map(|(name, _, mb)| WhisperModel {
+            name: name.to_string(),
+            size_mb: *mb,
+            installed: is_installed(app_data, name),
+            gpu_recommended: GPU_MODELS.contains(name),
+        })
         .collect()
 }
 
@@ -87,6 +102,14 @@ pub fn download(app_data: &Path, name: &str, mut progress: impl FnMut(u64, u64))
         out.flush()?;
         drop(out);
         std::fs::rename(&part, &target)?;
+    }
+    for f in OPTIONAL_FILES {
+        let url = format!("https://huggingface.co/{repo}/resolve/main/{f}");
+        if let Ok(resp) = ureq::get(&url).call() {
+            if let Ok(text) = resp.into_string() {
+                std::fs::write(dir.join(f), text)?;
+            }
+        }
     }
     Ok(())
 }
@@ -332,6 +355,105 @@ struct Engine {
     /// `suppress` plus every token with Latin letters or digits (for Chinese-only answers).
     suppress_latin: Tensor,
     device: Device,
+    /// F16 on the GPU, F32 on the CPU.
+    dtype: DType,
+    /// "gpu" or "cpu": where the model was loaded.
+    kind: &'static str,
+}
+
+// ---------- CPU or GPU ----------
+
+/// "auto" (the GPU when this build and this computer have one) or "cpu".
+static DEVICE_PREF: Mutex<String> = Mutex::new(String::new());
+
+pub fn set_device_preference(pref: &str) {
+    *DEVICE_PREF.lock().unwrap_or_else(|e| e.into_inner()) = pref.to_string();
+}
+
+/// Whether a CUDA GPU can be used (checked once; None = usable, Some = why not).
+fn gpu_problem() -> Option<String> {
+    static CHECK: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    CHECK
+        .get_or_init(|| {
+            #[cfg(feature = "gpu")]
+            {
+                match Device::new_cuda(0) {
+                    Ok(_) => None,
+                    Err(e) => Some(format!("No usable NVIDIA GPU: {e}")),
+                }
+            }
+            #[cfg(not(feature = "gpu"))]
+            {
+                Some("This build of the app has no GPU support.".to_string())
+            }
+        })
+        .clone()
+}
+
+/// Where Whisper should run now.
+fn wanted_kind() -> &'static str {
+    let pref = DEVICE_PREF.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    if pref != "cpu" && gpu_problem().is_none() { "gpu" } else { "cpu" }
+}
+
+fn gpu_name() -> Option<String> {
+    static NAME: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    NAME.get_or_init(|| {
+        let mut cmd = std::process::Command::new("nvidia-smi");
+        cmd.args(["--query-gpu=name", "--format=csv,noheader"]);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        let out = cmd.output().ok()?;
+        let name = String::from_utf8_lossy(&out.stdout).lines().next()?.trim().to_string();
+        (!name.is_empty()).then_some(name)
+    })
+    .clone()
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceInfo {
+    /// This build can use a GPU (built with the `gpu` feature).
+    pub gpu_build: bool,
+    /// The GPU's name, if there is a usable one.
+    pub gpu: Option<String>,
+    /// Why the GPU can't be used, if it can't.
+    pub gpu_problem: Option<String>,
+    /// Where Whisper runs with the current setting: "gpu" or "cpu".
+    pub using: String,
+}
+
+/// Models too slow to use without a graphics card.
+pub fn needs_gpu(name: &str) -> bool {
+    GPU_MODELS.contains(&name)
+}
+
+/// Whether Whisper runs on the GPU with the current setting.
+pub fn using_gpu() -> bool {
+    wanted_kind() == "gpu"
+}
+
+pub fn device_info() -> DeviceInfo {
+    let problem = gpu_problem();
+    DeviceInfo {
+        gpu_build: cfg!(feature = "gpu"),
+        gpu: if problem.is_none() { gpu_name().or(Some("NVIDIA GPU".into())) } else { None },
+        gpu_problem: problem,
+        using: wanted_kind().to_string(),
+    }
+}
+
+/// The loaded engine for `name` on the wanted device, loading (or reloading) it if needed.
+fn engine<'a>(guard: &'a mut Option<Engine>, app_data: &Path, name: &str) -> AppResult<&'a mut Engine> {
+    let kind = wanted_kind();
+    if guard.as_ref().is_none_or(|e| e.name != name || e.kind != kind) {
+        *guard = None; // free the old model first
+        *guard = Some(load(app_data, name, kind)?);
+    }
+    Ok(guard.as_mut().expect("loaded above"))
 }
 
 /// The loaded model, kept between answers (loading takes a moment).
@@ -348,19 +470,32 @@ fn unload_if(name: &str) {
     }
 }
 
-fn load(app_data: &Path, name: &str) -> AppResult<Engine> {
+fn load(app_data: &Path, name: &str, kind: &'static str) -> AppResult<Engine> {
     if !is_installed(app_data, name) {
         return Err(AppError::msg(format!(
             "The Whisper {name} model isn't downloaded yet. Download it in Settings › Speech recognition."
         )));
     }
     let dir = model_dir(app_data, name)?;
-    let config: Config = serde_json::from_slice(&std::fs::read(dir.join("config.json"))?)
+    let mut config: Config = serde_json::from_slice(&std::fs::read(dir.join("config.json"))?)
         .map_err(|e| AppError::msg(format!("Bad model config: {e}")))?;
+    if config.suppress_tokens.is_empty() {
+        // newer models list them in generation_config.json
+        if let Ok(raw) = std::fs::read(dir.join("generation_config.json")) {
+            let gen: serde_json::Value = serde_json::from_slice(&raw).unwrap_or_default();
+            config.suppress_tokens =
+                gen["suppress_tokens"].as_array().into_iter().flatten().filter_map(|v| v.as_u64()).map(|v| v as u32).collect();
+        }
+    }
     let tokenizer = Tokenizer::load(&dir.join("tokenizer.json"))?;
-    let device = Device::Cpu;
+    let (device, dtype) = if kind == "gpu" {
+        // half precision on the GPU: half the memory, and the tensor cores do the work
+        (Device::new_cuda(0).map_err(err)?, DType::F16)
+    } else {
+        (Device::Cpu, m::DTYPE)
+    };
     // SAFETY: the file is only read while mapped; we never modify it while loaded.
-    let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[dir.join("model.safetensors")], m::DTYPE, &device) }
+    let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[dir.join("model.safetensors")], dtype, &device) }
         .map_err(err)?;
     let encoder = crate::whisper_net::Encoder::load(vb.pp("model.encoder"), &config).map_err(err)?;
     let decoder = crate::whisper_net::Decoder::load(vb.pp("model.decoder"), &config).map_err(err)?;
@@ -385,7 +520,7 @@ fn load(app_data: &Path, name: &str) -> AppResult<Engine> {
     let suppress = Tensor::new(suppress.as_slice(), &device).map_err(err)?;
     let suppress_latin = Tensor::new(latin.as_slice(), &device).map_err(err)?;
     let filters = mel_filters(m::SAMPLE_RATE, m::N_FFT, config.num_mel_bins);
-    Ok(Engine { name: name.to_string(), encoder, decoder, config, tokenizer, filters, suppress, suppress_latin, device })
+    Ok(Engine { name: name.to_string(), encoder, decoder, config, tokenizer, filters, suppress, suppress_latin, device, dtype, kind })
 }
 
 /// Load the model and run it once on silence, so the first real answer is quick.
@@ -459,11 +594,7 @@ impl WordBias {
 /// ("zh" for Mandarin). Returns the text as Whisper wrote it.
 pub fn transcribe(app_data: &Path, name: &str, pcm: &[f32], language: &str, opts: &Options) -> AppResult<String> {
     let mut guard = ENGINE.lock().unwrap_or_else(|e| e.into_inner());
-    if guard.as_ref().is_none_or(|e| e.name != name) {
-        *guard = None; // free the old model first
-        *guard = Some(load(app_data, name)?);
-    }
-    let e = guard.as_mut().expect("loaded above");
+    let e = engine(&mut guard, app_data, name)?;
     run(e, pcm, language, opts).map_err(err)
 }
 
@@ -473,11 +604,7 @@ pub fn transcribe(app_data: &Path, name: &str, pcm: &[f32], language: &str, opts
 #[allow(dead_code)] // tone-checking prototype (docs/tone-recognition.md)
 pub fn score(app_data: &Path, name: &str, pcm: &[f32], opts: &Options, candidates: &[String]) -> AppResult<Vec<f32>> {
     let mut guard = ENGINE.lock().unwrap_or_else(|e| e.into_inner());
-    if guard.as_ref().is_none_or(|e| e.name != name) {
-        *guard = None;
-        *guard = Some(load(app_data, name)?);
-    }
-    let e = guard.as_mut().expect("loaded above");
+    let e = engine(&mut guard, app_data, name)?;
     score_run(e, pcm, opts, candidates).map_err(err)
 }
 
@@ -490,7 +617,7 @@ fn score_run(e: &mut Engine, pcm: &[f32], opts: &Options, candidates: &[String])
         let mut feed = Tensor::new(start.as_slice(), &e.device)?.unsqueeze(0)?;
         let mut total = 0f32;
         for t in e.tokenizer.encode(cand).into_iter().chain([eot]) {
-            let logits = e.decoder.step(&feed, &mut state)?;
+            let logits = e.decoder.step(&feed, &mut state)?.to_dtype(DType::F32)?;
             let logp = candle_nn::ops::log_softmax(&logits, D::Minus1)?.squeeze(0)?.to_vec1::<f32>()?;
             total += logp[t as usize];
             feed = Tensor::new(&[t], &e.device)?.unsqueeze(0)?;
@@ -514,7 +641,9 @@ fn prepare(e: &mut Engine, pcm: &[f32], language: &str, opts: &Options) -> candl
         }
         None => m::N_FRAMES,
     };
-    let mel = Tensor::from_vec(mel, (1, n_mels, frames), &e.device)?.narrow(2, 0, keep.min(frames).min(m::N_FRAMES))?;
+    let mel = Tensor::from_vec(mel, (1, n_mels, frames), &e.device)?
+        .narrow(2, 0, keep.min(frames).min(m::N_FRAMES))?
+        .to_dtype(e.dtype)?;
     let tok = |s: &str| e.tokenizer.special.get(s).copied();
     let (Some(sot), Some(eot), Some(transcribe), Some(no_ts)) =
         (tok(m::SOT_TOKEN), tok(m::EOT_TOKEN), tok(m::TRANSCRIBE_TOKEN), tok(m::NO_TIMESTAMPS_TOKEN))
@@ -550,7 +679,9 @@ fn run(e: &mut Engine, pcm: &[f32], language: &str, opts: &Options) -> candle_co
         }
         None => m::N_FRAMES,
     };
-    let mel = Tensor::from_vec(mel, (1, n_mels, frames), &e.device)?.narrow(2, 0, keep.min(frames).min(m::N_FRAMES))?;
+    let mel = Tensor::from_vec(mel, (1, n_mels, frames), &e.device)?
+        .narrow(2, 0, keep.min(frames).min(m::N_FRAMES))?
+        .to_dtype(e.dtype)?;
 
     let tok = |s: &str| e.tokenizer.special.get(s).copied();
     let (Some(sot), Some(eot), Some(transcribe), Some(no_ts)) =
@@ -595,7 +726,7 @@ fn run(e: &mut Engine, pcm: &[f32], language: &str, opts: &Options) -> candle_co
     let mut live: Vec<(Vec<u32>, f32)> = vec![(start.clone(), 0.0)];
     let mut done: Vec<(Vec<u32>, f32)> = Vec::new();
     for step in 0..max_new {
-        let logits = e.decoder.step(&feed, &mut state)?;
+        let logits = e.decoder.step(&feed, &mut state)?.to_dtype(DType::F32)?;
         let logits = logits.broadcast_add(if opts.chinese_only { &e.suppress_latin } else { &e.suppress })?;
         let logp = candle_nn::ops::log_softmax(&logits, D::Minus1)?.to_vec2::<f32>()?;
 
@@ -844,7 +975,7 @@ mod tests {
         let comma_prompt = format!("{}。", words.join("，"));
         {
             let mut g = ENGINE.lock().unwrap();
-            *g = Some(load(Path::new(&dir), &name).unwrap());
+            *g = Some(load(Path::new(&dir), &name, wanted_kind()).unwrap());
             let t = &g.as_ref().unwrap().tokenizer;
             let ids = t.encode(&comma_prompt);
             assert_eq!(t.decode(&ids, u32::MAX), comma_prompt, "prompt round-trips");

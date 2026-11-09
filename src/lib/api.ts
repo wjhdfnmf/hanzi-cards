@@ -161,7 +161,18 @@ export interface SpeechStatus {
   whisperModel: string | null;
 }
 
+/** Where Whisper runs. */
+export interface WhisperDeviceInfo {
+  gpuBuild: boolean;
+  gpu: string | null;
+  gpuProblem: string | null;
+  /** "gpu" | "cpu" */
+  using: string;
+}
+
 export interface WhisperModel {
+  /** Too slow without a graphics card. */
+  gpuRecommended: boolean;
   name: string;
   sizeMb: number;
   installed: boolean;
@@ -335,6 +346,7 @@ export const api = {
     invoke<string>("speech_transcribe", { pcm: Array.from(pcm), prompt }),
   /** Load Whisper ahead of the first spoken answer (fire and forget). */
   speechWarmup: () => invoke<void>("speech_warmup"),
+  whisperDeviceInfo: () => invoke<WhisperDeviceInfo>("whisper_device_info"),
   whisperModels: () => invoke<WhisperModel[]>("whisper_models"),
   whisperDownload: (name: string) => invoke<void>("whisper_download", { name }),
   whisperDelete: (name: string) => invoke<void>("whisper_delete", { name }),

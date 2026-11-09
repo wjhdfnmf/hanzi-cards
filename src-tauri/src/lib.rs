@@ -35,6 +35,9 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let conn = db::open(&dir.join("hanzi-cards.db"))?;
+            whisper::set_device_preference(
+                &db::get_setting(&conn, "whisper_device").ok().flatten().unwrap_or_else(|| "auto".into()),
+            );
             app.manage(AppState {
                 db: Mutex::new(conn),
             });
@@ -71,6 +74,7 @@ pub fn run() {
             commands::speech_transcribe,
             commands::speech_warmup,
             commands::whisper_models,
+            commands::whisper_device_info,
             commands::whisper_download,
             commands::whisper_delete,
             commands::ai_key_status,

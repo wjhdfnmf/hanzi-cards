@@ -303,7 +303,14 @@ pub fn engine_status(conn: &Connection, app_data: &std::path::Path) -> SpeechSta
     let windows = platform::status();
     let installed: Vec<String> = crate::whisper::list(app_data).into_iter().filter(|m| m.installed).map(|m| m.name).collect();
     let wanted_model = crate::db::get_setting(conn, "whisper_model").ok().flatten().unwrap_or_else(|| "base".into());
-    let whisper_model = if installed.contains(&wanted_model) { Some(wanted_model) } else { installed.first().cloned() };
+    let mut whisper_model = if installed.contains(&wanted_model) { Some(wanted_model) } else { installed.first().cloned() };
+    // A graphics-card model on the processor takes several seconds per answer: use the
+    // largest other model instead while there's no GPU.
+    if whisper_model.as_deref().is_some_and(crate::whisper::needs_gpu) && !crate::whisper::using_gpu() {
+        if let Some(cpu) = installed.iter().rev().find(|m| !crate::whisper::needs_gpu(m)) {
+            whisper_model = Some(cpu.clone());
+        }
+    }
     let choice = crate::db::get_setting(conn, "speech_engine").ok().flatten().unwrap_or_else(|| "auto".into());
     let engine = match choice.as_str() {
         "windows" if windows.available => Some("windows"),

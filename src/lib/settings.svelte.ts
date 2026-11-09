@@ -16,6 +16,8 @@ export const settings = $state({
   /** "auto" | "windows" | "whisper" */
   speechEngine: "auto",
   whisperModel: "base",
+  /** "auto" (GPU if available) | "cpu" */
+  whisperDevice: "auto",
   tutorModel: "claude-opus-5-5",
 });
 
@@ -31,6 +33,7 @@ const KEYS: Record<string, keyof typeof settings> = {
   voice: "voice",
   speech_engine: "speechEngine",
   whisper_model: "whisperModel",
+  whisper_device: "whisperDevice",
   tutor_model: "tutorModel",
 };
 

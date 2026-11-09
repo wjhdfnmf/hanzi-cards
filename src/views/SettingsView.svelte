@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import { ask, save } from "@tauri-apps/plugin-dialog";
-  import { api, errorText, type AiSpending, type DictStatus, type KeyStatus, type SpeechStatus, type WhisperModel } from "../lib/api";
+  import { api, errorText, type AiSpending, type DictStatus, type KeyStatus, type SpeechStatus, type WhisperDeviceInfo, type WhisperModel } from "../lib/api";
   import { recordUtterance } from "../lib/mic";
   import { showToast } from "../lib/toast.svelte";
   import { t } from "../lib/i18n.svelte";
@@ -30,8 +30,16 @@
   let micState = $state<"idle" | "recording" | "thinking">("idle");
   let micText = $state("");
 
+  let device = $state<WhisperDeviceInfo | null>(null);
+
   async function refreshSpeech() {
     [speech, models] = await Promise.all([api.speechStatus(), api.whisperModels()]);
+    device = await api.whisperDeviceInfo().catch(() => null);
+  }
+
+  async function setDevice(value: string) {
+    await saveSetting("whisperDevice", value);
+    device = await api.whisperDeviceInfo().catch(() => null);
   }
 
   onMount(() => {
@@ -297,13 +305,31 @@
         {speech?.available ? t("settings.speechUsing", { engine: engineLabel }) : (speech?.reason ?? t("settings.speechNone"))}
       </span>
     </div>
+    <label class="row">
+      <span>
+        {t("settings.whisperDevice")}
+        {#if device}
+          <small class="faint block">
+            {device.using === "gpu"
+              ? t("settings.whisperOnGpu", { gpu: device.gpu ?? "GPU" })
+              : t("settings.whisperOnCpu", { why: settings.whisperDevice === "cpu" ? t("settings.whisperCpuChosen") : (device.gpuProblem ?? "") })}
+          </small>
+        {/if}
+      </span>
+      <select value={settings.whisperDevice} onchange={(e) => setDevice(e.currentTarget.value)}>
+        <option value="auto">{t("settings.whisperDevice.auto")}</option>
+        <option value="cpu">{t("settings.whisperDevice.cpu")}</option>
+      </select>
+    </label>
     <div class="row col">
       <small class="faint">{t("settings.whisperHint")}</small>
       <div class="models">
         {#each models as m (m.name)}
           <div class="model">
             <strong>{t("settings.whisperModel", { name: m.name })}</strong>
-            <span class="small faint">{t("settings.whisperSize", { n: m.sizeMb })}</span>
+            <span class="small faint"
+              >{t("settings.whisperSize", { n: m.sizeMb })}{#if m.gpuRecommended}<br />{t("settings.gpuRecommended")}{/if}</span
+            >
             <span class="model-actions">
               {#if progress[m.name] !== undefined}
                 <progress max="100" value={progress[m.name]}></progress>
@@ -493,7 +519,7 @@
   }
   .model {
     display: grid;
-    grid-template-columns: 130px 70px 1fr;
+    grid-template-columns: 175px 125px 1fr;
     align-items: center;
     gap: 10px;
   }

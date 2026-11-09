@@ -28,6 +28,10 @@ candle-core = "0.11"
 candle-nn = "0.11"
 candle-transformers = "0.11"
 
+[features]
+# Run Whisper on an NVIDIA GPU (needs the CUDA Toolkit to build): cargo build --features gpu
+gpu = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+
 # Spoken answers use the built-in Windows speech recognizer.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Foundation", "Foundation_Collections", "Globalization", "Media_SpeechRecognition", "Win32_System_WinRT"] }

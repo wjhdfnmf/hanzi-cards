@@ -129,7 +129,7 @@ impl Encoder {
         Ok(Encoder {
             conv1: conv(cfg.num_mel_bins, 1, vb.pp("conv1"))?,
             conv2: conv(n, 2, vb.pp("conv2"))?,
-            pos: sinusoids(cfg.max_source_positions, n, vb.device())?,
+            pos: sinusoids(cfg.max_source_positions, n, vb.device())?.to_dtype(vb.dtype())?,
             blocks: (0..cfg.encoder_layers)
                 .map(|i| Block::load(n, cfg.encoder_attention_heads, false, vb.pp(format!("layers.{i}"))))
                 .collect::<Result<_>>()?,
@@ -209,7 +209,7 @@ impl Decoder {
             let m: Vec<f32> = (0..n)
                 .flat_map(|i| (0..total).map(move |j| if j > past + i { f32::NEG_INFINITY } else { 0.0 }))
                 .collect();
-            Some(Tensor::from_vec(m, (n, total), dev)?)
+            Some(Tensor::from_vec(m, (n, total), dev)?.to_dtype(x.dtype())?)
         } else {
             None
         };

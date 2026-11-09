@@ -45,6 +45,7 @@ pub fn get_settings(state: State<AppState>) -> AppResult<HashMap<String, String>
         ("autoplay_audio", "false".to_string()),
         ("speech_engine", "auto".to_string()),
         ("whisper_model", "base".to_string()),
+        ("whisper_device", "auto".to_string()),
         ("tutor_model", ai::DEFAULT_MODEL.to_string()),
     ]
     .into_iter()
@@ -60,6 +61,9 @@ pub fn get_settings(state: State<AppState>) -> AppResult<HashMap<String, String>
 
 #[tauri::command]
 pub fn set_setting(state: State<AppState>, key: String, value: String) -> AppResult<()> {
+    if key == "whisper_device" {
+        whisper::set_device_preference(&value);
+    }
     Ok(db::set_setting(&lock(&state), &key, &value)?)
 }
 
@@ -312,9 +316,10 @@ async fn run_whisper(app: &AppHandle, dir: PathBuf, model: String, pcm: Vec<f32>
             bias_words,
             bias: CARD_WORD_BIAS,
             chinese_only: true,
-            // Encode the speech plus 2 s (at least 10 s) instead of a padded 30 s window: about
-            // 3x faster with Whisper small and as accurate (whisper_bench, 2026-11-09).
-            trim: Some(SPEECH_WINDOW),
+            // On the CPU, encode the speech plus 2 s (at least 10 s) instead of a padded 30 s
+            // window: about 3x faster with Whisper small and nearly as accurate. On the GPU
+            // the full window costs ~0.2 s and is the most accurate (whisper_bench, 2026-11-09).
+            trim: if whisper::using_gpu() { None } else { Some(SPEECH_WINDOW) },
             ..Default::default()
         };
         whisper::transcribe(&dir, &model, &pcm, "zh", &opts)
@@ -350,6 +355,12 @@ pub async fn speech_warmup(app: AppHandle) -> AppResult<()> {
     tauri::async_runtime::spawn_blocking(move || whisper::warm_up(&dir, &model))
         .await
         .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Where Whisper runs (GPU or CPU) and why, for Settings. The first call checks the GPU.
+#[tauri::command]
+pub async fn whisper_device_info() -> AppResult<whisper::DeviceInfo> {
+    tauri::async_runtime::spawn_blocking(whisper::device_info).await.map_err(|e| AppError::msg(e.to_string()))
 }
 
 #[tauri::command]

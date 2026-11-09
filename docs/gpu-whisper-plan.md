@@ -1,6 +1,42 @@
 # Plan: Whisper on the NVIDIA GPU (RTX 3070)
 
-Status: plan, written 2026-11-09. Nothing below is built yet.
+Status: **built** 2026-11-09. large-v3-turbo on the GPU is the model in use on this PC.
+
+## What was built (2026-11-09)
+
+- Cargo feature `gpu` (candle's CUDA backend). Run with **`scripts/dev-gpu.ps1`**, which
+  finds the CUDA Toolkit and sets the two things this toolchain needs:
+  - `CUDARC_CUDA_VERSION=13040`: cudarc 0.19 only knows CUDA up to 13.4; its 13.4
+    bindings work with the installed 13.5 (same major version, loaded at run time).
+  - `NVCC_APPEND_FLAGS=-Xcompiler /Zc:preprocessor`: CUDA 13's headers refuse MSVC's
+    old preprocessor.
+  (CUDA 13.5 was installed rather than the 12.9 suggested below; it works with these two.)
+- `whisper.rs` picks the device per the new `whisper_device` setting ("auto" = graphics
+  card if usable, or "cpu"); weights are F16 on the GPU. Settings › Speech recognition
+  shows "Running on the graphics card: NVIDIA GeForce RTX 3070" or why it can't.
+- Measured with `whisper_bench`, Whisper small, same 60 clips: **identical accuracy** in
+  F16, **0.17-0.24 s per clip with the full 30 s window** (CPU: 2.5-2.9 s). So the GPU uses
+  the full window (most accurate); the CPU keeps the 10 s window. In the app, a
+  transcription takes about 0.15 s end to end; warm-up about 1 s.
+- `large-v3-turbo` (1.6 GB, MIT) added to the model list, marked "graphics card
+  recommended"; its suppressed tokens come from `generation_config.json`, now fetched too.
+- large-v3-turbo vs small, GPU, full window, same 60 clips (error rate / card words /
+  sentences / words not on cards):
+
+  | | small | large-v3-turbo |
+  |---|---|---|
+  | tutor setting, clean | 19.5% · 24/40 · 9/10 · 7/10 | **10.4% · 28/40 · 9/10 · 9/10** |
+  | tutor setting, noisy | 40.9% · 12/40 · 4/10 · 6/10 | **27.9% · 17/40 · 8/10 · 6/10** |
+  | drill setting, clean | 9.1% · 33/40 · 8/10 · 7/10 | 9.7% · 31/40 · 8/10 · 9/10 |
+  | drill setting, noisy | 40.9% · 29/40 · 4/10 · 3/10 | **20.8%** · 24/40 · 7/10 · 6/10 |
+  | time per clip | 0.17-0.24 s | 0.3-0.6 s |
+
+  Turbo halves the errors on sentences and noise. Small gets a few more card words exactly
+  right in drills only because the word-list prompt pulls it harder toward card words, which
+  also makes it worse at hearing words that aren't on the cards (wrong answers). Turbo is the
+  default here; without a usable GPU the app falls back to the largest CPU model.
+
+The original plan follows.
 
 ## Why
 
