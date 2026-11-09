@@ -38,6 +38,32 @@ function applyTone(syllable: string, tone: number): string {
   return mark ? s.slice(0, idx) + mark + s.slice(idx + 1) : s;
 }
 
+const BASE_OF = new Map<string, string>();
+for (const [base, marks] of Object.entries(MARKS)) for (const m of marks) BASE_OF.set(m, base);
+
+/** Remove tone marks: "nǐ hǎo" -> "ni hao". */
+export function stripTones(s: string): string {
+  return [...s].map((c) => BASE_OF.get(c) ?? c).join("");
+}
+
+const VOWELS = "aeiouüvāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ";
+// The last syllable of a string: optional initial, vowels (u: allowed for ü), optional final.
+const LAST_SYLLABLE = new RegExp(
+  `(?:[zcs]h|[bpmfdtnlgkhjqxrzcsyw])?[${VOWELS}${VOWELS.toUpperCase()}:]+(?:ng|n|r)?$`,
+  "i",
+);
+
+/**
+ * Put tone `tone` (1-4, or 5 for neutral) on the syllable that ends `text`, replacing any
+ * tone it already has: ("ni", 3) -> "nǐ", ("nǐhao", 3) -> "nǐhǎo", ("lv", 4) -> "lǜ".
+ * Returns null when `text` doesn't end in a syllable.
+ */
+export function toneLastSyllable(text: string, tone: number): string | null {
+  const m = text.match(LAST_SYLLABLE);
+  if (!m || m.index === undefined) return null;
+  return text.slice(0, m.index) + applyTone(stripTones(m[0]), tone);
+}
+
 /** "ni3 hao3" -> "nǐ hǎo"; text without tone numbers is returned unchanged. */
 export function numberedToMarks(input: string): string {
   return input.replace(/([a-zA-ZüÜ]+(?::[a-zA-ZüÜ]*)?)([1-5])/g, (_m, syl: string, t: string) =>
@@ -86,14 +112,23 @@ const HANZI_RE = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3007]/;
 export const isHanzi = (ch: string) => HANZI_RE.test(ch);
 export const hasHanzi = (s: string) => [...s].some(isHanzi);
 
+/** Erhua: "zhèr" is written as one syllable for two characters (这儿) -> "zhè", "r". */
+function splitErhua(sylls: string[]): string[] {
+  return sylls.flatMap((s) => {
+    const base = stripTones(s).toLowerCase();
+    return base.length > 2 && base.endsWith("r") && base !== "er" ? [s.slice(0, -1), "r"] : [s];
+  });
+}
+
 /**
  * Pair each Chinese character with a tone, when the pinyin lines up
  * (same number of syllables as characters). Non-hanzi chars get tone 0.
  */
 export function hanziTones(hanzi: string, pinyin: string): { ch: string; tone: number }[] {
   const chars = [...hanzi];
-  const sylls = syllables(pinyin);
+  let sylls = syllables(pinyin);
   const hanCount = chars.filter(isHanzi).length;
+  if (sylls.length < hanCount && hanzi.includes("儿")) sylls = splitErhua(sylls);
   const aligned = sylls.length === hanCount;
   let k = 0;
   return chars.map((ch) => {

@@ -276,12 +276,14 @@ select:focus-visible {
   outline: none;
 }
 
-label.field {
+label.field,
+div.field {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
-label.field > span:first-child {
+label.field > span:first-child,
+div.field > label:first-child {
   font-weight: 600;
   font-size: 13px;
 }
@@ -325,6 +327,12 @@ button.chip {
 button.chip.on {
   background: var(--accent-soft);
   border-color: var(--accent);
+  color: var(--accent);
+}
+/* included because a deck it is inside is selected */
+button.chip.implied {
+  border-color: var(--accent);
+  border-style: dashed;
   color: var(--accent);
 }
 

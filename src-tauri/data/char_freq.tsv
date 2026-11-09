@@ -1,0 +1,3800 @@
+# Character reading frequencies from Unihan kHanyuPinlu. Unicode License. See scripts/gen_char_freq.py
+一	yi1:32747
+丁	ding1:16
+七	qi1:950
+万	wan4:1335
+丈	zhang4:112
+三	san1:3030
+上	shang4:12308 shang5:392
+下	xia4:6430 xia5:249
+不	bu4:23305 bu5:555
+与	yu3:962 yu4:10
+丑	chou3:31
+专	zhuan1:602
+且	qie3:1051
+世	shi4:1238
+丘	qiu1:58
+丙	bing3:30
+业	ye4:2095
+丛	cong2:69
+东	dong1:1601
+丝	si1:186
+丟	diu1:144
+丢	diu1:144
+两	liang3:3229
+严	yan2:633
+丧	sang4:22
+个	ge4:11693 ge5:1891 ge3:18
+丫	ya1:56
+中	zhong1:4875 zhong4:66
+丰	feng1:264
+串	chuan4:104
+临	lin2:220
+丸	wan2:13
+丹	dan1:31 dan5:11
+为	wei4:3962 wei2:2433
+主	zhu3:6884
+丽	li4:215
+举	ju3:541 ju5:8
+乃	nai3:27
+久	jiu3:467
+么	me5:8053
+义	yi4:4472
+之	zhi1:2282
+乌	wu1:69
+乎	hu5:304 hu1:284
+乏	fa2:103
+乐	le4:283 yue4:54
+乒	ping1:29
+乓	pang1:29
+乖	guai1:19
+乘	cheng2:106
+乙	yi3:45
+九	jiu3:1453
+也	ye3:7359
+习	xi2:836
+乡	xiang1:433
+书	shu1:1446
+买	mai3:774
+乱	luan4:357
+乳	ru3:24
+亂	luan4:357
+了	le5:30101 liao3:654 liao4:19
+予	yu3:40
+争	zheng1:1708
+事	shi4:3356 shi5:210
+二	er4:2718
+于	yu2:3483
+亏	kui1:71
+云	yun2:207
+互	hu4:288
+五	wu3:1864
+井	jing3:147
+亚	ya4:26
+些	xie1:3689
+亞	ya4:26
+亡	wang2:94
+交	jiao1:642
+亦	yi4:35
+产	chan3:4099
+亩	mu3:107
+享	xiang3:76
+亭	ting2:53
+亮	liang4:415 liang5:134
+亲	qin1:1029 qin5:428
+人	ren2:16866 ren5:280
+亿	yi4:195
+什	shen2:4045 shen5:17
+仅	jin3:402
+仇	chou2:71
+今	jin1:1239
+介	jie4:156
+仍	reng2:378
+从	cong2:3708 cong1:25
+仓	cang1:47
+仔	zi3:132
+他	ta1:16038
+仗	zhang4:128
+付	fu4:83 fu5:77
+仙	xian5:18 xian1:17
+代	dai4:1881
+令	ling4:453
+以	yi3:6111
+仪	yi2:120
+们	men5:14950
+仰	yang3:70
+件	jian4:1163
+价	jia4:430
+任	ren4:1235
+份	fen4:147 fen5:31
+仿	fang3:273
+企	qi3:244
+伊	yi1:13
+伍	wu5:216
+伏	fu2:100
+伐	fa2:52
+休	xiu1:197
+众	zhong4:1149
+优	you1:287
+伙	huo3:402 huo5:117
+会	hui4:6866 kuai4:9
+伞	san3:57
+伟	wei3:575
+传	chuan2:704 zhuan4:12
+伤	shang1:393
+伪	wei3:48
+伯	bo2:137 bo5:56
+估	gu1:67
+伴	ban4:106
+伶	ling5:15
+伸	shen1:307
+伺	ci4:24
+似	shi4:599 si4:401
+佃	dian4:12
+但	dan4:2345
+位	wei4:1252
+低	di1:664
+住	zhu4:1793
+佑	you4:11
+体	ti3:1746
+何	he2:691
+余	yu2:287
+佛	fu2:252
+作	zuo4:4832
+你	ni3:10944
+佩	pei4:29
+佳	jia1:21
+使	shi3:2283
+來	lai2:14549
+例	li4:369
+侍	shi4:20
+供	gong1:305 gong4:11
+依	yi1:341
+侦	zhen1:51
+侧	ce4:125
+侮	wu3:32
+侵	qin1:341
+便	bian4:1235 pian2:58
+促	cu4:140
+俄	e2:12
+俗	su2:51
+俘	fu2:31
+保	bao3:852
+信	xin4:1068
+俩	lia3:196
+俭	jian3:9
+修	xiu1:464
+俯	fu3:22
+俱	ju4:18
+俺	an3:122
+倆	lia3:196
+倉	cang1:47
+個	ge4:11693 ge5:1891 ge3:18
+倍	bei4:219
+們	men5:14950
+倒	dao4:530 dao3:365
+倘	tang3:45
+候	hou5:2060 hou4:300
+倚	yi3:34
+借	jie4:204
+倡	chang4:55
+倦	juan4:28
+债	zhai4:36
+值	zhi2:341
+倾	qing1:175
+假	jia3:222 jia4:44
+偉	wei3:575
+偎	wei1:16
+偏	pian1:153
+做	zuo4:2166
+停	ting2:510
+健	jian4:142
+側	ce4:125
+偵	zhen1:51
+偶	ou3:64
+偷	tou1:204
+偽	wei3:48
+偿	chang2:11
+傅	fu5:201
+傍	bang4:47
+傘	san3:57
+備	bei4:784
+储	chu3:25
+催	cui1:41
+傲	ao4:67
+傳	chuan2:704 zhuan4:12
+債	zhai4:36
+傷	shang1:393
+傻	sha3:62
+傾	qing1:175
+僅	jin3:402
+像	xiang4:233
+僚	liao2:56
+僱	gu4:25
+僵	jiang1:34
+價	jia4:430
+儀	yi2:120
+億	yi4:195
+儉	jian3:9
+償	chang2:11
+優	you1:287
+儲	chu3:25
+儿	r5:3254 er2:581
+允	yun3:102
+元	yuan2:325
+兄	xiong1:97 xiong5:25
+充	chong1:375
+先	xian1:1962
+光	guang1:1636
+克	ke4:172
+免	mian3:193
+兒	r5:3254 er2:581
+兔	tu4:100
+党	dang3:2652
+兜	dou1:43
+入	ru4:784
+內	nei4:1434
+全	quan2:2824
+兩	liang3:3229
+八	ba1:1123
+公	gong1:1289
+六	liu4:1035
+共	gong4:1298
+关	guan1:1758
+兴	xing4:499 xing1:164
+兵	bing1:536
+其	qi2:1458
+具	ju4:705 ju5:30
+典	dian3:98
+养	yang3:430
+兼	jian1:40
+兽	shou4:40
+内	nei4:1434
+冈	gang1:37
+冊	ce4:21
+册	ce4:21
+再	zai4:1697
+冒	mao4:187
+写	xie3:1171
+军	jun1:1842
+农	nong2:1281
+冤	yuan1:48
+冬	dong1:272
+冰	bing1:167
+冲	chong1:428 chong4:33
+决	jue2:1503
+况	kuang4:719
+冶	ye3:61
+冷	leng3:453
+冻	dong4:133
+净	jing4:152
+凄	qi1:16
+准	zhun3:897
+凉	liang2:129
+凍	dong4:133
+减	jian3:300
+凑	cou4:69
+凝	ning2:138
+几	ji3:2523 ji1:216
+凡	fan2:135
+凤	feng4:16
+凫	fu2:12
+凭	ping2:134
+凰	huang2:16
+凳	deng4:87
+凶	xiong1:78
+凸	tu1:31
+凹	ao1:31
+出	chu1:6753
+击	ji1:644
+凿	zao2:34
+刀	dao1:284
+分	fen1:2405 fen4:559 fen5:532
+切	qie4:998 qie1:70
+刊	kan1:50
+刑	xing2:115
+划	hua4:438 hua2:68
+列	lie4:270
+则	ze2:535
+刚	gang1:873
+创	chuang4:435 chuang1:13
+初	chu1:405
+判	pan4:252
+別	bie2:2043 bie4:14
+刨	pao2:12
+利	li4:1593 li5:16
+别	bie2:2043 bie4:14
+刮	gua1:105
+到	dao4:10331 dao5:18
+制	zhi4:1850
+刷	shua1:140
+刹	sha1:17 cha4:14
+刺	ci4:162
+刻	ke4:653
+剂	ji4:79
+則	ze2:535
+削	xue1:194 xiao1:33
+前	qian2:3617
+剎	sha1:17 cha4:14
+剑	jian4:79
+剔	ti1:12
+剖	pou1:24
+剛	gang1:873
+剝	bo1:212
+剥	bo1:212
+剧	ju4:123
+剩	sheng4:199
+剪	jian3:39
+副	fu4:313
+割	ge1:128
+創	chuang4:435 chuang1:13
+剿	jiao3:25
+劇	ju4:123
+劈	pi1:17
+劍	jian4:79
+劑	ji4:79
+力	li4:2488 li5:97
+劝	quan4:121
+办	ban4:1187
+功	gong1:381
+加	jia1:1861
+务	wu5:473 wu4:445
+劣	lie4:26
+动	dong4:5030
+助	zhu4:464
+努	nu3:251
+励	li4:93
+劲	jin4:294
+劳	lao2:856
+势	shi4:442 shi5:10
+勁	jin4:294
+勃	bo2:54
+勇	yong3:223
+勉	mian3:37
+勒	lei1:13
+動	dong4:5030
+勘	kan1:13
+務	wu5:473 wu4:445
+勝	sheng4:745
+勞	lao2:856
+勢	shi4:442 shi5:10
+勤	qin2:100
+勵	li4:93
+勸	quan4:121
+勻	yun2:34
+勾	gou1:42
+匀	yun2:34
+包	bao1:706
+匆	cong1:124
+化	hua4:2148
+北	bei3:726
+匙	shi5:13
+匠	jiang5:70 jiang4:16
+匪	fei3:118
+匯	hui4:73
+匹	pi3:79
+区	qu1:1211
+医	yi1:460
+匾	bian3:23
+區	qu1:1211
+十	shi2:4082
+千	qian1:881
+升	sheng1:197
+午	wu3:258 wu5:12
+半	ban4:1143
+华	hua2:29
+协	xie2:150
+卑	bei1:13
+協	xie2:150
+单	dan1:603
+卖	mai4:479 mai5:51
+南	nan2:749
+博	bo2:121
+卜	bo5:25
+占	zhan4:343
+卡	ka3:28
+卧	wo4:45
+卫	wei4:340
+印	yin4:300
+危	wei1:308
+即	ji2:511
+却	que4:1157
+卵	luan3:87
+卷	juan3:115 juan4:14
+卸	xie4:28
+卻	que4:1157
+厂	chang3:731
+厅	ting1:59
+历	li4:819
+厉	li4:146
+压	ya1:625
+厌	yan4:67
+厕	ce4:10
+厘	li2:69
+厚	hou4:202
+原	yuan2:1701
+厢	xiang1:18
+厦	sha4:17
+厨	chu2:48
+厭	yan4:67
+厲	li4:146
+去	qu4:7347
+县	xian4:429
+参	can1:525 shen1:25
+參	can1:525 shen1:25
+又	you4:4892
+及	ji2:721
+友	you5:437 you3:275
+双	shuang1:373
+反	fan3:2114
+发	fa1:4834 fa5:174 fa4:80
+叔	shu1:215 shu5:153
+取	qu3:916
+受	shou4:1082
+变	bian4:1669
+叙	xu4:18
+叛	pan4:68
+叠	die2:39
+叢	cong2:69
+口	kou3:1647 kou5:74
+古	gu3:440
+句	ju4:624
+另	ling4:476
+只	zhi3:3118 zhi1:749
+叫	jiao4:2238
+召	zhao4:235
+叭	ba5:25
+叮	ding1:38
+可	ke3:6054
+台	tai2:530
+史	shi3:847
+右	you4:490
+叶	ye4:301
+号	hao4:462 hao5:16 hao2:12
+司	si1:309
+叹	tan4:153
+叼	diao1:16
+吁	xu1:20 yu4:12
+吃	chi1:1684
+各	ge4:1806
+吆	yao1:37
+合	he2:1585
+吉	ji2:13
+吊	diao4:59
+同	tong2:4634 tong5:34 tong4:17
+名	ming2:767
+后	hou4:4342
+吐	tu3:73 tu4:38
+向	xiang4:2542
+吓	xia4:135
+吗	ma5:1456 ma2:93
+君	jun1:34
+吞	tun1:30
+吟	yin2:24
+否	fou3:230
+吧	ba5:2073
+吨	dun1:157
+吩	fen1:48
+含	han2:320
+听	ting1:2028 ting5:48
+吭	keng1:10
+启	qi3:60
+吵	chao3:85
+吶	ne5:2307 na4:13
+吸	xi1:371
+吹	chui1:239
+吻	wen3:10
+吼	hou3:63
+呀	ya5:1018 ya1:398
+呃	e4:14
+呆	dai1:136
+呈	cheng2:40
+告	gao4:995
+呐	ne5:2307 na4:13
+呗	bei5:22
+员	yuan2:1766
+呜	wu1:11
+呢	ne5:2307 ni2:21
+周	zhou1:396
+味	wei4:281
+呵	a1:392 he1:64
+呸	pei1:32
+呻	shen1:13
+呼	hu1:378 hu5:107
+命	ming4:2703
+咀	ju3:15
+咂	za1:18
+咆	pao2:19
+咋	za3:17
+和	he2:9513 huo5:38 he5:24 he4:9
+咐	fu5:72
+咒	zhou4:11
+咕	gu5:14
+咖	ka1:9
+咙	long2:26
+咛	ning2:11
+咦	yi2:41
+咧	lie5:53
+咬	yao3:166
+咱	zan2:741 zan5:11
+咳	hai1:46 ke2:39
+咸	xian2:10
+咽	yan4:29 ye4:23 yan1:9
+哀	ai1:55
+品	pin3:876
+哄	hong1:26 hong3:14
+哆	duo1:30
+哇	wa5:76 wa1:26
+哈	ha1:228
+响	xiang3:798
+哎	ai1:302
+哏	gen2:56
+哑	ya3:14
+哗	hua1:54
+哟	yo1:64 yo5:32
+員	yuan2:1766
+哥	ge1:491 ge5:217
+哦	o2:98 o4:98 e2:63
+哧	chi1:35
+哨	shao4:51
+哩	li5:225
+哪	na3:1138 na5:266
+哭	ku1:373
+哮	xiao1:19
+哲	zhe2:217
+哺	bu3:14
+哼	heng1:147
+哽	geng3:12
+唄	bei5:22
+唇	chun2:97
+唤	huan4:57 huan5:35
+唬	hu5:14
+售	shou4:78
+唯	wei2:280
+唰	shua1:36
+唱	chang4:433
+唾	tuo4:14
+啃	ken3:17
+啄	zhuo2:12
+商	shang1:561
+啊	a5:1102 a1:404
+問	wen4:2838 wen5:54
+啞	ya3:14
+啟	qi3:60
+啡	fei1:9
+啤	pi2:12
+啥	sha4:109
+啦	la5:967 la1:15
+啪	pa1:49
+啸	xiao4:21
+啼	ti2:12
+啾	jiu1:32
+喂	wei4:151
+喃	nan2:26
+善	shan4:206
+喇	la3:25
+喉	hou2:51
+喊	han3:464
+喔	o1:103
+喘	chuan3:76
+喚	huan4:57 huan5:35
+喜	xi3:459
+喝	he1:340 he5:37 he4:19
+喪	sang4:22
+單	dan1:603
+喲	yo1:64 yo5:32
+喷	pen1:111
+喽	lou5:46
+嗅	xiu4:14
+嗎	ma5:1456 ma2:93
+嗐	hai4:14
+嗓	sang3:63
+嗚	wu1:11
+嗡	weng1:56
+嗦	suo5:30
+嗨	hai1:31
+嗬	he1:13
+嗯	n2:48 n3:48 n4:48 ng2:48 ng3:48 ng4:48
+嗽	sou5:39
+嘀	di2:14
+嘆	tan4:153
+嘈	cao2:13
+嘍	lou5:46
+嘗	chang2:38
+嘘	xu1:10
+嘛	ma5:246 ma2:93
+嘩	hua1:54
+嘯	xiao4:21
+嘱	zhu3:35
+嘲	chao2:28
+嘴	zui3:610
+嘶	si1:14
+嘻	xi1:42
+嘿	hei1:76
+噓	xu1:10
+噢	o1:103
+器	qi4:771
+噪	zao4:15
+噴	pen1:111
+噸	dun1:157
+嚀	ning2:11
+嚇	xia4:135
+嚨	long2:26
+嚴	yan2:633
+嚷	rang3:88
+嚼	jue2:15
+囑	zhu3:35
+四	si4:2101
+回	hui2:2949
+因	yin1:1919
+团	tuan2:887
+囪	cong1:28
+园	yuan2:258
+困	kun4:386
+囱	cong1:28
+围	wei2:654
+固	gu4:326
+国	guo2:6416
+图	tu2:491
+圆	yuan2:197
+圈	quan1:169 juan4:12
+國	guo2:6416
+圍	wei2:654
+園	yuan2:258
+圓	yuan2:197
+圖	tu2:491
+團	tuan2:887
+土	tu3:858
+圣	sheng4:28
+在	zai4:19364
+地	de5:7394 di4:4976
+场	chang3:773 chang2:141
+圾	ji1:38
+址	zhi3:24
+均	jun1:204
+坊	fang5:11
+坎	kan3:10
+坏	huai4:615
+坐	zuo4:1018
+坑	keng1:90
+块	kuai4:929
+坚	jian1:695
+坝	ba4:24
+坟	fen2:46
+坠	zhui4:13
+坡	po1:103
+坦	tan3:77
+坯	pi1:24
+垂	chui2:88
+垃	la1:38
+垄	long3:28
+型	xing2:317
+垒	lei3:28
+垦	ken3:10
+垫	dian4:24
+垮	kua3:38
+埃	ai1:33
+埋	mai2:90 man2:14
+城	cheng2:592
+域	yu4:124
+埠	bu4:12
+執	zhi2:218
+培	pei2:144
+基	ji1:895
+堂	tang2:180 tang5:10
+堅	jian1:695
+堆	dui1:233
+堡	bao3:24
+堤	di1:55
+堪	kan1:29
+堰	yan4:12
+報	bao4:1019
+場	chang3:773 chang2:141
+堵	du3:78
+塊	kuai4:929
+塌	ta1:32
+塑	su4:113
+塔	ta3:49
+塘	tang2:81
+塞	sai1:75 se4:13
+填	tian2:53
+塵	chen2:81
+境	jing4:280
+墊	dian4:24
+墓	mu4:23
+墙	qiang2:264
+墜	zhui4:13
+增	zeng1:601
+墨	mo4:50
+墩	dun1:36
+墳	fen2:46
+墾	ken3:10
+壁	bi4:149
+壓	ya1:625
+壕	hao2:28
+壘	lei3:28
+壞	huai4:615
+壟	long3:28
+壤	rang3:82
+壩	ba4:24
+士	shi4:516 shi5:69
+壮	zhuang4:174
+壯	zhuang4:174
+声	sheng1:2269 sheng5:57
+壳	ke2:67 qiao4:30
+壶	hu2:47
+壺	hu2:47
+壽	shou4:20
+处	chu4:661 chu3:357 chu5:149
+备	bei4:784
+复	fu4:558
+夏	xia4:197
+夕	xi1:30
+外	wai4:2233
+多	duo1:5568
+夜	ye4:799
+够	gou4:991
+夠	gou4:991
+夢	meng4:129
+大	da4:11596 dai4:177
+天	tian1:5162 tian5:64
+太	tai4:1379 tai5:337
+夫	fu5:396 fu1:102
+央	yang1:393
+失	shi1:525
+头	tou2:3058 tou5:715
+夸	kua1:43
+夹	jia1:95 jia2:23
+夺	duo2:197
+夾	jia1:95 jia2:23
+奇	qi2:345
+奈	nai4:22
+奉	feng4:25
+奋	fen4:281
+奏	zou4:26
+奔	ben1:135 ben4:19
+奖	jiang3:69
+套	tao4:227
+奠	dian4:26
+奪	duo2:197
+奮	fen4:281
+女	nv3:1129 nv5:37
+奴	nu2:73
+奶	nai3:234 nai5:167
+奸	jian1:20
+她	ta1:4477
+好	hao3:6060 hao1:142 hao4:115
+如	ru2:2323
+妄	wang4:48
+妇	fu4:321 fu5:28
+妈	ma1:1288 ma5:719
+妙	miao4:81
+妥	tuo3:53
+妨	fang2:22 fang1:13
+妹	mei4:158 mei5:100
+妻	qi1:69
+姆	mu3:16
+姊	zi3:10
+始	shi3:606
+姐	jie5:237 jie3:180
+姑	gu1:433 gu5:24
+姓	xing4:232
+委	wei3:668
+姜	jiang1:13
+姨	yi2:55
+姻	yin1:21
+姿	zi1:48
+威	wei1:188
+娃	wa2:44 wa5:44
+娇	jiao1:12
+娘	niang5:362 niang2:279
+娛	yu2:15
+娱	yu2:15
+娶	qu3:40
+婆	po2:76 po5:66
+婚	hun1:89
+婦	fu4:321 fu5:28
+婴	ying1:35
+婶	shen3:172 shen5:66
+媳	xi2:52
+媽	ma1:1288 ma5:719
+嫁	jia4:54
+嫂	sao3:320 sao5:14
+嫌	xian2:37
+嫩	nen4:26
+嬌	jiao1:12
+嬰	ying1:35
+嬸	shen3:172 shen5:66
+子	zi5:6853 zi3:1114
+孔	kong3:180
+字	zi4:676 zi5:138
+存	cun2:460
+孙	sun1:19
+季	ji4:238
+孤	gu1:54
+学	xue2:5640
+孩	hai2:1235
+孫	sun1:19
+孵	fu1:21
+學	xue2:5640
+宁	ning2:13 ning4:9
+它	ta1:2984
+宅	zhai2:61
+宇	yu3:144
+守	shou3:218
+安	an1:596
+完	wan2:1502
+宏	hong2:31
+宗	zong1:49 zong5:18
+官	guan1:276
+宙	zhou4:130
+定	ding4:2655
+宜	yi5:58 yi2:38
+宝	bao3:270
+实	shi2:2729 shi5:200
+审	shen3:58
+客	ke4:569
+宣	xuan1:296
+室	shi4:434
+宪	xian4:56
+宫	gong1:73
+宮	gong1:73
+宰	zai3:13
+害	hai4:553 hai5:107
+宴	yan4:34
+宵	xiao1:34
+家	jia1:4719 jia5:461
+容	rong2:822
+宽	kuan1:185
+宾	bin1:9
+宿	su4:60 xiu3:15
+寂	ji4:64
+寄	ji4:101
+密	mi4:481
+寇	kou4:19
+富	fu4:314
+寒	han2:145
+寓	yu4:11
+寞	mo4:35
+察	cha2:288
+寡	gua3:28
+實	shi2:2729 shi5:200
+寧	ning2:13 ning4:9
+審	shen3:58
+寫	xie3:1171
+寬	kuan1:185
+寶	bao3:270
+寸	cun4:63 cun5:29
+对	dui4:5013
+寻	xun2:127 xin2:14
+导	dao3:1403
+寿	shou4:20
+封	feng1:400
+射	she4:315
+将	jiang1:1194 jiang4:42
+將	jiang1:1194 jiang4:42
+專	zhuan1:602
+尊	zun1:122
+尋	xun2:127 xin2:14
+對	dui4:5013
+導	dao3:1403
+小	xiao3:5435
+少	shao3:1187 shao5:362 shao4:323
+尔	er3:26
+尖	jian1:168
+尘	chen2:81
+尚	shang4:64 shang5:20
+尝	chang2:38
+尤	you2:110
+就	jiu4:11223
+尸	shi1:14
+尺	chi3:124
+尽	jin3:212 jin4:166
+尾	wei3:169
+尿	niao4:16
+局	ju2:505
+屁	pi4:48
+层	ceng2:488
+居	ju1:184
+屆	jie4:70
+屈	qu1:37 qu5:27
+屉	ti5:17
+届	jie4:70
+屋	wu1:774
+屎	shi3:14
+屏	ping2:10
+屑	xie4:10
+展	zhan3:1433 zhan5:16
+屜	ti5:17
+属	shu3:369
+屠	tu2:15
+層	ceng2:488
+屬	shu3:369
+山	shan1:1704
+屹	yi4:18
+屿	yu3:30
+岁	sui4:519
+岂	qi3:51
+岖	qu1:13
+岗	gang3:59 gang1:11
+岛	dao3:190
+岡	gang1:37
+岩	yan2:70
+岭	ling3:70
+岸	an4:343
+峡	xia2:97
+峦	luan2:13
+峨	e2:12
+峭	qiao4:12
+峰	feng1:94
+島	dao3:190
+峻	jun4:12
+峽	xia2:97
+崇	chong2:55
+崎	qi2:13
+崖	ya2:43
+崗	gang3:59 gang1:11
+崩	beng1:19
+崭	zhan3:34
+崽	zai3:10
+嵌	qian4:17
+嶄	zhan3:34
+嶇	qu1:13
+嶺	ling3:70
+嶼	yu3:30
+巍	wei1:12
+巒	luan2:13
+州	zhou1:30
+巡	xun2:12
+巢	chao2:28
+工	gong1:5185
+左	zuo3:546
+巧	qiao3:147
+巨	ju4:332
+巩	gong3:125
+差	cha4:241 cha1:60 chai1:26
+己	ji3:2585
+已	yi3:2107
+巴	ba5:207 ba1:14
+巷	xiang4:37
+巾	jin1:86
+币	bi4:58
+市	shi4:690
+布	bu4:744
+帅	shuai4:11
+帆	fan1:22
+师	shi1:1142
+希	xi1:321
+帐	zhang4:172
+帕	pa4:13
+帘	lian2:53
+帚	zhou5:13
+帜	zhi4:51
+帝	di4:606
+帥	shuai4:11
+带	dai4:1348
+師	shi1:1142
+席	xi2:804
+帮	bang1:598
+帳	zhang4:172
+帶	dai4:1348
+常	chang2:1760
+帽	mao4:188
+幅	fu2:122
+幕	mu4:137
+幟	zhi4:51
+幣	bi4:58
+幫	bang1:598
+干	gan4:1464 gan1:482
+平	ping2:1484
+年	nian2:5553
+并	bing4:1420
+幸	xing4:257
+幻	huan4:62
+幼	you4:66
+幾	ji3:2512
+广	guang3:628
+庄	zhuang1:337
+庆	qing4:51
+床	chuang2:379
+序	xu4:131
+库	ku4:91
+应	ying1:1045 ying4:400 ying5:213
+底	di3:788
+店	dian4:300
+庙	miao4:55
+府	fu3:432
+庞	pang2:19
+废	fei4:111
+度	du4:1505 du5:331
+座	zuo4:396
+庫	ku4:91
+庭	ting2:137
+康	kang1:78
+庸	yong1:9
+廁	ce4:10
+廂	xiang1:18
+廈	sha4:17
+廉	lian2:13
+廓	kuo4:22
+廚	chu2:48
+廟	miao4:55
+廠	chang3:731
+廢	fei4:111
+廣	guang3:628
+廳	ting1:59
+延	yan2:55
+建	jian4:1732
+廿	nian4:10
+开	kai1:3483
+异	yi4:146
+弃	qi4:51
+弄	nong4:319
+式	shi4:567 shi5:10
+弓	gong1:36
+引	yin3:498
+弟	di4:248 di5:200
+张	zhang1:785
+弥	mi2:25
+弦	xian2:16
+弯	wan1:161
+弱	ruo4:193
+張	zhang1:785
+強	qiang2:975 qiang3:88
+弹	dan4:313 tan2:50 tan5:13
+强	qiang2:975 qiang3:88
+彈	dan4:313 tan2:50 tan5:13
+彌	mi2:25
+彎	wan1:161
+归	gui1:93
+当	dang1:2483 dang4:474 dang5:40
+录	lu4:143
+形	xing2:1016 xing5:101
+彩	cai3:128 cai5:10
+影	ying3:854
+役	yi4:123
+彻	che4:257
+彼	bi3:60
+往	wang3:856 wang4:427
+征	zheng1:192
+径	jing4:69
+待	dai4:342
+很	hen3:3637
+徊	huai2:17
+律	lv4:439
+徐	xu2:26
+徑	jing4:69
+徒	tu2:161
+得	de5:5096 de2:1496 dei3:637
+徘	pai2:17
+從	cong2:3708 cong1:25
+御	yu4:42
+循	xun2:32
+微	wei1:511
+德	de2:97
+徹	che4:257
+心	xin1:3357 xin5:11
+必	bi4:1102
+忆	yi4:110
+忍	ren3:189
+志	zhi4:2082
+忘	wang4:312
+忙	mang2:686
+忠	zhong1:27
+忧	you1:23
+快	kuai4:1536 kuai5:77
+忱	chen2:12
+念	nian4:447
+忽	hu1:535
+忿	fen4:97
+怀	huai2:281
+态	tai4:381
+怎	zen3:2090
+怒	nu4:167
+怔	zheng1:15
+怕	pa4:866
+怖	bu4:32
+怜	lian2:111
+思	si1:1305 si5:331
+急	ji2:621
+怦	peng1:24
+性	xing4:1374 xing5:11
+怨	yuan4:34 yuan5:13
+怪	guai4:410
+怯	qie4:18
+总	zong3:1599
+恆	heng2:40
+恋	lian4:11
+恍	huang3:24
+恐	kong3:109
+恒	heng2:40
+恢	hui1:111
+恥	chi3:36
+恨	hen4:131
+息	xi5:392 xi1:105
+恰	qia4:123
+恳	ken3:64
+恶	e4:157 wu4:40
+恼	nao3:27
+悄	qiao1:218
+悅	yue4:23
+悉	xi1:111
+悔	hui3:39
+悟	wu4:69
+悠	you1:14
+患	huan4:53
+悦	yue4:23
+您	nin2:1593
+悬	xuan2:52
+悲	bei1:127
+悶	men4:46 men1:29
+悼	dao4:11
+情	qing2:1700 qing5:491
+惊	jing1:425
+惋	wan3:14
+惑	huo4:12 huo5:11
+惕	ti4:16
+惚	hu1:12
+惜	xi1:115
+惟	wei2:123
+惡	e4:157 wu4:40
+惦	dian4:11
+惧	ju4:16
+惨	can3:51
+惩	cheng2:15
+惭	can2:24
+惯	guan4:145
+惱	nao3:27
+想	xiang3:4640
+惶	huang2:13
+惹	re3:49
+愁	chou2:48
+愈	yu4:139
+愉	yu2:74
+意	yi4:2098 yi5:450
+愕	e4:14
+愚	yu2:8
+愛	ai4:1137
+感	gan3:978
+愣	leng4:58
+愤	fen4:159
+愧	kui4:37
+愿	yuan4:525
+慈	ci2:20
+態	tai4:381
+慌	huang1:153 huang5:15
+慎	shen4:38
+慕	mu4:24
+慘	can3:51
+慚	can2:24
+慢	man4:417
+慣	guan4:145
+慧	hui4:40
+慨	kai3:33
+慮	lv4:125
+慰	wei4:70
+慶	qing4:51
+慷	kang1:13
+憂	you1:23
+憋	bie1:19
+憐	lian2:111
+憑	ping2:134
+憤	fen4:159
+憧	chong1:10
+憬	jing3:10
+憲	xian4:56
+憶	yi4:110
+憾	han4:21
+懂	dong3:377
+懇	ken3:64
+應	ying1:1045 ying4:400 ying5:213
+懒	lan3:31
+懲	cheng2:15
+懶	lan3:31
+懷	huai2:281
+懸	xuan2:52
+懼	ju4:16
+戀	lian4:11
+戏	xi4:205
+成	cheng2:4462 cheng5:17
+我	wo3:23213
+戒	jie4:42
+或	huo4:1133
+战	zhan4:2420
+戚	qi5:52
+截	jie2:53
+戰	zhan4:2420
+戲	xi4:205
+戴	dai4:137
+戶	hu4:131 hu5:86
+户	hu4:131 hu5:86
+房	fang2:708
+所	suo3:2517
+扁	bian3:63
+扇	shan4:19 shan1:15
+手	shou3:2615 shou5:12
+才	cai2:2108 cai5:33
+扎	zha1:90 zha2:43
+扑	pu1:140
+扒	ba1:31
+打	da3:2250 da5:15
+扔	reng1:101
+托	tuo1:101
+扛	kang2:46
+扣	kou4:62
+执	zhi2:218
+扩	kuo4:159
+扫	sao3:121 sao4:13
+扬	yang2:179
+扭	niu3:81 niu5:14
+扮	ban5:35 ban4:11
+扯	che3:74 che5:14
+扰	rao3:32
+扳	ban1:21
+扶	fu2:67
+批	pi1:694
+找	zhao3:1043
+承	cheng2:163
+技	ji4:712
+抄	chao1:70
+把	ba3:5330
+抑	yi4:53
+抓	zhua1:403
+投	tou2:264
+抖	dou3:118
+抗	kang4:663
+折	zhe2:196 zhe1:24 she2:11
+抚	fu3:13
+抛	pao1:51
+抡	lun1:11
+抢	qiang3:131
+护	hu4:468
+报	bao4:1019
+披	pi1:89
+抬	tai2:305
+抱	bao4:293
+抵	di3:104
+抹	mo3:50 ma1:10
+押	ya1:35
+抽	chou1:244
+抿	min3:14
+拄	zhu3:13
+担	dan1:297 dan4:61 dan5:36
+拆	chai1:43
+拇	mu5:11
+拉	la1:657 la5:12
+拋	pao1:51
+拌	ban4:37
+拍	pai1:222
+拐	guai3:24
+拒	ju4:59
+拔	ba2:125 ba5:13
+拖	tuo1:173
+拘	ju1:18
+招	zhao1:201
+拜	bai4:27
+拟	ni3:22
+拢	long3:62
+拣	jian3:84
+拥	yong1:122
+拦	lan2:58
+拧	ning2:41
+拨	bo1:66
+择	ze2:71
+括	kuo4:171
+拭	shi4:13
+拱	gong3:78
+拳	quan2:54
+拴	shuan1:42
+拼	pin1:147
+拾	shi5:60 shi2:39
+拿	na2:1125
+持	chi2:601
+挂	gua4:270
+指	zhi3:1269 zhi2:33 zhi1:15
+按	an4:439
+挎	kua4:16
+挑	tiao1:155 tiao3:52
+挖	wa1:136
+挟	xie2:11
+挡	dang3:83
+挣	zheng1:43 zheng4:33
+挤	ji3:172
+挥	hui1:365
+挨	ai1:111
+挫	cuo4:33
+振	zhen4:84
+挺	ting3:239
+挽	wan3:66
+挾	xie2:11
+捂	wu3:22
+捆	kun3:67
+捉	zhuo1:104
+捍	han4:17
+捎	shao1:19
+捏	nie1:74
+捐	juan1:15
+捕	bu3:103
+捞	lao1:68
+损	sun3:128
+捡	jian3:26
+换	huan4:351
+捣	dao3:23
+捧	peng3:120
+据	ju4:805
+捶	chui2:15
+捷	jie2:20
+捻	nian3:11
+掀	xian1:66
+掃	sao3:121 sao4:13
+掄	lun1:11
+授	shou4:122
+掉	diao4:471
+掌	zhang3:279 zhang5:14
+掏	tao1:106
+掐	qia1:13
+排	pai2:402
+掘	jue2:11
+掙	zheng1:43 zheng4:33
+掛	gua4:270
+掠	lve4:62
+探	tan4:152 tan5:10
+接	jie1:1295
+控	kong4:191
+推	tui1:531
+掩	yan3:84
+措	cuo4:101
+掰	bai1:12
+掷	zhi4:14
+揀	jian3:84
+揉	rou2:44
+揍	zou4:25
+描	miao2:56
+提	ti2:1557
+插	cha1:170
+揚	yang2:179
+換	huan4:351
+握	wo4:337
+揣	chuai1:12
+揩	kai1:12
+揪	jiu1:37
+揭	jie1:118
+揮	hui1:365
+援	yuan2:137
+搀	chan1:27
+搁	ge1:51 ge5:9
+搂	lou3:25
+搅	jiao3:41
+損	sun3:128
+搏	bo2:26
+搓	cuo1:23
+搔	sao1:14
+搖	yao2:387
+搗	dao3:23
+搜	sou1:61
+搞	gao3:434
+搪	tang2:14
+搬	ban1:142
+搭	da1:85
+搶	qiang3:131
+携	xie2:18
+摄	she4:128
+摆	bai3:275
+摇	yao2:387
+摊	tan1:72
+摔	shuai1:128
+摘	zhai1:79
+摟	lou3:25
+摧	cui1:58
+摩	mo2:18
+摸	mo1:263 mo5:21
+撂	liao4:12
+撅	jue1:16
+撈	lao1:68
+撐	cheng1:25 cheng5:17
+撑	cheng1:25 cheng5:17
+撒	sa1:54 sa3:14
+撕	si1:58
+撞	zhuang4:97
+撤	che4:82
+撥	bo1:66
+撩	liao1:15
+撫	fu3:13
+播	bo1:174
+撲	pu1:140
+撵	nian3:10
+撼	han4:17
+撿	jian3:26
+擁	yong1:122
+擇	ze2:71
+擊	ji1:644
+擋	dang3:83
+操	cao1:133
+擔	dan1:297 dan4:61 dan5:36
+據	ju4:805
+擠	ji3:172
+擦	ca1:194
+擬	ni3:22
+擰	ning2:41
+擱	ge1:51 ge5:9
+擲	zhi4:14
+擴	kuo4:159
+擺	bai3:275
+擾	rao3:32
+攀	pan1:53
+攆	nian3:10
+攏	long3:62
+攒	zan3:10
+攔	lan2:58
+攙	chan1:27
+攜	xie2:18
+攝	she4:128
+攢	zan3:10
+攤	tan1:72
+攥	zuan4:11
+攪	jiao3:41
+支	zhi1:641
+收	shou1:768
+改	gai3:1090
+攻	gong1:313
+放	fang4:2045
+政	zheng4:1844
+故	gu4:416
+效	xiao4:283
+敌	di2:1320
+敏	min3:60
+救	jiu4:216
+敗	bai4:218
+敘	xu4:18
+教	jiao4:1326 jiao1:155
+敞	chang5:19
+敢	gan3:483
+散	san4:159 san3:90
+敬	jing4:96
+数	shu4:1079 shu3:91 shu5:14
+敲	qiao1:111
+整	zheng3:896
+敵	di2:1320
+敷	fu1:21
+數	shu4:1079 shu3:91 shu5:14
+斃	bi4:17
+文	wen2:1890
+斗	dou4:1360
+料	liao4:980
+斜	xie2:96
+斤	jin1:317
+斥	chi4:35
+斧	fu3:43
+断	duan4:681
+斯	si1:77
+新	xin1:1919
+斷	duan4:681
+方	fang1:2781 fang5:733
+施	shi1:203
+旁	pang2:471
+旅	lv3:139
+旋	xuan2:107
+族	zu2:672
+旗	qi2:215
+无	wu2:1997
+既	ji4:308
+日	ri4:1276
+旦	dan4:36
+旧	jiu4:479
+早	zao3:1022
+旬	xun2:25
+旱	han4:59
+时	shi2:6805
+旷	kuang4:14
+旺	wang4:27
+昂	ang2:44
+昆	kun1:72
+明	ming2:1887 ming5:96
+昏	hun1:117 hun2:10
+易	yi4:530
+星	xing1:564
+映	ying4:289
+春	chun1:327
+昧	mei4:27
+昨	zuo2:204
+是	shi4:27098 shi5:1032
+昼	zhou4:29
+显	xian3:503
+時	shi2:6805
+晃	huang5:39 huang4:13 huang3:12
+晌	shang3:48
+晒	shai4:54
+晓	xiao3:83
+晕	yun1:19
+晚	wan3:729
+晝	zhou4:29
+晨	chen5:124 chen2:28
+普	pu3:322
+景	jing3:303
+晰	xi1:37
+晴	qing2:61
+晶	jing1:57
+智	zhi4:71
+晾	liang4:12
+暂	zan4:96
+暄	xuan1:12
+暈	yun1:19
+暑	shu3:13
+暖	nuan3:159
+暗	an4:329
+暢	chang4:18
+暫	zan4:96
+暴	bao4:151
+曉	xiao3:83
+曠	kuang4:14
+曰	yue1:12
+曲	qu1:118 qu3:46
+更	geng4:1405 geng1:27
+書	shu1:1446
+曾	ceng2:387
+替	ti4:352
+最	zui4:2100
+會	hui4:6866 kuai4:9
+月	yue4:1694 yue5:11
+有	you3:17798
+朋	peng2:514
+服	fu2:555 fu5:396
+朗	lang3:56
+望	wang4:1150 wang5:29
+朝	chao2:296 zhao1:10
+期	qi1:1012
+朦	meng2:32
+朧	long2:32
+木	mu4:415
+未	wei4:328
+末	mo4:51
+本	ben3:2326
+朮	shu4:1056
+术	shu4:1056
+朴	pu3:63
+朵	duo5:123 duo3:119
+机	ji1:2563
+朽	xiu3:42
+杀	sha1:275
+杂	za2:356
+权	quan2:483
+杆	gan1:82 gan3:54
+杉	shan1:17
+李	li5:36
+材	cai2:516 cai5:9
+村	cun1:806
+杜	du4:16
+束	shu4:231
+条	tiao2:1643
+来	lai2:14549
+杨	yang2:77
+杯	bei1:122
+杰	jie2:25
+東	dong1:1601
+松	song1:184
+板	ban3:430
+极	ji2:911
+构	gou4:317
+枉	wang5:26
+析	xi1:140
+枕	zhen3:34
+林	lin2:341
+枚	mei2:15
+果	guo3:1655
+枝	zhi1:246
+枢	shu1:15
+枣	zao3:20
+枪	qiang1:386
+枯	ku1:34
+架	jia4:317
+柄	bing3:29
+柏	bai3:19
+某	mou3:294
+染	ran3:218
+柔	rou2:56
+柜	gui4:102
+查	cha2:470
+柱	zhu4:68
+柳	liu3:49
+柴	chai2:156
+标	biao1:343
+栏	lan2:44
+树	shu4:856
+校	xiao4:428
+株	zhu1:68
+样	yang4:4642
+核	he2:68
+根	gen1:1232
+格	ge2:288 ge5:29
+栽	zai1:54
+桃	tao2:59
+桅	wei2:14
+框	kuang1:21 kuang4:14
+案	an4:255
+桌	zhuo1:286
+桑	sang1:13
+桔	ju2:11
+档	dang4:23
+桥	qiao2:547
+桦	hua4:12
+桨	jiang3:16
+桩	zhuang1:50
+桶	tong3:72
+梁	liang2:95 liang5:73
+梅	mei2:53
+梆	bang1:10
+梗	geng3:18
+條	tiao2:1643
+梢	shao1:31
+梦	meng4:129
+梨	li2:14
+梯	ti1:40
+械	xie4:174
+梳	shu1:30
+检	jian3:337
+棄	qi4:51
+棉	mian2:392
+棋	qi2:21
+棍	gun4:74
+棒	bang4:97
+棗	zao3:20
+棚	peng2:62 peng5:14
+森	sen1:85
+棵	ke1:170
+棺	guan1:9
+椅	yi3:105
+植	zhi2:218
+椒	jiao1:12
+椭	tuo3:11
+楊	yang2:77
+楚	chu5:279
+業	ye4:2095
+極	ji2:911
+楼	lou2:179
+概	gai4:287
+榕	rong2:14
+榜	bang3:20
+榮	rong2:147
+榴	liu2:62
+構	gou4:317
+槍	qiang1:386
+槐	huai2:12
+槛	kan3:15
+槳	jiang3:16
+槽	cao2:39
+樁	zhuang1:50
+樂	le4:283 yue4:54
+樓	lou2:179
+標	biao1:343
+樞	shu1:15
+樟	zhang1:16
+模	mo2:298 mu2:64
+樣	yang4:4642
+横	heng2:131
+樹	shu4:856
+樺	hua4:12
+橋	qiao2:547
+橘	ju2:56
+機	ji1:2563
+橡	xiang4:29
+橢	tuo3:11
+橫	heng2:131
+檐	yan2:13
+檔	dang4:23
+檢	jian3:337
+檻	kan3:15
+欄	lan2:44
+權	quan2:483
+欠	qian4:53 qian5:16
+次	ci4:1715
+欢	huan5:252 huan1:248
+欣	xin1:63
+欧	ou1:16
+欲	yu4:43
+欺	qi1:59
+欽	qin1:10
+款	kuan3:65
+歇	xie1:84
+歉	qian4:23
+歌	ge1:344 ge5:11
+歐	ou1:16
+歡	huan5:252 huan1:248
+止	zhi3:380
+正	zheng4:2578 zheng5:76 zheng1:24
+此	ci3:1111
+步	bu4:1113
+武	wu3:337
+歪	wai1:64
+歲	sui4:519
+歷	li4:819
+歸	gui1:93
+死	si3:931
+歼	jian1:96
+殊	shu1:99
+残	can2:108
+殖	zhi2:151
+殘	can2:108
+殲	jian1:96
+段	duan4:531
+殺	sha1:275
+殼	ke2:67 qiao4:30
+殿	dian4:40
+毀	hui3:92
+毁	hui3:92
+毅	yi4:25
+母	mu3:700
+每	mei3:1245
+毒	du2:188
+比	bi3:1774
+毕	bi4:149
+毙	bi4:17
+毛	mao2:503 mao5:33
+毡	zhan1:20
+毫	hao2:225
+毯	tan3:29
+氈	zhan1:20
+氏	shi4:40
+民	min2:4675
+氓	mang2:25
+气	qi4:2211 qi5:348
+氛	fen1:28
+氢	qing1:13
+氣	qi4:2634 qi5:348
+氧	yang3:129
+氨	an1:22
+氫	qing1:13
+氮	dan4:13
+水	shui3:2819
+永	yong3:303
+汁	zhi1:9
+求	qiu2:818
+汇	hui4:73
+汉	han4:227
+汗	han4:47
+汛	xun4:12
+汞	gong3:22
+江	jiang1:299
+池	chi2:72
+污	wu1:107
+汤	tang1:40 tang5:15
+汪	wang1:20
+汰	tai4:9
+汹	xiong1:30
+決	jue2:1503
+汽	qi4:676
+沃	wo4:18
+沉	chen2:422 chen1:24
+沏	qi1:11
+沒	mei2:5589 mo4:44
+沖	chong1:428 chong4:33
+沙	sha1:425
+沛	pei4:8
+沟	gou1:136
+没	mei2:5589 mo4:44
+沥	li4:28
+沫	mo4:29 mo5:14
+河	he2:958
+沸	fei4:25
+油	you2:822
+治	zhi4:1165
+沾	zhan1:38
+沿	yan2:219 yan4:12
+況	kuang4:719
+泄	xie4:10
+泉	quan2:47
+泊	po1:26 bo2:11
+泌	mi4:23
+法	fa3:2090 fa5:130
+泛	fan4:144
+泡	pao4:77
+波	bo1:114
+泣	qi4:14
+泥	ni2:308
+注	zhu4:446
+泪	lei4:233
+泳	yong3:17
+泵	beng4:14
+泼	po5:50 po1:25
+洁	jie2:86
+洋	yang2:296
+洒	sa3:54
+洗	xi3:288
+洞	dong4:237
+津	jin1:20
+洪	hong2:46
+洲	zhou1:203
+洶	xiong1:30
+活	huo2:1755 huo5:54
+派	pai4:650
+流	liu2:1162
+浅	qian3:82
+浆	jiang1:17
+浇	jiao1:58
+浊	zhuo2:30
+测	ce4:227
+济	ji4:1008
+浑	hun2:99
+浓	nong2:116
+浩	hao4:11
+浪	lang4:259
+浮	fu2:148
+海	hai3:914
+浸	jin4:51
+涂	tu5:116 tu2:59
+消	xiao1:708
+涉	she4:57
+涌	yong3:168
+涕	ti4:14
+涛	tao1:21
+涡	wo1:43
+涤	di2:25
+润	run4:68
+涨	zhang3:75 zhang4:11
+液	ye4:186
+涼	liang2:129
+淀	dian4:30
+淋	lin2:40
+淌	tang3:22
+淒	qi1:16
+淘	tao2:33
+淚	lei4:233
+淡	dan4:111
+淨	jing4:152
+深	shen1:773
+淳	chun2:16
+混	hun4:197 hun2:10
+淹	yan1:41
+淺	qian3:82
+添	tian1:103
+清	qing1:819
+渐	jian4:459
+渔	yu2:41
+渗	shen4:34
+減	jian3:300
+渠	qu2:91
+渡	du4:176
+渣	zha1:33
+渦	wo1:43
+温	wen1:493
+測	ce4:227
+港	gang3:51
+渴	ke3:48
+游	you2:364
+渺	miao3:16
+渾	hun2:99
+湃	pai4:11
+湊	cou4:69
+湖	hu2:248
+湯	tang1:40 tang5:15
+湾	wan1:17
+湿	shi1:170
+溃	kui4:10
+溅	jian4:23
+溉	gai4:75
+源	yuan2:380
+溜	liu1:48
+溝	gou1:136
+溪	xi1:40
+溫	wen1:493
+溶	rong2:62
+滅	mie4:328
+滋	zi1:27
+滌	di2:25
+滑	hua2:70 hua5:27
+滔	tao1:20
+滚	gun3:147
+满	man3:1032
+滥	lan4:18
+滨	bin1:11
+滩	tan1:62
+滲	shen4:34
+滴	di1:99
+滾	gun3:147
+滿	man3:1032
+漁	yu2:41
+漂	piao4:68 piao1:17
+漆	qi1:78
+漏	lou4:68
+演	yan3:332
+漠	mo4:98
+漢	han4:227
+漩	xuan2:15
+漫	man4:60
+漲	zhang3:75 zhang4:11
+漸	jian4:459
+漾	yang4:17
+漿	jiang1:17
+潑	po5:50 po1:25
+潔	jie2:86
+潛	qian2:38
+潜	qian2:38
+潤	run4:68
+潭	tan2:29
+潮	chao2:151
+潰	kui4:10
+澆	jiao1:58
+澎	peng1:11
+澡	zao3:23
+澱	dian4:30
+激	ji1:407 ji5:49
+濁	zhuo2:30
+濃	nong2:116
+濕	shi1:170
+濟	ji4:1008
+濤	tao1:21
+濫	lan4:18
+濱	bin1:11
+濺	jian4:23
+瀑	pu4:19
+瀝	li4:28
+灌	guan4:141
+灘	tan1:62
+灣	wan1:17
+火	huo3:956
+灭	mie4:328
+灯	deng1:483
+灰	hui1:189
+灵	ling2:170 ling5:15
+灶	zao4:25
+災	zai1:110
+灾	zai1:110
+灿	can4:37
+炉	lu2:177
+炊	chui1:12
+炎	yan2:50
+炒	chao3:22
+炕	kang4:87
+炭	tan4:73
+炮	pao4:182
+炯	jiong3:28
+炸	zha4:114
+点	dian3:3816
+為	wei4:3962 wei2:2433
+炼	lian4:256
+烁	shuo4:29
+烂	lan4:126
+烈	lie4:428
+烏	wu1:69
+烘	hong1:19
+烛	zhu2:53
+烟	yan1:348
+烤	kao3:36
+烦	fan2:63 fan5:63
+烧	shao1:397
+烫	tang4:30
+热	re4:1014
+焊	han4:93
+無	wu2:1997
+焦	jiao1:80
+焰	yan4:34
+然	ran2:3549 ran5:84
+煉	lian4:256
+煌	huang2:26
+煎	jian1:22
+煙	yan1:348
+煞	sha1:17
+煤	mei2:250
+照	zhao4:884
+煩	fan2:63 fan5:63
+煮	zhu3:52
+熄	xi1:36
+熊	xiong2:41
+熏	xun1:19
+熔	rong2:21
+熟	shu2:385
+熬	ao2:21
+熱	re4:1014
+燃	ran2:273
+燈	deng1:483
+燒	shao1:397
+燕	yan4:59
+燙	tang4:30
+營	ying2:331
+燥	zao4:32
+燦	can4:37
+燭	zhu2:53
+爆	bao4:189
+爍	shuo4:29
+爐	lu2:177
+爛	lan4:126
+爪	zhao3:18 zhua3:12
+爬	pa2:330
+爭	zheng1:1708
+爱	ai4:1137
+父	fu4:516
+爷	ye5:671 ye2:281
+爸	ba4:546 ba5:429
+爹	die1:91
+爺	ye5:671 ye2:281
+爽	shuang3:35
+爾	er3:26
+牆	qiang2:264
+片	pian4:762 pian1:42
+版	ban3:73
+牌	pai2:73
+牙	ya2:187
+牛	niu2:270
+牡	mu3:11
+牢	lao2:62
+牦	mao2:11
+牧	mu4:84
+物	wu4:2422 wu5:11
+牲	sheng1:188
+牵	qian1:97
+特	te4:1099
+牺	xi1:103
+牽	qian1:97
+犀	xi1:13
+犁	li2:10
+犛	mao2:11
+犧	xi1:103
+犬	quan3:12
+犯	fan4:250
+状	zhuang4:268
+犹	you2:57
+狀	zhuang4:268
+狂	kuang2:101
+狈	bei4:13
+狐	hu2:18
+狗	gou3:216
+狠	hen3:123
+狡	jiao3:20
+独	du2:264
+狭	xia2:31
+狮	shi1:21
+狱	yu4:85
+狸	li5:18
+狹	xia2:31
+狼	lang2:88
+狽	bei4:13
+猎	lie4:72
+猛	meng3:258
+猜	cai1:98
+猩	xing1:13 xing5:13
+猪	zhu1:83
+猫	mao1:62
+猬	wei5:14
+献	xian4:179
+猴	hou2:86
+猶	you2:57
+猾	hua2:20
+猿	yuan2:136
+獄	yu4:85
+獅	shi1:21
+獎	jiang3:69
+獨	du2:264
+獲	huo4:156
+獵	lie4:72
+獸	shou4:40
+獻	xian4:179
+率	lv4:173 shuai4:58
+玉	yu4:112
+王	wang2:278
+玩	wan2:222
+环	huan2:291
+现	xian4:3900
+玲	ling2:10
+玻	bo1:213
+珊	shan1:16
+珍	zhen1:100
+珑	long2:10
+珠	zhu1:140
+班	ban1:403
+現	xian4:3900
+球	qiu2:458
+理	li3:2282 li5:140
+琐	suo3:12
+琢	zuo2:18
+琴	qin2:59
+瑚	hu2:16
+瑣	suo3:12
+瑩	ying2:14
+璃	li2:213
+環	huan2:291
+瓏	long2:10
+瓜	gua1:136
+瓢	piao2:11
+瓣	ban4:37
+瓦	wa3:46
+瓶	ping2:128
+瓷	ci2:68
+甘	gan1:42
+甚	shen2:3394 shen4:303
+甜	tian2:75
+生	sheng1:4790 sheng5:1071
+產	chan3:4099
+用	yong4:4975 yong5:28
+甩	shuai3:48
+甫	fu5:12
+甭	beng2:35
+田	tian2:336
+由	you2:1623
+甲	jia3:92 jia5:15
+申	shen1:20
+电	dian4:1775
+男	nan2:249
+甸	dian1:28
+画	hua4:493
+畅	chang4:18
+界	jie4:1312
+畏	wei4:20
+畔	pan4:21
+留	liu2:484
+畜	chu4:21 xu4:14
+畝	mu3:107
+畢	bi4:149
+略	lve4:445
+番	fan1:84
+畫	hua4:493
+異	yi4:146
+當	dang1:2483 dang4:474 dang5:40
+疆	jiang1:14
+疊	die2:39
+疏	shu1:21
+疑	yi2:163
+疗	liao2:85
+疙	ge1:17
+疫	yi4:11
+疯	feng1:131
+疲	pi2:78
+疼	teng2:127
+疾	ji2:44
+病	bing4:739
+症	zheng4:37
+痒	yang3:16
+痕	hen2:44
+痛	tong4:356
+痰	tan2:11
+痹	bi4:10
+痺	bi4:10
+瘋	feng1:131
+瘦	shou4:82
+瘩	da5:17
+瘪	bie3:13
+療	liao2:85
+癌	ai2:35
+癟	bie3:13
+登	deng1:150
+發	fa1:4834 fa5:174 fa4:80
+白	bai2:1055 bai5:329
+百	bai3:1559
+皂	zao4:38
+的	de5:75596 di4:157 di2:84
+皆	jie1:10
+皇	huang2:85
+皮	pi2:519
+皱	zhou4:115
+皺	zhou4:115
+盆	pen2:168
+益	yi4:335
+盏	zhan3:50
+盐	yan2:70
+监	jian1:115
+盒	he2:78
+盔	kui1:26
+盖	gai4:227 gai5:10
+盗	dao4:52
+盘	pan2:169 pan5:25
+盛	sheng4:54 cheng2:43
+盜	dao4:52
+盞	zhan3:50
+盟	meng2:77
+盡	jin3:212 jin4:166
+監	jian1:115
+盤	pan2:169 pan5:25
+目	mu4:814
+盯	ding1:65
+盲	mang2:41
+直	zhi2:1294
+相	xiang1:1235 xiang4:114
+盼	pan4:74
+盾	dun4:279
+省	sheng3:409
+眉	mei2:131
+看	kan4:6042 kan1:66
+真	zhen1:2099
+眠	mian2:48
+眨	zha3:51
+眯	mi1:64
+眶	kuang4:18
+眺	tiao4:11
+眼	yan3:2215
+眾	zhong4:1149
+着	zhe5:10643 zhao2:545 zhuo2:125 zhao1:15
+睁	zheng1:120
+睛	jing5:707 jing1:16
+睜	zheng1:120
+睡	shui4:672
+督	du1:53
+睫	jie2:12
+瞄	miao2:13
+瞅	chou3:34
+瞇	mi1:64
+瞌	ke1:11
+瞎	xia1:56
+瞒	man2:32
+瞞	man2:32
+瞥	pie1:16
+瞧	qiao2:250
+瞪	deng4:77
+瞭	liao3:326 liao4:19
+瞻	zhan1:12
+矗	chu4:14
+矛	mao2:279
+知	zhi1:2483
+矩	ju5:29
+短	duan3:318
+矮	ai3:45
+石	shi2:1006
+矿	kuang4:264
+码	ma3:60
+砂	sha1:33
+砌	qi4:24
+砍	kan3:81
+研	yan2:1242
+砖	zhuan1:44
+砰	peng1:16
+破	po4:605
+砸	za2:36
+砾	li4:10
+础	chu3:400
+硅	gui1:14
+硝	xiao1:16
+硫	liu2:35
+硬	ying4:221
+确	que4:927
+碌	lu4:17
+碍	ai4:72
+碎	sui4:256
+碑	bei1:81
+碗	wan3:237
+碟	die2:15
+碧	bi4:39
+碰	peng4:219
+碱	jian3:31
+碳	tan4:55
+確	que4:927
+碼	ma3:60
+碾	nian3:11
+磁	ci2:113
+磅	bang4:17
+磊	lei3:9
+磕	ke1:23
+磚	zhuan1:44
+磨	mo2:90 mo5:44 mo4:30
+磷	lin2:27
+磺	huang2:25
+礎	chu3:400
+礙	ai4:72
+礦	kuang4:264
+礫	li4:10
+示	shi4:509
+礼	li3:114
+社	she4:2459
+祖	zu3:366
+祝	zhu4:91
+神	shen2:846 shen5:30
+祥	xiang2:20
+票	piao4:175
+祸	huo4:16
+禁	jin4:78 jin1:64
+禍	huo4:16
+福	fu2:199
+禮	li3:114
+离	li2:790
+禿	tu1:13
+秀	xiu4:93
+私	si1:114
+秃	tu1:13
+秆	gan3:12
+秋	qiu1:172
+种	zhong3:3481 zhong4:285
+科	ke1:1462
+秒	miao3:104
+秘	mi4:154
+租	zu1:51
+秤	cheng4:15
+秧	yang1:64
+秩	zhi4:46
+积	ji1:562
+称	cheng1:318 chen4:20
+移	yi2:221
+稀	xi1:56
+稅	shui4:23
+稈	gan3:12
+程	cheng2:830
+稍	shao1:118
+税	shui4:23
+稚	zhi4:16
+稠	chou2:8
+種	zhong3:3481 zhong4:285
+稱	cheng1:318 chen4:20
+稳	wen3:152
+稻	dao4:92
+稼	jia5:118
+稿	gao3:64
+穆	mu4:10
+積	ji1:562
+穎	ying3:11
+穗	sui4:20
+穩	wen3:152
+究	jiu1:1138 jiu5:41
+穷	qiong2:214
+空	kong1:857 kong4:69
+穿	chuan1:594
+突	tu1:474
+窃	qie4:38
+窄	zhai3:47
+窑	yao2:73
+窖	jiao4:12
+窗	chuang1:372
+窜	cuan4:51
+窝	wo1:153
+窟	ku1:26
+窩	wo1:153
+窮	qiong2:214
+窯	yao2:73
+窿	long5:26
+竄	cuan4:51
+竊	qie4:38
+立	li4:1565
+竖	shu4:30
+站	zhan4:1100
+竞	jing4:79
+竟	jing4:392
+章	zhang1:424
+童	tong2:55
+竭	jie2:27
+端	duan1:259
+競	jing4:79
+竹	zhu2:96
+竽	yu2:15
+竿	gan1:30
+笆	ba5:15
+笑	xiao4:1403
+笔	bi3:308
+笛	di2:11
+符	fu2:84
+笨	ben4:35
+第	di4:1765
+笼	long2:39 long5:34 long3:23
+筆	bi3:308
+等	deng3:2469
+筋	jin1:60
+筐	kuang1:49
+筑	zhu4:274
+筒	tong3:45
+答	da2:457 da1:193
+策	ce4:259
+筛	shai1:12
+筷	kuai4:41
+签	qian1:76
+简	jian3:431
+算	suan4:933 suan5:103
+管	guan3:981
+箩	luo2:9
+箫	xiao1:11
+箭	jian4:87
+箱	xiang1:133
+節	jie2:533
+篇	pian1:203
+篩	shai1:12
+篮	lan2:74
+篱	li2:15
+篷	peng5:23
+簇	cu4:20
+簡	jian3:431
+簫	xiao1:11
+簸	bo3:18
+簽	qian1:76
+籃	lan2:74
+籍	ji2:35
+籠	long2:39 long5:34 long3:23
+籬	li2:15
+籮	luo2:9
+米	mi3:784
+类	lei4:792
+籽	zi3:10
+粉	fen3:211
+粒	li4:103
+粗	cu1:182
+粘	zhan1:26
+粜	tiao4:18
+粥	zhou1:48
+粪	fen4:36
+粮	liang2:280
+粹	cui4:17
+精	jing1:664
+糊	hu5:87 hu2:75
+糕	gao1:18
+糖	tang2:97
+糙	cao1:16
+糞	fen4:36
+糟	zao1:100
+糧	liang2:280
+糶	tiao4:18
+系	xi4:724 xi5:643 ji4:15
+糾	jiu1:68
+紀	ji4:467
+約	yue1:553
+紅	hong2:839
+紋	wen2:47
+納	na4:21
+紐	niu3:26
+純	chun2:133
+紗	sha1:78
+紙	zhi3:466
+級	ji2:2047
+紛	fen1:148
+素	su4:289
+紡	fang3:178
+索	suo3:153 suo5:18
+紧	jin3:897
+紫	zi3:49
+累	lei4:111 lei3:54
+細	xi4:840
+紳	shen1:16
+紹	shao4:156
+終	zhong1:385
+組	zu3:962
+結	jie2:1419 jie1:91
+絕	jue2:294
+絡	luo4:27
+絢	xuan4:13
+給	gei3:2860 ji3:80
+絨	rong2:27
+統	tong3:959
+絲	si1:186
+絹	juan4:18
+綁	bang3:52
+經	jing1:2854 jing5:1342
+綜	zong1:64
+綠	lv4:220
+綢	chou2:24
+維	wei2:419
+綱	gang1:83
+網	wang3:120
+綴	zhui5:14
+綸	lun2:48
+綿	mian2:18
+緊	jin3:897
+緒	xu4:92
+線	xian4:1280
+緞	duan4:9
+締	di4:12
+緣	yuan2:77
+編	bian1:215
+緩	huan3:155
+緯	wei3:41
+練	lian4:245
+縛	fu4:34
+縣	xian4:429
+縫	feng4:77 feng2:29
+縮	suo1:179
+縱	zong4:43
+縷	lv3:18
+總	zong3:1599
+績	ji1:132
+繁	fan2:129
+繃	beng3:18 beng1:12
+織	zhi1:733
+繞	rao4:74 rao3:40
+繡	xiu4:22
+繩	sheng2:110 sheng5:17
+繪	hui4:39
+繭	jian3:14
+繳	jiao3:17
+繼	ji4:405
+續	xu4:489
+纏	chan2:32
+纖	xian1:197
+纠	jiu1:68
+红	hong2:839
+纤	xian1:197
+约	yue1:553
+级	ji2:2047
+纪	ji4:467
+纬	wei3:41
+纯	chun2:133
+纱	sha1:78
+纲	gang1:83
+纳	na4:21
+纵	zong4:43
+纶	lun2:48
+纷	fen1:148
+纸	zhi3:466
+纹	wen2:47
+纺	fang3:178
+纽	niu3:26
+线	xian4:1280
+练	lian4:245
+组	zu3:962
+绅	shen1:16
+细	xi4:840
+织	zhi1:733
+终	zhong1:385
+绍	shao4:156
+经	jing1:2854 jing5:1342
+绑	bang3:52
+绒	rong2:27
+结	jie2:1419 jie1:91
+绕	rao4:74 rao3:40
+绘	hui4:39
+给	gei3:2860 ji3:80
+绚	xuan4:13
+络	luo4:27
+绝	jue2:294
+统	tong3:959
+绢	juan4:18
+绣	xiu4:22
+继	ji4:405
+绩	ji1:132
+绪	xu4:92
+续	xu4:489
+绳	sheng2:110 sheng5:17
+维	wei2:419
+绵	mian2:18
+绷	beng3:18 beng1:12
+绸	chou2:24
+综	zong1:64
+绿	lv4:220
+缀	zhui5:14
+缎	duan4:9
+缓	huan3:155
+缔	di4:12
+缕	lv3:18
+编	bian1:215
+缘	yuan2:77
+缚	fu4:34
+缝	feng4:77 feng2:29
+缠	chan2:32
+缩	suo1:179
+缰	jiang1:17
+缴	jiao3:17
+缸	gang1:38
+缺	que1:364
+罐	guan4:40
+网	wang3:120
+罚	fa2:26
+罢	ba5:2073 ba4:148
+罩	zhao4:49
+罪	zui4:168 zui5:15
+置	zhi4:166 zhi5:104
+罰	fa2:26
+署	shu3:27
+罵	ma4:182
+罷	ba5:2073 ba4:148
+羊	yang2:216
+美	mei3:466
+羔	gao1:10
+羡	xian4:24
+群	qun2:1210
+羨	xian4:24
+義	yi4:4472
+羽	yu3:16
+翁	weng1:20
+翅	chi4:85
+習	xi2:836
+翔	xiang2:9
+翘	qiao4:30
+翹	qiao4:30
+翻	fan1:369
+翼	yi4:23
+耀	yao4:54
+老	lao3:3598
+考	kao3:334
+者	zhe3:1454
+而	er2:3483
+耍	shua3:29
+耐	nai4:221
+耕	geng1:55
+耗	hao4:86
+耳	er3:176
+耷	da1:12
+耸	song3:39
+耻	chi3:36
+耽	dan1:33
+聊	liao2:29
+职	zhi2:173
+联	lian2:578
+聖	sheng4:28
+聚	ju4:73
+聞	wen2:133
+聪	cong1:96
+聯	lian2:578
+聰	cong1:96
+聲	sheng1:2269 sheng5:57
+聳	song3:39
+職	zhi2:173
+聽	ting1:2028 ting5:48
+肃	su4:144
+肅	su4:144
+肉	rou4:278
+肌	ji1:43
+肖	xiao4:50
+肚	du4:171
+肝	gan1:56
+肠	chang2:82
+股	gu3:187 gu5:33
+肢	zhi1:38
+肤	fu1:87
+肥	fei2:162
+肩	jian1:208
+肪	fang2:10
+肯	ken3:280
+育	yu4:547
+肺	fei4:52
+肿	zhong3:24
+胀	zhang4:54
+胁	xie2:54
+胃	wei4:89
+胆	dan3:107
+背	bei4:433 bei1:72
+胎	tai1:38
+胖	pang4:43
+胜	sheng4:745
+胞	bao1:116
+胡	hu2:215
+胧	long2:32
+胳	ge1:65
+胶	jiao1:37
+胸	xiong1:178
+能	neng2:5594
+脂	zhi1:46
+脅	xie2:54
+脆	cui4:92
+脈	mai4:116
+脉	mai4:116
+脊	ji2:38
+脏	zang4:61 zang1:54
+脑	nao3:437
+脖	bo2:73
+脚	jiao3:627
+脫	tuo1:239
+脯	pu2:27
+脱	tuo1:239
+脸	lian3:930
+脹	zhang4:54
+脾	pi2:85
+腈	jing1:21
+腐	fu3:87 fu5:31
+腔	qiang1:62
+腥	xing1:11
+腦	nao3:437
+腫	zhong3:24
+腮	sai1:14
+腰	yao1:160
+腳	jiao3:627
+腸	chang2:82
+腹	fu4:24
+腾	teng2:91 teng5:28
+腿	tui3:263
+膀	bang3:182
+膊	bo5:45
+膏	gao1:21
+膚	fu1:87
+膛	tang2:29
+膜	mo2:54
+膝	xi1:38
+膠	jiao1:37
+膨	peng2:44
+膽	dan3:107
+臂	bi4:66 bei5:20
+臉	lian3:930
+臟	zang4:61 zang1:54
+臣	chen2:15
+臥	wo4:45
+臨	lin2:220
+自	zi4:4664
+臭	chou4:72
+至	zhi4:787
+致	zhi4:314
+舀	yao3:19
+舅	jiu4:48 jiu5:35
+舆	yu2:9
+與	yu3:962 yu4:10
+興	xing4:499 xing1:164
+舉	ju3:541 ju5:8
+舊	jiu4:479
+舋	xin4:11
+舌	she2:59
+舍	she3:62 she4:41
+舒	shu1:143
+舔	tian3:16
+舞	wu3:204
+舟	zhou1:13
+航	hang2:137
+般	ban1:564
+舰	jian4:21
+舱	cang1:75
+舶	bo2:17
+船	chuan2:923
+艇	ting3:22
+艘	sou1:30
+艙	cang1:75
+艦	jian4:21
+良	liang2:198
+艰	jian1:211
+艱	jian1:211
+色	se4:950
+艳	yan4:38
+艷	yan4:38
+艺	yi4:609
+节	jie2:533
+芒	mang2:35
+芝	zhi1:11
+芦	lu2:46 lu5:28
+芯	xin1:14
+花	hua1:1104 hua5:117
+芽	ya2:31
+苇	wei3:32
+苍	cang1:69
+苏	su1:33
+苗	miao2:71
+若	ruo4:182
+苦	ku3:645
+英	ying1:252
+苹	ping2:77
+茁	zhuo2:9
+茂	mao4:29
+范	fan4:201
+茄	jia1:10
+茅	mao2:17
+茎	jing1:15
+茧	jian3:14
+茫	mang2:76 mang1:36
+茶	cha2:194
+茸	rong1:20
+草	cao3:613
+荐	jian4:19
+荒	huang1:54
+荔	li4:28
+荡	dang4:67
+荣	rong2:147
+药	yao4:407
+荷	he2:69
+莊	zhuang1:337
+莖	jing1:15
+莫	mo4:42 mo5:21
+获	huo4:156
+莹	ying2:14
+菇	gu5:12
+菊	ju2:11
+菌	jun1:175
+菜	cai4:354
+菩	pu2:18
+華	hua2:29
+萄	tao2:49
+萝	luo2:25
+萤	ying2:18
+营	ying2:331
+萨	sa4:18
+萬	wan4:1335
+落	luo4:516 la4:11
+葉	ye4:301
+著	zhe5:10643 zhao2:545 zhu4:275 zhuo2:125 zhao1:15
+葡	pu2:49
+葦	wei3:32
+葫	hu2:28
+葬	zang4:9
+葱	cong1:9
+葵	kui2:16
+蒙	meng2:62 meng1:15 meng3:13
+蒜	suan4:9
+蒸	zheng1:115
+蒼	cang1:69
+蓄	xu4:11
+蓋	gai4:227 gai5:10
+蓝	lan2:126
+蓬	peng2:24
+蔑	mie4:12
+蔗	zhe5:10
+蔥	cong1:9
+蔬	shu1:33
+蔼	ai3:19
+蔽	bi4:59
+蕉	jiao1:14
+蕩	dang4:67
+蕴	yun4:14
+薄	bao2:80 bo2:43
+薩	sa4:18
+薪	xin1:17
+薯	shu3:13
+藍	lan2:126
+藏	cang2:156
+藝	yi4:609
+藤	teng2:14
+藥	yao4:407
+藹	ai3:19
+蘆	lu2:46 lu5:28
+蘇	su1:33
+蘊	yun4:14
+蘋	ping2:77
+蘑	mo2:12
+蘸	zhan4:10
+蘿	luo2:25
+虎	hu3:171 hu5:19
+虏	lu3:31
+虑	lv4:125
+處	chu4:661 chu3:357 chu5:149
+虚	xu1:86
+虛	xu1:86
+虜	lu3:31
+號	hao4:462 hao5:16 hao2:12
+虧	kui1:71
+虫	chong2:553
+虽	sui1:543
+虾	xia1:46
+蚀	shi2:67
+蚁	yi3:40
+蚂	ma3:40
+蚊	wen2:30
+蚓	yin3:16
+蚕	can2:62
+蚜	ya2:15
+蚣	gong5:11
+蚩	chi1:20
+蚪	dou3:10
+蚯	qiu1:16
+蛀	zhu4:10
+蛆	qu1:10
+蛇	she2:68
+蛋	dan4:168
+蛙	wa1:57
+蛛	zhu1:34
+蛤	ha2:12
+蛾	e2:11
+蜂	feng1:96
+蜈	wu2:11
+蜓	ting2:21
+蜗	wo1:11
+蜘	zhi1:34
+蜜	mi4:110
+蜡	la4:40
+蜻	qing1:21
+蝇	ying5:39
+蝉	chan2:48
+蝌	ke1:10
+蝕	shi2:67
+蝗	huang2:62
+蝙	bian1:15
+蝟	wei5:14
+蝠	fu2:15
+蝦	xia1:46
+蝴	hu2:35
+蝶	die2:35
+蝸	wo1:11
+融	rong2:25
+螞	ma3:40
+螢	ying2:18
+蟀	shuai4:23
+蟆	ma5:12
+蟋	xi1:23
+蟬	chan2:48
+蟻	yi3:40
+蠅	ying5:39
+蠕	ru2:20
+蠟	la4:40
+蠶	can2:62
+血	xue4:349 xie3:69
+衅	xin4:11
+行	xing2:2943 hang2:218
+衍	yan3:11
+衔	xian2:13
+街	jie1:335
+衙	ya2:20
+衛	wei4:340
+衡	heng2:80
+衣	yi1:646
+补	bu3:141
+表	biao3:1608
+衫	shan1:26
+衬	chen4:46
+衰	shuai1:19
+袄	ao3:59
+袋	dai4:179 dai5:93
+袍	pao2:35
+袖	xiu4:138
+袜	wa4:42
+被	bei4:1546
+袭	xi2:46
+袱	fu5:42
+裁	cai2:42
+裂	lie4:67
+装	zhuang1:732
+裕	yu4:17
+裙	qun2:12
+補	bu3:141
+裝	zhuang1:732
+裡	li5:706 li3:100
+裤	ku4:62
+裳	shang5:56
+裹	guo3:46
+褂	gua4:15
+複	fu4:558
+褐	he4:12
+褲	ku4:62
+襖	ao3:59
+襟	jin1:13
+襪	wa4:42
+襯	chen4:46
+襲	xi2:46
+西	xi5:902 xi1:738
+要	yao4:8645 yao1:456
+覆	fu4:27
+見	jian4:2832 xian4:446 jian5:335
+規	gui1:752
+視	shi4:409 shi5:12
+親	qin1:1029 qin5:428
+覺	jue2:1032 jiao4:179
+覽	lan3:48
+觀	guan1:1031
+见	jian4:2832 xian4:446 jian5:335
+观	guan1:1031
+规	gui1:752
+视	shi4:409 shi5:12
+览	lan3:48
+觉	jue2:1032 jiao4:179
+角	jiao3:392 jue2:14
+解	jie3:1857
+触	chu4:120
+觸	chu4:120
+言	yan2:307
+訂	ding4:126
+計	ji4:1050 ji5:58
+訊	xun4:132
+討	tao3:278
+訓	xun5:98 xun4:86
+記	ji4:866 ji5:414
+訝	ya4:33
+訟	song4:27
+訪	fang3:73
+設	she4:1097
+許	xu3:1465
+訴	su5:552 su4:43
+診	zhen3:32
+証	zheng4:518
+評	ping2:439
+詞	ci2:72
+詢	xun2:24
+試	shi4:374
+詩	shi1:152
+詫	cha4:38
+詭	gui3:15
+話	hua4:2332 hua5:32
+該	gai1:1057
+詳	xiang2:95
+誉	yu4:36
+認	ren4:1247
+誒	ei2:10 ei3:10 ei4:10
+誓	shi4:25
+誕	dan4:40
+誘	you4:12
+語	yu3:261
+誠	cheng2:51
+誡	jie4:10
+誣	wu1:14
+誤	wu4:478 wu5:33
+誦	song4:14
+說	shuo1:10245
+誰	shui2:1065
+課	ke4:341
+誼	yi4:30
+調	diao4:390 tiao2:213
+談	tan2:693
+請	qing3:585
+諒	liang4:46
+論	lun4:1472
+諷	feng3:14
+諸	zhu1:24
+謀	mou2:98 mou5:24
+謂	wei4:170
+謊	huang3:21
+謙	qian1:26
+講	jiang3:974
+謝	xie4:192 xie5:97
+謠	yao2:19
+謬	miu4:26
+謹	jin3:20
+譏	ji1:19
+識	shi5:908 shi2:267
+警	jing3:198
+譬	pi4:42
+譯	yi4:70
+議	yi4:570
+譴	qian3:13
+護	hu4:468
+譽	yu4:36
+讀	du2:432
+變	bian4:1669
+讓	rang4:974
+计	ji4:1050 ji5:58
+订	ding4:126
+认	ren4:1247
+讥	ji1:19
+讨	tao3:278
+让	rang4:974
+训	xun5:98 xun4:86
+议	yi4:570
+讯	xun4:132
+记	ji4:866 ji5:414
+讲	jiang3:974
+讶	ya4:33
+许	xu3:1465
+论	lun4:1472
+讼	song4:27
+讽	feng3:14
+设	she4:1097
+访	fang3:73
+证	zheng4:518
+评	ping2:439
+识	shi5:908 shi2:267
+诉	su5:552 su4:43
+诊	zhen3:32
+词	ci2:72
+译	yi4:70
+试	shi4:374
+诗	shi1:152
+诚	cheng2:51
+话	hua4:2332 hua5:32
+诞	dan4:40
+诡	gui3:15
+询	xun2:24
+该	gai1:1057
+详	xiang2:95
+诧	cha4:38
+诫	jie4:10
+诬	wu1:14
+语	yu3:261
+误	wu4:478 wu5:33
+诱	you4:12
+说	shuo1:10245
+诵	song4:14
+诶	ei2:10 ei3:10 ei4:10
+请	qing3:585
+诸	zhu1:24
+读	du2:432
+课	ke4:341
+谁	shui2:1065
+调	diao4:390 tiao2:213
+谅	liang4:46
+谈	tan2:693
+谊	yi4:30
+谋	mou2:98 mou5:24
+谎	huang3:21
+谓	wei4:170
+谢	xie4:192 xie5:97
+谣	yao2:19
+谦	qian1:26
+谨	jin3:20
+谬	miu4:26
+谴	qian3:13
+谷	gu3:145
+豁	huo1:37
+豆	dou4:127
+豈	qi3:51
+豌	wan1:9
+豎	shu4:30
+象	xiang4:3043
+豪	hao2:35
+豫	yu4:39
+豬	zhu1:83
+豹	bao4:15
+豺	chai2:16
+貌	mao4:95
+貓	mao1:62
+貝	bei4:49
+負	fu4:322 fu5:25
+財	cai2:166
+貢	gong4:97
+貧	pin2:115
+貨	huo4:328
+販	fan4:14
+貪	tan1:30
+貫	guan4:91
+責	ze2:363
+貴	gui4:180
+買	mai3:774
+費	fei4:305
+貼	tie1:124
+貿	mao4:36
+賀	he4:15
+資	zi1:1455
+賊	zei2:31
+賓	bin1:9
+賞	shang3:58
+賠	pei2:24
+賣	mai4:479 mai5:51
+賤	jian4:29
+質	zhi4:902
+賭	du3:10
+賴	lai4:28
+賺	zhuan4:25
+購	gou4:41
+賽	sai4:124
+贊	zan4:162
+贝	bei4:49
+负	fu4:322 fu5:25
+贡	gong4:97
+财	cai2:166
+责	ze2:363
+败	bai4:218
+货	huo4:328
+质	zhi4:902
+贩	fan4:14
+贪	tan1:30
+贫	pin2:115
+购	gou4:41
+贯	guan4:91
+贱	jian4:29
+贴	tie1:124
+贵	gui4:180
+贸	mao4:36
+费	fei4:305
+贺	he4:15
+贼	zei2:31
+资	zi1:1455
+赌	du3:10
+赏	shang3:58
+赔	pei2:24
+赖	lai4:28
+赚	zhuan4:25
+赛	sai4:124
+赞	zan4:162
+赤	chi4:34
+走	zou3:3176
+赴	fu4:12
+赶	gan3:681
+起	qi3:5632
+趁	chen4:84
+超	chao1:256
+越	yue4:958
+趋	qu1:21
+趕	gan3:681
+趟	tang4:89
+趣	qu4:168
+趨	qu1:21
+足	zu2:310
+趴	pa1:43
+跃	yue4:139
+跌	die1:47
+跑	pao3:986
+跛	bo3:11
+距	ju4:129
+跟	gen1:1534
+跡	ji1:87
+跨	kua4:62
+跪	gui4:55
+路	lu4:1987
+跳	tiao4:470
+践	jian4:312
+跺	duo4:19
+踌	chou2:24
+踏	ta4:122 ta1:10
+踐	jian4:312
+踢	ti1:50
+踩	cai3:64
+踪	zong1:12
+踮	dian3:9
+踱	duo2:37
+蹄	ti2:15
+蹈	dao3:9
+蹋	ta4:13
+蹤	zong1:12
+蹦	beng4:28
+蹬	deng1:39
+蹭	ceng4:14
+蹲	dun1:107
+躁	zao4:33
+躇	chu2:24
+躊	chou2:24
+躍	yue4:139
+身	shen1:2161
+躬	gong1:22
+躯	qu1:10
+躲	duo3:124
+躺	tang3:198
+軀	qu1:10
+車	che1:1893
+軋	ya4:21
+軌	gui3:72
+軍	jun1:1842
+軟	ruan3:125
+軸	zhou2:39
+較	jiao4:799
+載	zai4:80 zai3:64
+輔	fu3:31
+輕	qing1:859
+輛	liang4:178
+輝	hui1:100
+輩	bei4:87
+輪	lun2:222
+輯	ji5:41 ji2:28
+輸	shu1:231
+輻	fu2:31
+輿	yu2:9
+轉	zhuan3:757 zhuan4:177
+轎	jiao4:27
+轟	hong1:77
+车	che1:1893
+轧	ya4:21
+轨	gui3:72
+转	zhuan3:757 zhuan4:177
+轮	lun2:222
+软	ruan3:125
+轰	hong1:77
+轴	zhou2:39
+轻	qing1:859
+载	zai4:80 zai3:64
+轿	jiao4:27
+较	jiao4:799
+辅	fu3:31
+辆	liang4:178
+辈	bei4:87
+辉	hui1:100
+辐	fu2:31
+辑	ji5:41 ji2:28
+输	shu1:231
+辛	xin1:90
+辜	gu1:9
+辞	ci2:23
+辟	pi4:68 bi4:27
+辣	la4:25
+辦	ban4:1187
+辨	bian4:49
+辩	bian4:165
+辫	bian4:55
+辭	ci2:23
+辮	bian4:55
+辯	bian4:165
+辱	ru3:22
+農	nong2:1281
+边	bian1:2050 bian5:356
+辽	liao2:32
+达	da2:557
+迁	qian1:34
+迅	xun4:191
+过	guo4:5174 guo5:1222
+迈	mai4:83
+迎	ying2:135
+运	yun4:1192
+近	jin4:823
+返	fan3:48
+还	hai2:5894 huan2:103
+这	zhe4:16714
+进	jin4:3920
+远	yuan3:1036
+违	wei2:113
+连	lian2:1073
+迟	chi2:107
+迫	po4:306
+述	shu4:109
+迷	mi2:150
+迹	ji1:87
+追	zhui1:272
+退	tui4:254
+送	song4:818
+适	shi4:356
+逃	tao2:164
+选	xuan3:339
+逊	xun4:9
+透	tou4:316
+逐	zhu2:275
+递	di4:83
+途	tu2:178
+逗	dou4:77
+這	zhe4:16714
+通	tong1:1126 tong4:16
+逛	guang4:19
+逝	shi4:31
+速	su4:668
+造	zao4:1377
+逢	feng2:53
+連	lian2:1073
+逮	dai3:20 dai4:20
+進	jin4:3920
+逻	luo2:24
+逼	bi1:89
+遇	yu4:261
+運	yun4:1192
+遍	bian4:290
+過	guo4:5174 guo5:1222
+道	dao4:2324 dao5:1654
+達	da2:557
+違	wei2:113
+遗	yi2:101
+遙	yao2:23
+遜	xun4:9
+遞	di4:83
+遠	yuan3:1036
+遣	qian3:30
+遥	yao2:23
+適	shi4:356
+遭	zao1:192
+遮	zhe1:61
+遲	chi2:107
+遵	zun1:90
+遷	qian1:34
+選	xuan3:339
+遺	yi2:101
+遼	liao2:32
+避	bi4:166
+邀	yao1:30
+邁	mai4:83
+還	hai2:5894 huan2:103
+邊	bian1:2050 bian5:356
+邏	luo2:24
+那	na4:7249
+邦	bang1:13
+邮	you2:32
+邻	lin2:35
+郁	yu4:13
+郊	jiao1:26
+郑	zheng4:16
+部	bu4:2783
+郵	you2:32
+都	dou1:5680 du1:93
+鄉	xiang1:433
+鄙	bi3:13
+鄭	zheng4:16
+鄰	lin2:35
+配	pei4:291
+酒	jiu3:262
+酬	chou5:22
+酱	jiang4:36
+酵	jiao4:9
+酶	mei2:13
+酷	ku4:38
+酸	suan1:102
+酿	niang4:10
+醉	zui4:51
+醋	cu4:22
+醒	xing3:200
+醫	yi1:460
+醬	jiang4:36
+釀	niang4:10
+采	cai3:420
+释	shi4:123
+釋	shi4:123
+里	li3:8067 li5:754
+重	zhong4:1823 chong2:329
+野	ye3:360
+量	liang4:1265 liang5:433 liang2:208
+金	jin1:568
+釘	ding1:59
+針	zhen1:319
+釣	diao4:72
+鈔	chao1:25
+鈣	gai4:11
+鈴	ling2:85
+鈷	gu3:14
+鈾	you2:15
+鉗	qian2:17
+鉛	qian1:74
+鉤	gou1:42
+鉴	jian4:33
+銀	yin2:243
+銅	tong2:129
+銜	xian2:13
+銳	rui4:66
+銷	xiao1:92
+鋁	lv3:42
+鋅	xin1:13
+鋒	feng1:71
+鋤	chu2:22
+鋪	pu4:111 pu1:96 pu5:11
+鋸	ju4:14
+鋼	gang1:526
+錄	lu4:143
+錘	chui2:15
+錠	ding4:13
+錢	qian2:817 qian5:78
+錦	jin3:50
+錫	xi1:25
+錯	cuo4:815
+鍋	guo1:115
+鍍	du4:18
+鍛	duan4:88
+鍬	qiao1:15
+鍵	jian4:60
+鎂	mei3:14
+鎖	suo3:68
+鎮	zhen4:216
+鏈	lian4:9
+鏟	chan3:29
+鏡	jing4:285
+鏽	xiu4:22
+鐘	zhong1:410
+鐮	lian2:14
+鐵	tie3:734
+鐺	dang5:16
+鑄	zhu4:36
+鑒	jian4:33
+鑰	yao4:13
+鑲	xiang1:17
+鑼	luo2:28
+鑽	zuan1:205
+鑿	zao2:34
+针	zhen1:319
+钉	ding1:59
+钓	diao4:72
+钙	gai4:11
+钞	chao1:25
+钟	zhong1:410
+钢	gang1:526
+钥	yao4:13
+钦	qin1:10
+钩	gou1:42
+钱	qian2:817 qian5:78
+钳	qian2:17
+钴	gu3:14
+钻	zuan1:205
+铀	you2:15
+铁	tie3:734
+铃	ling2:85
+铅	qian1:74
+铛	dang5:16
+铜	tong2:129
+铝	lv3:42
+铲	chan3:29
+银	yin2:243
+铸	zhu4:36
+铺	pu4:111 pu1:96 pu5:11
+链	lian4:9
+销	xiao1:92
+锁	suo3:68
+锄	chu2:22
+锅	guo1:115
+锈	xiu4:22
+锋	feng1:71
+锌	xin1:13
+锐	rui4:66
+错	cuo4:815
+锡	xi1:25
+锣	luo2:28
+锤	chui2:15
+锦	jin3:50
+锭	ding4:13
+键	jian4:60
+锯	ju4:14
+锹	qiao1:15
+锻	duan4:88
+镀	du4:18
+镁	mei3:14
+镇	zhen4:216
+镜	jing4:285
+镰	lian2:14
+镶	xiang1:17
+長	zhang3:1879 chang2:1179
+长	zhang3:1879 chang2:1179
+門	men2:1633 men5:20
+閃	shan3:251
+閉	bi4:117
+開	kai1:3483
+閑	xian2:89
+間	jian1:2080 jian5:37 jian4:15
+閘	zha2:20
+閥	fa2:48
+閨	gui1:37
+閱	yue4:22
+闊	kuo4:148
+闖	chuang3:55
+關	guan1:1758
+闡	chan3:25
+门	men2:1633 men5:20
+闪	shan3:251
+闭	bi4:117
+问	wen4:2838 wen5:54
+闯	chuang3:55
+闲	xian2:89
+间	jian1:2080 jian5:37 jian4:15
+闷	men4:46 men1:29
+闸	zha2:20
+闹	nao4:186 nao5:68
+闺	gui1:37
+闻	wen2:133
+阀	fa2:48
+阅	yue4:22
+阐	chan3:25
+阔	kuo4:148
+队	dui4:1474
+防	fang2:375
+阳	yang2:513
+阴	yin1:148
+阵	zhen4:577
+阶	jie1:1888
+阻	zu3:157
+阿	a1:169
+附	fu4:148
+际	ji4:706
+陆	lu4:202
+陈	chen2:24
+陋	lou4:9
+陌	mo4:32
+降	jiang4:243 xiang2:75
+限	xian4:240
+陡	dou3:31
+院	yuan4:717
+陣	zhen4:577
+除	chu2:496
+险	xian3:222
+陪	pei2:69
+陰	yin1:148
+陳	chen2:24
+陵	ling2:31
+陶	tao2:23
+陷	xian4:86
+陸	lu4:202
+陽	yang2:513
+隆	long2:46 long1:10
+隊	dui4:1474
+階	jie1:1888
+随	sui2:599
+隐	yin3:109
+隔	ge2:155
+隘	ai4:14
+隙	xi4:37
+際	ji4:706
+障	zhang4:98
+隧	sui4:22
+隨	sui2:599
+險	xian3:222
+隱	yin3:109
+隶	li4:73
+隸	li4:73
+难	nan2:795 nan5:344 nan4:82
+雀	que4:33
+雄	xiong2:214
+集	ji2:751
+雇	gu4:25
+雌	ci2:22
+雕	diao1:38
+雖	sui1:543
+雙	shuang1:373
+雜	za2:356
+雞	ji1:244
+離	li2:790
+難	nan2:795 nan5:344 nan4:82
+雨	yu3:545
+雪	xue3:465
+零	ling2:211
+雷	lei2:91
+雹	bao2:15
+電	dian4:1775
+雾	wu4:85
+需	xu1:750
+震	zhen4:221
+霉	mei2:38
+霎	sha4:11
+霜	shuang1:62
+霞	xia2:15
+霧	wu4:85
+露	lu4:241
+霸	ba4:27
+靈	ling2:170 ling5:15
+青	qing1:828
+静	jing4:449 jing5:28
+靜	jing4:449 jing5:28
+非	fei1:688
+靠	kao4:524
+面	mian4:3227 mian5:1300
+革	ge2:2148
+靴	xue1:11
+鞋	xie2:268
+鞏	gong3:125
+鞠	ju1:22
+鞭	bian1:48
+韁	jiang1:17
+韌	ren4:11
+韧	ren4:11
+音	yin1:639
+響	xiang3:798
+頁	ye4:35
+頂	ding3:445
+頃	qing3:26
+項	xiang4:236
+順	shun4:266
+須	xu1:734
+頌	song4:31
+預	yu4:221
+頑	wan2:56
+頒	ban1:21
+頓	dun4:204
+頗	po1:55
+領	ling3:1527
+頭	tou2:3058 tou5:715
+頰	jia2:10
+頸	jing3:13
+頻	pin2:48
+顆	ke1:207
+題	ti2:1649
+額	e2:108
+顏	yan2:132
+顛	dian1:49
+類	lei4:792
+顧	gu4:323
+顫	chan4:72
+顯	xian3:503
+页	ye4:35
+顶	ding3:445
+顷	qing3:26
+项	xiang4:236
+顺	shun4:266
+须	xu1:734
+顽	wan2:56
+顾	gu4:323
+顿	dun4:204
+颁	ban1:21
+颂	song4:31
+预	yu4:221
+领	ling3:1527
+颇	po1:55
+颈	jing3:13
+颊	jia2:10
+频	pin2:48
+颖	ying3:11
+颗	ke1:207
+题	ti2:1649
+颜	yan2:132
+额	e2:108
+颠	dian1:49
+颤	chan4:72
+風	feng1:1185
+飄	piao1:90
+风	feng1:1185
+飘	piao1:90
+飛	fei1:943
+飞	fei1:943
+食	shi2:341 shi5:152
+飢	ji1:37
+飯	fan4:557
+飲	yin3:43
+飼	si4:36
+飽	bao3:85
+飾	shi4:40
+餃	jiao3:10
+餅	bing3:40 bing5:35
+養	yang3:430
+餐	can1:44
+餓	e4:164
+餡	xian4:10
+館	guan3:241
+饅	man2:37
+饒	rao2:23
+饞	chan2:11
+饥	ji1:37
+饭	fan4:557
+饮	yin3:43
+饰	shi4:40
+饱	bao3:85
+饲	si4:36
+饶	rao2:23
+饺	jiao3:10
+饼	bing3:40 bing5:35
+饿	e4:164
+馅	xian4:10
+馆	guan3:241
+馋	chan2:11
+馒	man2:37
+首	shou3:492
+香	xiang1:161
+馬	ma3:891
+馱	tuo2:27
+馳	chi2:35
+駁	bo2:26
+駐	zhu4:33
+駒	ju1:10
+駕	jia4:59
+駛	shi3:123
+駝	tuo5:116 tuo2:25
+駱	luo4:116
+騎	qi2:134
+騙	pian4:96
+騰	teng2:91 teng5:28
+騾	luo2:21
+驅	qu1:12
+驕	jiao1:67
+驗	yan4:792
+驚	jing1:425
+驟	zhou4:20
+驢	lv2:56
+马	ma3:891
+驮	tuo2:27
+驰	chi2:35
+驱	qu1:12
+驳	bo2:26
+驴	lv2:56
+驶	shi3:123
+驹	ju1:10
+驻	zhu4:33
+驼	tuo5:116 tuo2:25
+驾	jia4:59
+骂	ma4:182
+骄	jiao1:67
+骆	luo4:116
+验	yan4:792
+骑	qi2:134
+骗	pian4:96
+骡	luo2:21
+骤	zhou4:20
+骨	gu3:185 gu2:62
+骼	ge2:22
+體	ti3:1746
+高	gao1:3057
+髦	mao2:14
+鬧	nao4:186 nao5:68
+鬼	gui3:224
+魂	hun2:46
+魄	po4:11
+魔	mo2:53
+魚	yu2:538
+鮮	xian1:182 xian5:66
+鯉	li3:12
+鯨	jing1:64
+鱷	e4:14
+鱼	yu2:538
+鲜	xian1:182 xian5:66
+鲤	li3:12
+鲸	jing1:64
+鳄	e4:14
+鳥	niao3:190
+鳧	fu2:12
+鳳	feng4:16
+鳴	ming2:66
+鴉	ya1:58
+鴨	ya1:41
+鴿	ge1:11
+鵑	juan1:16
+鵝	e2:24
+鵪	an1:21
+鵲	que5:28
+鶉	chun5:21
+鷗	ou1:13
+鷹	ying1:19
+鸝	li2:14
+鸟	niao3:190
+鸡	ji1:244
+鸣	ming2:66
+鸥	ou1:13
+鸦	ya1:58
+鸭	ya1:41
+鸽	ge1:11
+鹂	li2:14
+鹃	juan1:16
+鹅	e2:24
+鹊	que5:28
+鹌	an1:21
+鹑	chun5:21
+鹰	ying1:19
+鹼	jian3:31
+鹽	yan2:70
+鹿	lu4:10
+麗	li4:215
+麥	mai4:146
+麦	mai4:146
+麻	ma2:159 ma5:11
+麼	me5:3394
+黃	huang2:347
+黄	huang2:347
+黎	li2:30
+黏	nian2:31
+黑	hei1:690
+默	mo4:199
+點	dian3:3816
+黨	dang3:2652
+黯	an4:8
+黴	mei2:13
+鼓	gu3:286
+鼠	shu3:42
+鼻	bi2:190
+齊	qi2:190
+齐	qi2:190
+齒	chi3:80
+齡	ling2:43
+齿	chi3:80
+龄	ling2:43
+龍	long2:76
+龐	pang2:19
+龙	long2:76
+龜	gui1:11
+龟	gui1:11

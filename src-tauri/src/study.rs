@@ -32,11 +32,16 @@ pub fn build_session(conn: &Connection, f: &StudyFilter) -> AppResult<SessionInf
         return Err(AppError::msg("Choose at least one study direction"));
     }
     let t = now();
+    // selected decks include their subdecks
     let deck_clause = if f.deck_ids.is_empty() {
         String::new()
     } else {
         let ids: Vec<String> = f.deck_ids.iter().map(|i| i.to_string()).collect();
-        format!("WHERE c.deck_id IN ({})", ids.join(","))
+        format!(
+            "WHERE c.deck_id IN (WITH RECURSIVE sub(id) AS (SELECT id FROM decks WHERE id IN ({})
+               UNION SELECT d.id FROM decks d JOIN sub ON d.parent_id = sub.id) SELECT id FROM sub)",
+            ids.join(",")
+        )
     };
     let sql = format!(
         "SELECT {CARD_COLS}, p.state, p.stability, p.difficulty, p.due, p.last_review, p.reps, p.lapses
@@ -49,6 +54,7 @@ pub fn build_session(conn: &Connection, f: &StudyFilter) -> AppResult<SessionInf
     let mut items: Vec<StudyItem> = Vec::new();
     for dir in &f.directions {
         check_direction(dir)?;
+        let mut these: Vec<StudyItem> = Vec::new();
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map([dir], |r| {
             let card = card_from_row(r, 0)?;
@@ -82,8 +88,9 @@ pub fn build_session(conn: &Connection, f: &StudyFilter) -> AppResult<SessionInf
             {
                 continue;
             }
-            items.push(item);
+            these.push(item);
         }
+        items.extend(merge_duplicates(these));
     }
 
     let is_due = |i: &StudyItem| i.progress.as_ref().is_some_and(|p| p.due <= t);
@@ -133,6 +140,45 @@ pub fn build_session(conn: &Connection, f: &StudyFilter) -> AppResult<SessionInf
         new_count,
         new_remaining_today,
     })
+}
+
+/// The same word in several decks is studied once: keep one card per set of characters
+/// (the one furthest along, else the oldest) and show the meanings of all copies.
+fn merge_duplicates(items: Vec<StudyItem>) -> Vec<StudyItem> {
+    let mut groups: Vec<Vec<StudyItem>> = Vec::new();
+    let mut index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for item in items {
+        let key = item.card.hanzi.trim().to_string();
+        match index.get(&key) {
+            Some(&g) => groups[g].push(item),
+            None => {
+                index.insert(key, groups.len());
+                groups.push(vec![item]);
+            }
+        }
+    }
+    groups
+        .into_iter()
+        .map(|group| {
+            let mut meanings: Vec<String> = Vec::new();
+            for m in group.iter().map(|i| i.card.meaning.trim()) {
+                if !m.is_empty() && !meanings.iter().any(|x| x == m) {
+                    meanings.push(m.to_string());
+                }
+            }
+            let best = group
+                .iter()
+                .enumerate()
+                .min_by_key(|(k, i)| (i.progress.is_none(), i.progress.as_ref().map(|p| p.due).unwrap_or(0), *k))
+                .map(|(k, _)| k)
+                .unwrap_or(0);
+            let mut item = group.into_iter().nth(best).expect("group is never empty");
+            if meanings.len() > 1 {
+                item.card.meaning = meanings.join(" / ");
+            }
+            item
+        })
+        .collect()
 }
 
 fn load_memory(conn: &Connection, card_id: i64, direction: &str) -> AppResult<Option<Memory>> {
@@ -212,6 +258,17 @@ pub fn answer_at(
             lapses = excluded.lapses",
         params![card_id, direction, m.state, m.stability, m.difficulty, m.due, m.last_review, m.reps, m.lapses],
     )?;
+    // copies of the same word in other decks share this progress
+    tx.execute(
+        "INSERT INTO progress (card_id, direction, state, stability, difficulty, due, last_review, reps, lapses)
+         SELECT c.id, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9 FROM cards c
+         WHERE c.hanzi = (SELECT hanzi FROM cards WHERE id = ?1) AND c.id <> ?1
+         ON CONFLICT(card_id, direction) DO UPDATE SET
+            state = excluded.state, stability = excluded.stability, difficulty = excluded.difficulty,
+            due = excluded.due, last_review = excluded.last_review, reps = excluded.reps,
+            lapses = excluded.lapses",
+        params![card_id, direction, m.state, m.stability, m.difficulty, m.due, m.last_review, m.reps, m.lapses],
+    )?;
     tx.execute(
         "INSERT INTO review_log (card_id, direction, rating, state_before, reviewed_at, duration_ms, scheduled_secs)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -278,5 +335,39 @@ mod tests {
         both.limit = 5;
         assert_eq!(build_session(&conn, &both).unwrap().items.len(), 5);
         assert!(answer(&mut conn, card, "sideways", 3, 0).is_err());
+    }
+
+    #[test]
+    fn same_word_in_two_decks_is_studied_once() {
+        let mut conn = crate::db::open_in_memory().unwrap();
+        let class = crate::decks::create_deck(&conn, "Class", "", None).unwrap();
+        let lesson = crate::decks::create_deck(&conn, "Class 9", "", Some(class)).unwrap();
+        let add = |deck: i64, meaning: &str| {
+            conn.execute(
+                "INSERT INTO cards (deck_id, hanzi, pinyin, meaning, created_at, updated_at) VALUES (?1, '会', 'huì', ?2, 0, 0)",
+                params![deck, meaning],
+            )
+            .unwrap();
+            conn.last_insert_rowid()
+        };
+        let a = add(class, "can");
+        let b = add(lesson, "meeting");
+
+        let mut f = filter("all");
+        f.deck_ids = vec![class]; // includes Class 9
+        let s = build_session(&conn, &f).unwrap();
+        assert_eq!(s.items.len(), 1, "one item for both copies");
+        assert_eq!(s.items[0].card.meaning, "can / meeting");
+
+        answer(&mut conn, a, "recognition", 4, 1000).unwrap();
+        let shared: i64 = conn
+            .query_row("SELECT reps FROM progress WHERE card_id = ?1 AND direction = 'recognition'", [b], |r| r.get(0))
+            .unwrap();
+        assert_eq!(shared, 1, "the copy shares the progress");
+        let logged: i64 = conn.query_row("SELECT COUNT(*) FROM review_log", [], |r| r.get(0)).unwrap();
+        assert_eq!(logged, 1, "but the review is logged once");
+
+        f.deck_ids = vec![lesson];
+        assert_eq!(build_session(&conn, &f).unwrap().items.len(), 1);
     }
 }

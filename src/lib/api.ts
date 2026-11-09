@@ -6,12 +6,23 @@ export type StudyMode = "due" | "new" | "all" | "difficult";
 
 export interface Deck {
   id: number;
+  /** The deck this one is inside (null = top level). */
+  parentId: number | null;
   name: string;
+  /** Names from the top, e.g. "Class › Class 9". */
+  path: string;
+  depth: number;
+  childCount: number;
   description: string;
   createdAt: number;
+  /** Cards directly in this deck. */
   cardCount: number;
   dueCount: number;
   newCount: number;
+  /** Including all subdecks. */
+  totalCards: number;
+  totalDue: number;
+  totalNew: number;
 }
 
 export interface Card {
@@ -123,6 +134,56 @@ export interface DictEntry {
   inCards: boolean;
 }
 
+/**
+ * A word offered while typing pinyin; `consumed` = how many typed characters it uses.
+ * A composed phrase has `entry.id` -1 and lists its words' entry ids in `parts`.
+ */
+export interface Candidate {
+  entry: DictEntry;
+  consumed: number;
+  parts: number[];
+}
+
+/** A dictionary word within a character string (`entry` is null when none matches). */
+export interface Segment {
+  text: string;
+  entry: DictEntry | null;
+}
+
+/** A word in an import file that is already in other decks. */
+export interface DuplicateWord {
+  hanzi: string;
+  decks: string[];
+}
+
+/** What importing a file would do. */
+export interface ImportPreview {
+  rows: number;
+  fresh: number;
+  sameDeck: number;
+  otherDecks: DuplicateWord[];
+  invalid: number;
+}
+
+/** What a Pleco flashcard file contains, before importing it. */
+export interface PlecoPreview {
+  cards: number;
+  categories: { name: string; deck: string; exists: boolean; cards: number }[];
+  uncategorized: number;
+  dictionary: boolean;
+  duplicates: ImportPreview;
+}
+
+export interface PlecoImportResult {
+  imported: number;
+  skipped: number;
+  skippedOther: number;
+  decks: number;
+  decksCreated: number;
+  pinyinCorrected: number;
+  definitionsAdded: number;
+}
+
 export interface DictStatus {
   entries: number;
   importedAt: number | null;
@@ -130,7 +191,10 @@ export interface DictStatus {
 
 export interface ImportResult {
   imported: number;
+  /** Already in the same deck, or rows without Chinese characters. */
   skipped: number;
+  /** Words already in other decks that weren't imported again. */
+  skippedOther: number;
 }
 
 export const api = {
@@ -138,9 +202,10 @@ export const api = {
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
 
   listDecks: () => invoke<Deck[]>("list_decks"),
-  createDeck: (name: string, description = "") => invoke<number>("create_deck", { name, description }),
-  updateDeck: (id: number, name: string, description: string) =>
-    invoke<void>("update_deck", { id, name, description }),
+  createDeck: (name: string, description = "", parentId: number | null = null) =>
+    invoke<number>("create_deck", { name, description, parentId }),
+  updateDeck: (id: number, name: string, description: string, parentId: number | null) =>
+    invoke<void>("update_deck", { id, name, description, parentId }),
   deleteDeck: (id: number) => invoke<void>("delete_deck", { id }),
 
   listCards: (deckId: number | null, search = "") => invoke<CardRow[]>("list_cards", { deckId, search }),
@@ -150,8 +215,15 @@ export const api = {
   moveCards: (ids: number[], deckId: number) => invoke<void>("move_cards", { ids, deckId }),
   listTags: () => invoke<string[]>("list_tags"),
   cardsByHanzi: (hanzi: string) => invoke<{ card: Card; deckName: string }[]>("cards_by_hanzi", { hanzi }),
-  importCards: (deckId: number, path: string) => invoke<ImportResult>("import_cards", { deckId, path }),
+  importPreview: (deckId: number, path: string) => invoke<ImportPreview>("import_preview", { deckId, path }),
+  importCards: (deckId: number, path: string, includeOtherDecks = false) =>
+    invoke<ImportResult>("import_cards", { deckId, path, includeOtherDecks }),
   exportCards: (deckId: number | null, path: string) => invoke<number>("export_cards", { deckId, path }),
+  plecoPreview: (path: string, defaultDeck: number | null) =>
+    invoke<PlecoPreview>("pleco_preview", { path, defaultDeck }),
+  importPleco: (path: string, defaultDeck: number | null, useDictionary: boolean, includeOtherDecks: boolean) =>
+    invoke<PlecoImportResult>("import_pleco", { path, defaultDeck, useDictionary, includeOtherDecks }),
+  exportPleco: (deckId: number | null, path: string) => invoke<number>("export_pleco", { deckId, path }),
 
   buildSession: (filter: StudyFilter) => invoke<SessionInfo>("build_session", { filter }),
   previewIntervals: (cardId: number, direction: Direction) =>
@@ -163,6 +235,8 @@ export const api = {
   dictStatus: () => invoke<DictStatus>("dict_status"),
   dictSearch: (query: string, limit = 60) => invoke<DictEntry[]>("dict_search", { query, limit }),
   dictLookup: (hanzi: string) => invoke<DictEntry[]>("dict_lookup", { hanzi }),
+  dictCandidates: (query: string, limit = 9) => invoke<Candidate[]>("dict_candidates", { query, limit }),
+  dictSegment: (text: string, prefer: number[] = []) => invoke<Segment[]>("dict_segment", { text, prefer }),
   dictImportFile: (path: string) => invoke<number>("dict_import_file", { path }),
   dictDownload: () => invoke<number>("dict_download"),
 };

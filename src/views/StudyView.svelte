@@ -100,6 +100,15 @@
     return list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
   }
 
+  /** A deck inside a selected deck is studied too. */
+  function insideSelected(d: Deck): boolean {
+    const parent = new Map(decks.map((x) => [x.id, x.parentId]));
+    for (let p = d.parentId; p !== null && p !== undefined; p = parent.get(p) ?? null) {
+      if (sel.deckIds.includes(p)) return true;
+    }
+    return false;
+  }
+
   function shuffle<T>(a: T[]): T[] {
     const arr = [...a];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -235,10 +244,11 @@
               <button
                 class="chip"
                 class:on={sel.deckIds.includes(d.id)}
+                class:implied={!sel.deckIds.includes(d.id) && insideSelected(d)}
                 onclick={() => (sel.deckIds = toggle(sel.deckIds, d.id))}
               >
-                {d.name}
-                <span class="faint">{d.cardCount}</span>
+                {d.path}
+                <span class="faint">{d.totalCards}</span>
               </button>
             {/each}
           </div>

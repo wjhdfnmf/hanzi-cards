@@ -96,6 +96,36 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         seed(conn)?;
         conn.execute_batch("PRAGMA user_version = 1")?;
     }
+    if version < 2 {
+        // v2: a usage score for ranking dictionary results, and pinyin indexes for
+        // typing characters by pinyin. Scores are computed for an existing dictionary.
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
+            "ALTER TABLE dictionary ADD COLUMN score INTEGER NOT NULL DEFAULT 0;
+             CREATE INDEX IF NOT EXISTS idx_dict_pkey ON dictionary(pinyin_key, score);
+             CREATE INDEX IF NOT EXISTS idx_dict_pkey_tone ON dictionary(pinyin_key_tone);",
+        )?;
+        crate::dictionary::compute_scores(&tx)?;
+        tx.execute_batch("PRAGMA user_version = 2")?;
+        tx.commit()?;
+    }
+    if version < 3 {
+        // v3: revised scoring (reading frequency for single characters, no proper-noun penalty).
+        let tx = conn.unchecked_transaction()?;
+        crate::dictionary::compute_scores(&tx)?;
+        tx.execute_batch("PRAGMA user_version = 3")?;
+        tx.commit()?;
+    }
+    if version < 4 {
+        // v4: nested decks.
+        conn.execute_batch(
+            "BEGIN;
+             ALTER TABLE decks ADD COLUMN parent_id INTEGER REFERENCES decks(id) ON DELETE CASCADE;
+             CREATE INDEX IF NOT EXISTS idx_decks_parent ON decks(parent_id);
+             PRAGMA user_version = 4;
+             COMMIT;",
+        )?;
+    }
     Ok(())
 }
 

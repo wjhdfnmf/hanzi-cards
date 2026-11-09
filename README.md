@@ -2,13 +2,25 @@
 
 A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows, macOS and Linux.
 
-- **Cards** with characters, pinyin (type `ni3 hao3` → `nǐ hǎo`), English meaning, notes and tags, organised into decks
+- **Cards** with characters, pinyin, English meaning, notes and tags, organised into **nested decks**
+  (e.g. Class › Class 9; a deck includes its subdecks when listing, studying and exporting)
+- **Duplicates**: the same word can be in several decks but is studied once, with progress shared
+  between the copies; the editor warns about duplicates, and imports skip same-deck duplicates and
+  ask before adding words that are already in other decks
+- **Fast card entry**: type pinyin in the characters field and pick from a ranked list, like an input method
+  (`nihao` → 你好, `woaini` → 我爱你; add a tone number to narrow: `ni3`). Pinyin and meaning fill in from the
+  dictionary and update as you add characters. In the pinyin field, a digit after a syllable sets its tone
+  (`ni3` → `nǐ`, `5` = neutral)
 - **Study** with FSRS-5 spaced repetition. Pick decks, tags, mode (due & new / new only / cram / difficult), session size, and directions:
   characters → meaning, meaning → characters, and listening
 - **Dictionary**: CC-CEDICT (~120k entries), searchable by characters, pinyin (with or without tones) or English; one click adds a word as a card. The card editor auto-fills pinyin and meaning from it
 - **Statistics**: reviews per day, retention, streaks, a 30-day forecast, card progress, an activity heatmap and the cards you forget most
 - **Tone colours** for characters and pinyin, OS text-to-speech for pronunciation
-- **CSV/TSV import & export** (works with Pleco and Anki text exports)
+- **Pleco flashcards** (`.xml`): import categories as (nested) decks (re-importing an updated file skips cards you
+  already have; pinyin is checked against the dictionary, with Pleco's reading choosing between readings),
+  and export any deck back to Pleco (decks become categories, pinyin as tone numbers)
+- **CSV/TSV import & export** (also works with Anki and Pleco text exports); a 6th `deck` column holds
+  the subdeck path, e.g. `Class 9` or `Lesson 1/Food`
 - English interface by default, Simplified Chinese optional; light and dark themes
 
 ## Stack
@@ -44,18 +56,22 @@ src/                  Svelte front end
 src-tauri/src/
   commands.rs         IPC commands
   db.rs               schema, migrations, settings
-  cards.rs            decks, cards, CSV import/export
+  decks.rs            nested decks: tree, paths, CRUD
+  cards.rs            cards, duplicate checks, CSV import/export
   study.rs            session building, answering
   scheduler.rs        FSRS-5
   stats.rs            statistics
   dictionary.rs       CC-CEDICT import/download/search
-  pinyin.rs           tone marks and search keys
+  pinyin.rs           tone marks, syllables and search keys
+  pleco.rs            Pleco flashcard XML import/export
 ```
 
 ## Licences of data
 
 - CC-CEDICT © MDBG, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Downloaded by the user at runtime, not bundled.
 - FSRS default parameters from the [open-spaced-repetition](https://github.com/open-spaced-repetition) project.
+- `src-tauri/data/char_freq.tsv`: character reading frequencies from the Unicode Unihan database (`kHanyuPinlu`),
+  © Unicode, Inc., [Unicode License](https://www.unicode.org/license.txt). Regenerate with `scripts/gen_char_freq.py`.
 
 ## Roadmap ideas
 

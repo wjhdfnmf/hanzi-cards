@@ -3,7 +3,7 @@
 use crate::error::{AppError, AppResult};
 use crate::models::*;
 use crate::stats::Stats;
-use crate::{cards, db, dictionary, stats, study, AppState};
+use crate::{cards, db, decks, dictionary, pleco, stats, study, AppState};
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -63,22 +63,33 @@ pub fn set_setting(state: State<AppState>, key: String, value: String) -> AppRes
 
 #[tauri::command]
 pub fn list_decks(state: State<AppState>) -> AppResult<Vec<Deck>> {
-    cards::list_decks(&lock(&state))
+    decks::list_decks(&lock(&state))
 }
 
 #[tauri::command]
-pub fn create_deck(state: State<AppState>, name: String, description: String) -> AppResult<i64> {
-    cards::create_deck(&lock(&state), &name, &description)
+pub fn create_deck(
+    state: State<AppState>,
+    name: String,
+    description: String,
+    parent_id: Option<i64>,
+) -> AppResult<i64> {
+    decks::create_deck(&lock(&state), &name, &description, parent_id)
 }
 
 #[tauri::command]
-pub fn update_deck(state: State<AppState>, id: i64, name: String, description: String) -> AppResult<()> {
-    cards::update_deck(&lock(&state), id, &name, &description)
+pub fn update_deck(
+    state: State<AppState>,
+    id: i64,
+    name: String,
+    description: String,
+    parent_id: Option<i64>,
+) -> AppResult<()> {
+    decks::update_deck(&lock(&state), id, &name, &description, parent_id)
 }
 
 #[tauri::command]
 pub fn delete_deck(state: State<AppState>, id: i64) -> AppResult<()> {
-    cards::delete_deck(&lock(&state), id)
+    decks::delete_deck(&mut lock(&state), id)
 }
 
 // ---------- cards ----------
@@ -129,8 +140,60 @@ pub fn cards_by_hanzi(state: State<AppState>, hanzi: String) -> AppResult<Vec<Ca
 }
 
 #[tauri::command]
-pub async fn import_cards(app: AppHandle, deck_id: i64, path: String) -> AppResult<ImportResult> {
-    blocking(app, move |conn| cards::import_file(conn, deck_id, &PathBuf::from(path))).await
+pub async fn import_preview(app: AppHandle, deck_id: i64, path: String) -> AppResult<ImportPreview> {
+    blocking(app, move |conn| {
+        let text = cards::read_text(&PathBuf::from(path))?;
+        cards::preview_csv(conn, deck_id, &text)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn import_cards(
+    app: AppHandle,
+    deck_id: i64,
+    path: String,
+    include_other_decks: Option<bool>,
+) -> AppResult<ImportResult> {
+    blocking(app, move |conn| {
+        let text = cards::read_text(&PathBuf::from(path))?;
+        cards::import_text(conn, deck_id, &text, include_other_decks.unwrap_or(false))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn pleco_preview(app: AppHandle, path: String, default_deck: Option<i64>) -> AppResult<PlecoPreview> {
+    blocking(app, move |conn| {
+        let cards = pleco::read_file(&PathBuf::from(path))?;
+        pleco::preview(conn, &cards, default_deck)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn import_pleco(
+    app: AppHandle,
+    path: String,
+    default_deck: Option<i64>,
+    use_dictionary: bool,
+    include_other_decks: Option<bool>,
+) -> AppResult<PlecoImportResult> {
+    blocking(app, move |conn| {
+        let cards = pleco::read_file(&PathBuf::from(path))?;
+        let opts = pleco::ImportOptions {
+            default_deck,
+            use_dictionary,
+            include_other_decks: include_other_decks.unwrap_or(false),
+        };
+        pleco::import(conn, &cards, &opts)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn export_pleco(app: AppHandle, deck_id: Option<i64>, path: String) -> AppResult<i64> {
+    blocking(app, move |conn| pleco::export(conn, deck_id, &PathBuf::from(path))).await
 }
 
 #[tauri::command]
@@ -181,6 +244,16 @@ pub fn dict_search(state: State<AppState>, query: String, limit: Option<i64>) ->
 #[tauri::command]
 pub fn dict_lookup(state: State<AppState>, hanzi: String) -> AppResult<Vec<DictEntry>> {
     dictionary::lookup(&lock(&state), &hanzi)
+}
+
+#[tauri::command]
+pub fn dict_candidates(state: State<AppState>, query: String, limit: Option<usize>) -> AppResult<Vec<Candidate>> {
+    dictionary::candidates(&lock(&state), &query, limit.unwrap_or(9))
+}
+
+#[tauri::command]
+pub fn dict_segment(state: State<AppState>, text: String, prefer: Option<Vec<i64>>) -> AppResult<Vec<Segment>> {
+    dictionary::segment(&lock(&state), &text, &prefer.unwrap_or_default())
 }
 
 #[tauri::command]

@@ -1,10 +1,12 @@
 mod cards;
 mod commands;
 mod db;
+mod decks;
 mod dictionary;
 mod error;
 mod models;
 mod pinyin;
+mod pleco;
 mod scheduler;
 mod stats;
 mod study;
@@ -44,8 +46,12 @@ pub fn run() {
             commands::move_cards,
             commands::list_tags,
             commands::cards_by_hanzi,
+            commands::import_preview,
             commands::import_cards,
             commands::export_cards,
+            commands::pleco_preview,
+            commands::import_pleco,
+            commands::export_pleco,
             commands::build_session,
             commands::preview_intervals,
             commands::answer_card,
@@ -53,6 +59,8 @@ pub fn run() {
             commands::dict_status,
             commands::dict_search,
             commands::dict_lookup,
+            commands::dict_candidates,
+            commands::dict_segment,
             commands::dict_import_file,
             commands::dict_download,
         ])
