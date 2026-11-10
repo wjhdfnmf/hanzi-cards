@@ -1,4 +1,4 @@
-//! Tone checking from pitch (prototype, not wired into the app yet).
+//! Tone checking from pitch. Used for spoken answers by tone_check.rs ("pitch_tones" setting).
 //!
 //! 1. Track the pitch (F0) of the recording with YIN, 10 ms frames.
 //! 2. Split the voiced part into the expected number of syllables (at loudness dips).
@@ -9,7 +9,7 @@
 //! recordings; a learner's voice can't be judged high or low from one syllable alone.
 //!
 //! See docs/tone-recognition.md for what was measured and the plan.
-#![allow(dead_code)] // prototype: exercised by tests, not used by the app yet
+#![allow(dead_code)] // some helpers (classify, the tuning knobs) are only used by the benches
 
 pub const SAMPLE_RATE: usize = 16000;
 const HOP: usize = 160; // 10 ms
@@ -69,10 +69,18 @@ fn pitch_raw(pcm: &[f32]) -> Vec<Frame> {
     let tau_max = (SAMPLE_RATE as f32 / F0_MIN) as usize;
     let mut frames = Vec::new();
     let mut d = vec![0f32; tau_max + 1];
+    // loudness first: quiet frames are dropped by clean() anyway, so skip their pitch search
+    let rms_at = |start: usize| (pcm[start..start + WIN].iter().map(|v| v * v).sum::<f32>() / WIN as f32).sqrt();
+    let loudest = (0..).map(|k| k * HOP).take_while(|s| s + WIN + tau_max <= pcm.len()).map(rms_at).fold(0f32, f32::max);
     let mut start = 0;
     while start + WIN + tau_max <= pcm.len() {
         let x = &pcm[start..start + WIN + tau_max];
-        let rms = (x[..WIN].iter().map(|v| v * v).sum::<f32>() / WIN as f32).sqrt();
+        let rms = rms_at(start);
+        if rms < loudest * 0.08 {
+            frames.push(Frame { st: None, rms });
+            start += HOP;
+            continue;
+        }
         for (tau, dt) in d.iter_mut().enumerate().skip(1) {
             let mut s = 0f32;
             for j in 0..WIN {
@@ -137,14 +145,16 @@ fn clean(frames: &mut [Frame]) {
     }
     voiced.sort_by(f32::total_cmp);
     let med = voiced[voiced.len() / 2];
+    let env = |k: &str, d: f32| std::env::var(k).ok().and_then(|v| v.parse().ok()).unwrap_or(d);
+    let (jump, drop) = (env("OCT_JUMP", 8.0), env("OCT_DROP", 10.0));
     for f in frames.iter_mut() {
         if let Some(s) = f.st.as_mut() {
-            if *s - med > 8.0 {
+            if *s - med > jump {
                 *s -= 12.0;
-            } else if med - *s > 8.0 {
+            } else if med - *s > jump {
                 *s += 12.0;
             }
-            if (*s - med).abs() > 10.0 {
+            if (*s - med).abs() > drop {
                 f.st = None;
             }
         }
@@ -237,9 +247,22 @@ impl Voice {
 /// Five points of a syllable's pitch on Chao's scale relative to the speaker: about -2 (their
 /// lowest) to +2 (their highest).
 pub fn contour(frames: &[Frame], (s, e): (usize, usize), voice: Voice) -> Option<[f32; 5]> {
-    let v: Vec<f32> = frames[s..e].iter().filter_map(|f| f.st).collect();
+    let mut v: Vec<f32> = frames[s..e].iter().filter_map(|f| f.st).collect();
     if v.len() < 5 {
         return None;
+    }
+    // A fall often ends in creak: still loud, but with no pitch the tracker can follow. Count
+    // that tail as the bottom of the speaker's range instead of dropping it, or a 4th tone
+    // that loses its second half looks like a level 1st tone.
+    // Tone Perfect, 6 speakers: 4th tones right 49% → 75%, all tones 83% → 90% (0 turns it off)
+    let creak = std::env::var("TONE_CREAK").ok().and_then(|x| x.parse::<f32>().ok()).unwrap_or(0.1);
+    if creak > 0.0 {
+        let loud = frames.iter().map(|f| f.rms).fold(0f32, f32::max);
+        let tail = frames[e..].iter().take_while(|f| f.st.is_none() && f.rms >= loud * creak).count();
+        if tail >= 4 && tail * 4 >= v.len() {
+            let floor = voice.median - voice.spread / 2.0;
+            v.extend(std::iter::repeat_n(floor, tail));
+        }
     }
     // onsets and offsets wobble: use the middle 80%
     let a = v.len() / 10;
@@ -262,23 +285,114 @@ const TEMPLATES: [(u8, [f32; 5]); 5] = [
     (4, [1.8, 1.4, 0.5, -0.5, -1.4]),   // 51
 ];
 
-/// The nearest tone (1-4) for a contour, with the distance to it and to the runner-up.
-pub fn classify(c: &[f32; 5], shape_weight: f32) -> (u8, f32, f32) {
+/// Distance from a contour to each tone's shape (index 0 = tone 1): level (where in the
+/// voice) + `shape_weight` × shape (how it moves).
+pub fn distances(c: &[f32; 5], shape_weight: f32) -> [f32; 4] {
     let mean = c.iter().sum::<f32>() / 5.0;
-    let mut best: Vec<(u8, f32)> = Vec::new();
+    let mut d = [f32::MAX; 4];
     for (tone, t) in TEMPLATES {
         let tmean = t.iter().sum::<f32>() / 5.0;
-        // level (where in the voice) + shape (how it moves), shape counted more
         let level = (mean - tmean).powi(2);
         let shape: f32 = c.iter().zip(t.iter()).map(|(x, y)| ((x - mean) - (y - tmean)).powi(2)).sum();
-        let d = level + shape_weight * shape;
-        match best.iter_mut().find(|b| b.0 == tone) {
-            Some(b) => b.1 = b.1.min(d),
-            None => best.push((tone, d)),
-        }
+        let k = tone as usize - 1;
+        d[k] = d[k].min(level + shape_weight * shape);
     }
+    d
+}
+
+/// The nearest tone (1-4) for a contour, with the distance to it and to the runner-up.
+pub fn classify(c: &[f32; 5], shape_weight: f32) -> (u8, f32, f32) {
+    let d = distances(c, shape_weight);
+    let mut best: Vec<(u8, f32)> = (1..=4).map(|t| (t, d[t as usize - 1])).collect();
     best.sort_by(|a, b| a.1.total_cmp(&b.1));
     (best[0].0, best[0].1, best[1].1)
+}
+
+/// Shape weight used by the app (and the benches' default).
+pub const SHAPE_WEIGHT: f32 = 2.0;
+
+/// How sharply distances turn into probabilities (smaller = more confident).
+const TONE_TEMPERATURE: f32 = 1.0;
+
+/// For each of `n` expected syllables, the log-probability of tones 1-4 from its pitch, or
+/// None for a syllable with too little pitch to judge.
+pub fn tone_logprobs(frames: &[Frame], n: usize, voice: Voice) -> Vec<Option<[f32; 4]>> {
+    let syl = syllables(frames, n);
+    (0..n)
+        .map(|k| {
+            let c = contour(frames, *syl.get(k)?, voice)?;
+            let d = distances(&c, SHAPE_WEIGHT).map(|x| -x / TONE_TEMPERATURE);
+            let max = d.iter().copied().fold(f32::MIN, f32::max);
+            let z = max + d.iter().map(|x| (x - max).exp()).sum::<f32>().ln();
+            Some(d.map(|x| x - z))
+        })
+        .collect()
+}
+
+/// The learner's pitch range, built up from their recordings: a histogram of voiced frames
+/// in half-semitone bins, older recordings fading out (each new one scales the rest by
+/// `PROFILE_DECAY`). Stored as text in the settings ("pitch_profile").
+#[derive(Debug, Clone)]
+pub struct PitchProfile {
+    pub recordings: u32,
+    bins: Vec<f32>,
+}
+
+const PROFILE_LOW: f32 = -8.0; // semitones above 100 Hz: 63 Hz
+const PROFILE_BINS: usize = 80; // up to +32 st: 635 Hz
+const PROFILE_DECAY: f32 = 0.97;
+/// Recordings needed before the range is trusted.
+pub const PROFILE_MIN_RECORDINGS: u32 = 5;
+
+impl PitchProfile {
+    pub fn parse(s: &str) -> PitchProfile {
+        let mut parts = s.split(';');
+        let ok = parts.next() == Some("v1");
+        let recordings = parts.next().and_then(|x| x.parse().ok()).filter(|_| ok).unwrap_or(0);
+        let mut bins: Vec<f32> = parts.next().filter(|_| ok).map(|b| b.split(',').map(|x| x.parse().unwrap_or(0.0)).collect()).unwrap_or_default();
+        bins.resize(PROFILE_BINS, 0.0);
+        PitchProfile { recordings, bins }
+    }
+
+    pub fn serialize(&self) -> String {
+        let bins: Vec<String> = self.bins.iter().map(|b| if *b < 0.05 { "0".into() } else { format!("{b:.1}") }).collect();
+        format!("v1;{};{}", self.recordings, bins.join(","))
+    }
+
+    /// Add one recording's voiced frames.
+    pub fn add(&mut self, frames: &[Frame]) {
+        let voiced: Vec<f32> = frames.iter().filter_map(|f| f.st).collect();
+        if voiced.len() < 10 {
+            return;
+        }
+        self.bins.iter_mut().for_each(|b| *b *= PROFILE_DECAY);
+        for st in voiced {
+            let k = ((st - PROFILE_LOW) * 2.0).floor();
+            if k >= 0.0 && (k as usize) < PROFILE_BINS {
+                self.bins[k as usize] += 1.0;
+            }
+        }
+        self.recordings += 1;
+    }
+
+    /// The range, once enough recordings are in.
+    pub fn voice(&self) -> Option<Voice> {
+        let total: f32 = self.bins.iter().sum();
+        if self.recordings < PROFILE_MIN_RECORDINGS || total < 100.0 {
+            return None;
+        }
+        let at = |q: f32| {
+            let mut acc = 0.0;
+            for (k, b) in self.bins.iter().enumerate() {
+                acc += b;
+                if acc >= q * total {
+                    return PROFILE_LOW + (k as f32 + 0.5) / 2.0;
+                }
+            }
+            PROFILE_LOW + PROFILE_BINS as f32 / 2.0
+        };
+        Some(Voice { median: at(0.5), spread: (at(0.9) - at(0.1)).max(4.0) })
+    }
 }
 
 #[cfg(test)]
@@ -338,6 +452,150 @@ mod tests {
             let line: String = f.iter().map(|f| match f.st { Some(s) => format!("{:.0} ", s), None => if f.rms > 0.01 { "~ ".into() } else { ". ".into() } }).collect();
             println!("#{i} samples {} peak {peak:.2} header {:?}
 {line}", pcm.len(), String::from_utf8_lossy(&raw_head[36..44]));
+        }
+    }
+
+    /// Tone Perfect (six native speakers, every syllable in four tones). TP_DIR is the `all`
+    /// folder from scripts/tone_perfect_prep.py (meta.tsv: N, syllable, tone, speaker, gap).
+    /// Compares four ways to get tone templates:
+    ///   chao      the fixed shapes (55 35 214/21 51), no data
+    ///   calib     the speaker's own mā má mǎ mà only (option B: one calibration set)
+    ///   own       the speaker's own average per tone, from their other syllables
+    ///   others    the other five speakers' average per tone (a trained model, roughly)
+    /// TP_DIR=... cargo test --lib tone_perfect_bench -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn tone_perfect_bench() {
+        let Ok(dir) = std::env::var("TP_DIR") else { return };
+        let dir = std::path::Path::new(&dir);
+        let weight: f32 = std::env::var("SHAPE_WEIGHT").ok().and_then(|w| w.parse().ok()).unwrap_or(2.0);
+        let calib_syl = std::env::var("CALIB").unwrap_or_else(|_| "ma".into());
+        struct Clip {
+            syl: String,
+            tone: u8,
+            spk: String,
+            gap: bool,
+        }
+        let clips: Vec<Clip> = std::fs::read_to_string(dir.join("meta.tsv"))
+            .unwrap()
+            .lines()
+            .map(|l| {
+                let f: Vec<&str> = l.split('\t').collect();
+                Clip { syl: f[1].into(), tone: f[2].parse().unwrap(), spk: f[3].into(), gap: f[4] == "1" }
+            })
+            .collect();
+        let mut speakers: Vec<String> = clips.iter().map(|c| c.spk.clone()).collect();
+        speakers.sort();
+        speakers.dedup();
+
+        // distance used by every method: level + weight × shape, like classify()
+        let dist = |c: &[f32; 5], t: &[f32; 5]| {
+            let (cm, tm) = (c.iter().sum::<f32>() / 5.0, t.iter().sum::<f32>() / 5.0);
+            (cm - tm).powi(2) + weight * c.iter().zip(t).map(|(x, y)| ((x - cm) - (y - tm)).powi(2)).sum::<f32>()
+        };
+        let nearest = |c: &[f32; 5], temps: &[(u8, [f32; 5])]| temps.iter().min_by(|a, b| dist(c, &a.1).total_cmp(&dist(c, &b.1))).map(|t| t.0).unwrap_or(0);
+        let mean_by_tone = |cs: &mut dyn Iterator<Item = (u8, [f32; 5])>| -> Vec<(u8, [f32; 5])> {
+            let mut sum = [[0f32; 5]; 5];
+            let mut n = [0u32; 5];
+            for (t, c) in cs {
+                n[t as usize] += 1;
+                for k in 0..5 {
+                    sum[t as usize][k] += c[k];
+                }
+            }
+            (1..5u8).filter(|&t| n[t as usize] > 0).map(|t| (t, sum[t as usize].map(|x| x / n[t as usize] as f32))).collect()
+        };
+
+        for set in std::env::var("BENCH_SETS").unwrap_or_else(|_| "clean,noisy".into()).split(',') {
+            // pitch tracks in parallel
+            let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+            let mut tracks: Vec<Vec<Frame>> = vec![Vec::new(); clips.len()];
+            std::thread::scope(|s| {
+                for (k, chunk) in tracks.chunks_mut(clips.len().div_ceil(threads)).enumerate() {
+                    let base = k * clips.len().div_ceil(threads);
+                    s.spawn(move || {
+                        for (j, t) in chunk.iter_mut().enumerate() {
+                            *t = pitch_track(&read_wav(&dir.join(set).join(format!("{}.wav", base + j))));
+                        }
+                    });
+                }
+            });
+            // each speaker's range from all their clips, then one contour per clip
+            let voices: std::collections::HashMap<&str, Voice> = speakers
+                .iter()
+                .map(|s| (s.as_str(), Voice::from_frames(clips.iter().zip(&tracks).filter(|(c, _)| &c.spk == s).flat_map(|(_, t)| t.iter())).unwrap()))
+                .collect();
+            let contours: Vec<Option<[f32; 5]>> = clips
+                .iter()
+                .zip(&tracks)
+                .map(|(c, f)| syllables(f, 1).first().and_then(|&r| contour(f, r, voices[c.spk.as_str()])))
+                .collect();
+
+            let chao: Vec<(u8, [f32; 5])> = TEMPLATES.to_vec();
+            let methods = ["chao", "calib", "own", "others"];
+            // [method][expected tone][heard], heard 0 = no pitch
+            let mut conf = vec![[[0u32; 5]; 5]; methods.len()];
+            let mut per_spk: std::collections::BTreeMap<(usize, &str), (u32, u32)> = Default::default();
+            let mut gaps = vec![(0u32, 0u32); methods.len()];
+            for spk in &speakers {
+                let own_all: Vec<(usize, u8, [f32; 5])> = clips.iter().enumerate().filter(|(_, c)| &c.spk == spk).filter_map(|(i, c)| contours[i].map(|k| (i, c.tone, k))).collect();
+                let calib = mean_by_tone(&mut own_all.iter().filter(|(i, _, _)| clips[*i].syl == calib_syl).map(|&(_, t, k)| (t, k)));
+                let others = mean_by_tone(&mut clips.iter().enumerate().filter(|(_, c)| &c.spk != spk).filter_map(|(i, c)| contours[i].map(|k| (c.tone, k))));
+                for (i, c) in clips.iter().enumerate().filter(|(_, c)| &c.spk == spk) {
+                    if c.syl == calib_syl {
+                        continue; // calibration syllable: not tested for any method, so all see the same clips
+                    }
+                    let own = mean_by_tone(&mut own_all.iter().filter(|(j, _, _)| clips[*j].syl != c.syl).map(|&(_, t, k)| (t, k)));
+                    for (m, temps) in [&chao, &calib, &own, &others].into_iter().enumerate() {
+                        let got = contours[i].map(|k| nearest(&k, temps)).unwrap_or(0);
+                        conf[m][c.tone as usize][got as usize] += 1;
+                        let e = per_spk.entry((m, spk.as_str())).or_default();
+                        e.0 += (got == c.tone) as u32;
+                        e.1 += 1;
+                        if c.gap {
+                            gaps[m].0 += (got == c.tone) as u32;
+                            gaps[m].1 += 1;
+                        }
+                    }
+                }
+            }
+            if std::env::var_os("TP_DIAG").is_some() {
+                // average contour and voiced length per (expected, heard by chao)
+                let mut acc: std::collections::BTreeMap<(u8, u8), ([f32; 5], f32, f32, u32)> = Default::default();
+                for (i, c) in clips.iter().enumerate() {
+                    let Some(k) = contours[i] else { continue };
+                    let got = nearest(&k, &chao);
+                    let voiced = tracks[i].iter().filter(|f| f.st.is_some()).count() as f32;
+                    let loud = tracks[i].iter().filter(|f| f.rms > 0.02).count() as f32;
+                    let e = acc.entry((c.tone, got)).or_insert(([0.0; 5], 0.0, 0.0, 0));
+                    for j in 0..5 {
+                        e.0[j] += k[j];
+                    }
+                    e.1 += voiced;
+                    e.2 += loud;
+                    e.3 += 1;
+                }
+                for ((t, g), (s, v, l, n)) in acc.iter().filter(|(_, e)| e.3 >= 20) {
+                    let n = *n as f32;
+                    println!("  T{t}→{g} n={n}: contour {:?} voiced {:.0} loud {:.0} frames", s.map(|x| (x / n * 10.0).round() / 10.0), v / n, l / n);
+                }
+            }
+            let nopitch: u32 = (1..5).map(|t| conf[0][t][0]).sum();
+            println!("== {set} ({} clips, no pitch found: {nopitch}; speaker ranges: {})", clips.len(), speakers.iter().map(|s| format!("{s} {:.0}±{:.0}st", voices[s.as_str()].median, voices[s.as_str()].spread)).collect::<Vec<_>>().join(", "));
+            for (m, name) in methods.iter().enumerate() {
+                let ok: u32 = (1..5).map(|t| conf[m][t][t]).sum();
+                let n: u32 = (1..5).map(|t| conf[m][t].iter().sum::<u32>()).sum();
+                let by_tone: Vec<String> = (1..5).map(|t| format!("T{t} {:.0}%", 100.0 * conf[m][t][t] as f32 / conf[m][t].iter().sum::<u32>().max(1) as f32)).collect();
+                let by_spk: Vec<String> = speakers.iter().map(|s| { let e = per_spk[&(m, s.as_str())]; format!("{s} {:.0}%", 100.0 * e.0 as f32 / e.1 as f32) }).collect();
+                println!(
+                    "{name:7} {:.1}% ({ok}/{n}) | {} | {} | non-words {:.0}%",
+                    100.0 * ok as f32 / n as f32,
+                    by_tone.join(" "),
+                    by_spk.join(" "),
+                    100.0 * gaps[m].0 as f32 / gaps[m].1.max(1) as f32
+                );
+                println!("        expected→heard (rows T1-T4; cols none,1,2,3,4): {:?}", &conf[m][1..]);
+            }
         }
     }
 

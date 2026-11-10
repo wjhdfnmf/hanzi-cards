@@ -210,6 +210,9 @@ const en = {
   "settings.inUse": "In use",
   "settings.micTest": "Test the microphone",
   "settings.micTestHint": "Say something in Chinese…",
+  "settings.pitchTones": "Use pitch to tell tones apart",
+  "settings.pitchTonesHint":
+    "Whisper tends to write the word it expects, even when a tone was wrong. With this on, the pitch of your voice decides between words that differ only in tone (妈 mā / 马 mǎ). It starts after your first {n} spoken answers, which it uses to learn your voice's range. Whisper only.",
   "settings.micHeard": "Heard: {text}",
   "settings.micNothing": "Didn't hear anything.",
 
@@ -648,6 +651,9 @@ const zh: Partial<Record<Key, string>> = {
   "settings.inUse": "使用中",
   "settings.micTest": "测试麦克风",
   "settings.micTestHint": "请说一句中文…",
+  "settings.pitchTones": "用音高区分声调",
+  "settings.pitchTonesHint":
+    "Whisper 常常写出它预期的词，即使声调读错了。开启后，由你声音的音高来决定只差声调的词（妈 mā / 马 mǎ）。前 {n} 次口语回答用来了解你的音域，之后开始生效。仅适用于 Whisper。",
   "settings.micHeard": "听到：{text}",
   "settings.micNothing": "没有听到声音。",
 

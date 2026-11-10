@@ -14,7 +14,8 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
 - **Study** with FSRS-5 spaced repetition. Pick decks, tags, mode (due & new / new only / cram / difficult), session size, and directions:
   characters → meaning, meaning → characters, listening, and **speaking**: say the answer and it is checked
   by speech recognition, either Windows' built-in Mandarin recognizer or OpenAI Whisper run locally
-  (downloaded in Settings). Audio never leaves the computer
+  (downloaded in Settings). Audio never leaves the computer. Optionally, the pitch of your voice decides
+  between words that differ only in tone (妈 mā / 马 mǎ), which Whisper on its own tends to miss
 - **AI conversation tutor** (optional, needs your own Anthropic API key): a spoken role-play with Claude
   built from your decks' words. Speak (Whisper, on this computer) or type; it answers aloud, notes which of
   your words you used correctly, suggests new words, and at the end records reviews and adds cards. Each
@@ -95,7 +96,9 @@ src-tauri/src/
   scheduler.rs        FSRS-5
   stats.rs            statistics
   dictionary.rs       CC-CEDICT import/download/search
-  pinyin.rs           tone marks, syllables and search keys
+  pinyin.rs           tone marks, syllables, search keys, tone sandhi
+  speech.rs           checking spoken answers; whisper.rs runs Whisper
+  tones.rs            pitch tracking and tone shapes; tone_check.rs picks words by tone
   pleco.rs            Pleco flashcard XML import/export
 ```
 
@@ -108,6 +111,10 @@ src-tauri/src/
 - `src-tauri/data/hsk.tsv`: HSK 3.0 word levels (2026 syllabus and 2021 lists) from
   [complete-hsk-vocabulary](https://github.com/drkameleon/complete-hsk-vocabulary) © Yanis Zafirópulos, MIT licence
   (reproduced at the top of the file).
+- Tone checking by pitch (`tones.rs`, `tone_check.rs`) was measured and tuned on the Tone Perfect
+  recordings, which are not included in this repository or the app:
+  Catherine Ryu, Mandarin Tone Perception & Production Team, and Michigan State University Libraries.
+  *Tone Perfect: Multimodal Database for Mandarin Chinese.* Accessed 1 January 2022. https://tone.lib.msu.edu/
 
 ## Roadmap ideas
 

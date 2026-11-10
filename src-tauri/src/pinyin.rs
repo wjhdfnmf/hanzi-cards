@@ -227,6 +227,25 @@ pub fn marks_to_numbered(input: &str) -> String {
     out
 }
 
+/// The tones a word is actually said with, from its dictionary tones (one per character, 5 =
+/// neutral): 3-3 → 2-3 (a run of third tones keeps only the last), 不 before a 4th tone → 2,
+/// 一 before a 4th tone → 2 and before 1-3 → 4 (alone or last it stays 1).
+pub fn spoken_tones(hanzi: &str, tones: &[u8]) -> Vec<u8> {
+    let chars: Vec<char> = hanzi.chars().filter(|c| is_hanzi(*c)).collect();
+    let mut out = tones.to_vec();
+    let next = |i: usize| tones.get(i + 1).copied();
+    for i in 0..out.len() {
+        match (chars.get(i), tones[i], next(i)) {
+            (Some('不'), 4, Some(4)) => out[i] = 2,
+            (Some('一'), 1, Some(4)) => out[i] = 2,
+            (Some('一'), 1, Some(1..=3)) => out[i] = 4,
+            (_, 3, Some(3)) => out[i] = 2,
+            _ => {}
+        }
+    }
+    out
+}
+
 /// True for a CJK ideograph.
 pub fn is_hanzi(c: char) -> bool {
     matches!(c as u32,

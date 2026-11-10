@@ -410,6 +410,18 @@
         {/each}
       </div>
     </div>
+    <label class="row">
+      <span>
+        {t("settings.pitchTones")}
+        <small class="faint block">{t("settings.pitchTonesHint", { n: 5 })}</small>
+      </span>
+      <input
+        type="checkbox"
+        class="toggle"
+        checked={settings.pitchTones}
+        onchange={(e) => saveSetting("pitchTones", e.currentTarget.checked)}
+      />
+    </label>
     {#if speech?.whisperModels.length}
       <div class="row">
         <button class="btn" disabled={micState !== "idle"} onclick={micTest}>

@@ -603,14 +603,12 @@ pub fn transcribe(app_data: &Path, name: &str, pcm: &[f32], language: &str, opts
 /// How likely each candidate text is to be what was said: the sum of its tokens'
 /// log-probabilities (and of ending there), given the audio. Higher is likelier. Used to
 /// check tones: the answer against the same syllables with other tones.
-#[allow(dead_code)] // tone-checking prototype (docs/tone-recognition.md)
 pub fn score(app_data: &Path, name: &str, pcm: &[f32], opts: &Options, candidates: &[String]) -> AppResult<Vec<f32>> {
     let mut guard = ENGINE.lock().unwrap_or_else(|e| e.into_inner());
     let e = engine(&mut guard, app_data, name)?;
     score_run(e, pcm, opts, candidates).map_err(err)
 }
 
-#[allow(dead_code)]
 fn score_run(e: &mut Engine, pcm: &[f32], opts: &Options, candidates: &[String]) -> candle_core::Result<Vec<f32>> {
     let (features, start, eot) = prepare(e, pcm, "zh", opts)?;
     let mut out = Vec::with_capacity(candidates.len());

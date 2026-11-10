@@ -64,10 +64,14 @@ already encodes these by hand; the app needs the rules in `pinyin.rs`.
 
 ## Tone Perfect: the dataset to use (checked 2026-11-09)
 
+Citation: Catherine Ryu, Mandarin Tone Perception & Production Team, and Michigan State
+University Libraries. *Tone Perfect: Multimodal Database for Mandarin Chinese.* Accessed 1 January
+2022. https://tone.lib.msu.edu/
+
 - **What it is:** Michigan State University's Tone Perfect (tone.lib.msu.edu; Catherine Ryu,
   Mandarin Tone Perception & Production Team, and MSU Libraries, 2017): every Mandarin
   syllable in all four tones, said by six native speakers (three female, three male).
-  1,640 toned syllables, 8,940 MP3 recordings (not every syllable has all six speakers).
+  1,640 toned syllables, 9,839 MP3 recordings (all six speakers for all but one).
 - **Labels for free:** github.com/MatthewScholefield/mandarin-sound-table (MIT) has
   `src/pinyins.json` mapping each toned syllable (e.g. "pàng") to its recording ids, one per
   speaker, and plays them from `tone.lib.msu.edu/tone/{id}/PROXY_MP3/download`.
@@ -82,8 +86,92 @@ already encodes these by hand; the app needs the rules in `pinyin.rs`.
   the sixth), training option C, checking B's templates against real voices, and re-measuring
   Whisper's tone scoring. Isolated syllables only, so the sandhi and two-syllable cases
   still need connected speech (the learner's own recordings).
-- **When it arrives:** unpack it anywhere; I'll convert the MP3s to 16 kHz WAV, build
-  `list.tsv` from the ids with `pinyins.json`, and run `tone_bench` / `whisper_tone_bench`.
+- **Received 2026-11-09** (`TonePerfectDataset/`, git-ignored, two zips, 293 MB):
+  - `tone_perfect_all_mp3.zip`: **9,839 clips** = 410 syllables × 4 tones × 6 speakers (FV1-3,
+    MV1-3), only `jiao1_FV3` missing. Named `{syllable}{tone}_{speaker}_MP3.mp3`, ü written
+    `v` (lv, nv, lve, nve). MP3 44.1 kHz stereo 320 kbps, 0.5-1.3 s (median 0.7), trimmed
+    tight to the voice and peak-normalised to -0.1 dB.
+  - `tone_perfect_all_xml.zip`: two files per clip. `_DC.xml` is just id/speaker/title.
+    `_CUSTOM.xml` has pinyin with marks, initial, final, gender, example characters
+    (simplified and traditional), and **`lexical_gap`**: 2,382 clips (24%) are tone/syllable
+    pairs that aren't real Mandarin syllables, said anyway. No labels are needed from
+    `pinyins.json`: the filename is the label.
+  - No licence or readme in either zip, so the open question about shipping a model trained on
+    it still stands.
+  - To use: convert to 16 kHz mono WAV, add ~150 ms padding (clips start on the voice), build
+    `list.tsv`, and run `tone_bench` / `whisper_tone_bench` per speaker.
+
+## Results on Tone Perfect (2026-11-09)
+
+Six native speakers, 410 syllables × 4 tones, 9,815 clips scored (the `ma` syllables are held
+out as the calibration set). Prepared with `scripts/tone_perfect_prep.py`; noisy = pink noise
+about 13-17 dB below the speech.
+
+**Pitch tracker + shapes** (`tone_perfect_bench`), share of syllables whose tone is right:
+
+| Templates | Clean | Noisy | T1 / T2 / T3 / T4 (clean) |
+|---|---|---|---|
+| Chao shapes, no data (before the creak fix) | 83.1% | 83.4% | 99 / 91 / 94 / **49** |
+| **Chao shapes, no data** | **89.7%** | 87.4% | 99 / 91 / 94 / 75 |
+| Speaker's own mā má mǎ mà only (option B as planned) | 85.2% | 75.4% | 100 / 97 / 72 / 72 |
+| Speaker's own average over many syllables | 92.1% | 91.2% | 99 / 97 / 93 / 79 |
+| Other five speakers' average (like a trained model) | 89.5% | 88.7% | 99 / 95 / 86 / 78 |
+
+- On real voices the tracker works: **45% on the synthetic voice → 90% here**, untuned. Every
+  speaker is 86-93%. Non-words (lexical gaps) score the same, so it hears pitch, not words.
+- **4th tones were the weak spot**: half were heard as 1st tones. The fall ends in creak, which
+  is loud but has no pitch the tracker can follow, so only the high start was kept and it
+  looked level. `contour()` now counts a loud, pitchless tail as the bottom of the speaker's
+  range (`TONE_CREAK`, default 0.1 of the loudest frame; 0 turns it off): 4th tones 49% → 75%,
+  1st tones unchanged at 99%. Loosening YIN's thresholds or the octave-jump rule helped less
+  (≤ 85%).
+- Remaining errors: 4th → 1st (16%), 2nd → 3rd (9%, a low, late rise).
+- **One calibration set is worse than no calibration**: four clips are too few to average out
+  one syllable's quirks. Personal templates pay off only when built from many syllables (92%),
+  e.g. averaged from the learner's answers that were graded right over time.
+
+**Whisper's tone scoring** (`whisper_tone_bench`, 30 real syllables whose four tones each have
+a character read almost only that way, × 6 speakers = 720 clips; the right character must beat
+the other three tones):
+
+| Model | Clean | Noisy |
+|---|---|---|
+| small | 47% | 45% |
+| large-v3-turbo | 53% | 56% |
+
+Chance is 25%. Its misses lean to frequent characters (抛 袍 炮 → 跑), so word frequency
+still outweighs what it hears. On isolated syllables **pitch beats Whisper by a wide margin**,
+and the bigger model barely helps. Whisper can't be the tone judge; at most it can
+cross-check (option D).
+
+**In the app: "Use pitch to tell tones apart"** (Settings › Speech recognition, off by default;
+`tone_check.rs`). After Whisper transcribes a spoken answer, if it wrote the answer or a word
+with the same syllables, the candidates (the answer, up to 7 same-syllable words from the
+dictionary, and Whisper's own word) are re-scored as Whisper's log-probability + 2 × the
+pitch's log-probability, with expected tones after sandhi (`pinyin::spoken_tones`). The
+learner's pitch range is a histogram of their recordings (setting `pitch_profile`); choosing
+starts after 5 recordings.
+
+End to end (`tone_select_e2e`): ten cards (跑 同 影 书 位 题 去 想 臭 气), Tone Perfect clips of
+each card's syllable in all four tones as a learner aiming for the card's word, Whisper with the
+drill's prompt and card-word bias. Share of answers ending with the tone actually said:
+
+| Model | Whisper's word | With pitch | Where pitch could choose |
+|---|---|---|---|
+| small | 79/234 (34%) | **207/234 (88%)** | 197/214 (92%) |
+| large-v3-turbo | 114/234 (49%) | **189/234 (81%)** | 184/199 (92%) |
+
+The rest are answers where Whisper wrote other syllables or nothing (嗯, 有, a song title for a
+lone syllable); the pitch weight makes no difference between 1 and 1000 there.
+
+What these don't cover: syllables in words and phrases (sandhi, neutral tones, coarticulation)
+and learner-style errors. Those need the native recordings (`native-tone-recordings.md`).
+
+To re-run: `python scripts/tone_perfect_prep.py TonePerfectDataset tone-data/tp`, then
+`TP_DIR=../tone-data/tp/all cargo test --lib tone_perfect_bench -- --ignored --nocapture`
+(set `CARGO_PROFILE_DEV_OPT_LEVEL=3` or it's slow), and `whisper_tone_bench` with
+`TONES_DIR` on each `tone-data/tp/whisper/<speaker>-g<k>` folder. With the GPU build the test
+process can hang after printing its results; stop it then.
 
 ## Recommendation
 
@@ -93,7 +181,8 @@ already encodes these by hand; the app needs the rules in `pinyin.rs`.
    one of your card words), you say it, and the recording is saved with what you meant to
    say (opt-in, stays on this computer). Twenty minutes of your own speech is enough to
    measure options B, C and D on a real learner voice instead of a robot. In parallel,
-   **request Tone Perfect** (above) for six native voices.
+   **request Tone Perfect** (above) for six native voices. Native-speaker recordings of our
+   own list: see `native-tone-recordings.md`.
 3. Then **B** (personal templates), measured on those recordings, and **D** to combine it with
    Whisper's score. Consider **C** if B isn't reliable enough and a usable dataset licence
    is confirmed.

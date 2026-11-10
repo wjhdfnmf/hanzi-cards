@@ -167,6 +167,11 @@ pub fn answer_forms(hanzi: &str) -> Vec<String> {
 /// Phrases that sound like the answer but aren't it: the same syllables in other tones
 /// (买 mǎi / 卖 mài), from the dictionary, most common first.
 pub fn tone_distractors(conn: &Connection, hanzi: &str, card_pinyin: &str, max: usize) -> AppResult<Vec<String>> {
+    Ok(tone_variants(conn, hanzi, card_pinyin, max)?.into_iter().map(|(simp, _)| simp).collect())
+}
+
+/// Like [`tone_distractors`], with each word's numbered pinyin ("ma4").
+pub fn tone_variants(conn: &Connection, hanzi: &str, card_pinyin: &str, max: usize) -> AppResult<Vec<(String, String)>> {
     let forms = answer_forms(hanzi);
     let Some(main) = forms.first() else { return Ok(vec![]) };
     let bare = pinyin::toneless_key(card_pinyin);
@@ -181,16 +186,16 @@ pub fn tone_distractors(conn: &Connection, hanzi: &str, card_pinyin: &str, max: 
          ORDER BY score DESC LIMIT 60",
     )?;
     let rows = stmt.query_map(rusqlite::params![bare, len], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
-    let mut out: Vec<String> = Vec::new();
+    let mut out: Vec<(String, String)> = Vec::new();
     for row in rows {
         let (simp, num) = row?;
-        if pinyin::toned_key(&num) == toned || forms.contains(&simp) || out.contains(&simp) {
+        if pinyin::toned_key(&num) == toned || forms.contains(&simp) || out.iter().any(|(s, _)| *s == simp) {
             continue;
         }
         if !simp.chars().all(pinyin::is_hanzi) {
             continue;
         }
-        out.push(simp);
+        out.push((simp, num));
         if out.len() >= max {
             break;
         }

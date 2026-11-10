@@ -15,6 +15,7 @@ mod scheduler;
 mod speech;
 mod stats;
 mod study;
+mod tone_check;
 mod tones;
 mod tutor;
 mod whisper;

@@ -3,7 +3,7 @@
 use crate::error::{AppError, AppResult};
 use crate::models::*;
 use crate::stats::Stats;
-use crate::{ai, billing, cards, db, decks, dictionary, pleco, speech, stats, study, tutor, whisper, AppState};
+use crate::{ai, billing, cards, db, decks, dictionary, pinyin, pleco, speech, stats, study, tone_check, tones, tutor, whisper, AppState};
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -46,6 +46,7 @@ pub fn get_settings(state: State<AppState>) -> AppResult<HashMap<String, String>
         ("speech_engine", "auto".to_string()),
         ("whisper_model", "base".to_string()),
         ("whisper_device", "auto".to_string()),
+        ("pitch_tones", "false".to_string()),
         ("tutor_model", ai::DEFAULT_MODEL.to_string()),
     ]
     .into_iter()
@@ -265,10 +266,22 @@ pub async fn speech_check_audio(
     pcm: Vec<f32>,
 ) -> AppResult<speech::SpokenAnswer> {
     let dir = app_data(&app)?;
-    let (plan, status) = blocking(app.clone(), {
+    let (plan, status, pitch) = blocking(app.clone(), {
         let dir = dir.clone();
         let others = others.clone();
-        move |conn| Ok((speech::plan(conn, card_id, &others)?, speech::engine_status(conn, &dir)))
+        move |conn| {
+            let plan = speech::plan(conn, card_id, &others)?;
+            // "Use pitch to tell tones apart": the words it may choose between, and the
+            // learner's pitch range so far
+            let pitch = if db::get_setting(conn, "pitch_tones")?.as_deref() == Some("true") {
+                let cands = tone_check::candidates(conn, &plan.hanzi, &plan.pinyin, tone_check::MAX_VARIANTS)?;
+                let profile = tones::PitchProfile::parse(&db::get_setting(conn, "pitch_profile")?.unwrap_or_default());
+                Some((cands, profile))
+            } else {
+                None
+            };
+            Ok((plan, speech::engine_status(conn, &dir), pitch))
+        }
     })
     .await?;
     let model = status.whisper_model.ok_or_else(|| AppError::msg("No Whisper model is downloaded."))?;
@@ -278,8 +291,48 @@ pub async fn speech_check_audio(
     words.retain(|w| *w != answer);
     words.insert(card_id.unsigned_abs() as usize % (words.len() + 1), answer);
     let prompt = format!("{}。", words.join("，"));
-    let text = run_whisper(&app, dir, model, pcm, prompt, true).await?;
+    let text = match pitch {
+        Some((cands, profile)) => {
+            let text = run_whisper(&app, dir.clone(), model.clone(), pcm.clone(), prompt, true).await?;
+            pick_by_pitch(&app, dir, model, pcm, text, cands, profile).await?
+        }
+        None => run_whisper(&app, dir, model, pcm, prompt, true).await?,
+    };
     blocking(app, move |conn| speech::judge_text(conn, &plan, &text)).await
+}
+
+/// With the "pitch_tones" setting: when Whisper wrote the answer or a word with the same
+/// syllables in another tone (妈 / 马), choose among those words by Whisper's score plus the
+/// pitch of the recording (see tone_check.rs). Every recording also extends the learner's
+/// pitch range; choosing starts once it has `PROFILE_MIN_RECORDINGS` of them.
+async fn pick_by_pitch(
+    app: &AppHandle,
+    dir: PathBuf,
+    model: String,
+    pcm: Vec<f32>,
+    text: String,
+    cands: Vec<tone_check::Candidate>,
+    mut profile: tones::PitchProfile,
+) -> AppResult<String> {
+    let (heard, cands) = blocking(app.clone(), {
+        let text = text.clone();
+        move |conn| {
+            let heard: String = speech::to_simplified(conn, &text)?.chars().filter(|c| pinyin::is_hanzi(*c)).collect();
+            let mut cands = cands;
+            tone_check::add_heard(conn, &mut cands, &heard)?;
+            Ok((heard, cands))
+        }
+    })
+    .await?;
+    let (chosen, profile) = tauri::async_runtime::spawn_blocking(move || -> AppResult<(Option<String>, tones::PitchProfile)> {
+        let trim = if whisper::using_gpu() { None } else { Some(SPEECH_WINDOW) };
+        let chosen = tone_check::select(&dir, &model, &pcm, &heard, &cands, &mut profile, trim)?;
+        Ok((chosen, profile))
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))??;
+    blocking(app.clone(), move |conn| Ok(db::set_setting(conn, "pitch_profile", &profile.serialize())?)).await?;
+    Ok(chosen.unwrap_or(text))
 }
 
 /// How strongly Whisper is pulled toward words on the learner's cards (added to a token's

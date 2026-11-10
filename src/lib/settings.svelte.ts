@@ -18,6 +18,8 @@ export const settings = $state({
   whisperModel: "base",
   /** "auto" (GPU if available) | "cpu" */
   whisperDevice: "auto",
+  /** Re-check Whisper's word against same-syllable words in other tones by pitch. */
+  pitchTones: false,
   tutorModel: "claude-opus-5-5",
 });
 
@@ -34,6 +36,7 @@ const KEYS: Record<string, keyof typeof settings> = {
   speech_engine: "speechEngine",
   whisper_model: "whisperModel",
   whisper_device: "whisperDevice",
+  pitch_tones: "pitchTones",
   tutor_model: "tutorModel",
 };
 
