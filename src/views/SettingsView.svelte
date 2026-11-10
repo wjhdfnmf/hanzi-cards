@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import { ask, save } from "@tauri-apps/plugin-dialog";
-  import { api, errorText, type AiSpending, type DictStatus, type KeyStatus, type SpeechStatus, type WhisperDeviceInfo, type WhisperModel } from "../lib/api";
+  import { ask, open, save } from "@tauri-apps/plugin-dialog";
+  import { getVersion } from "@tauri-apps/api/app";
+  import { api, errorText, type AiSpending, type DataContents, type DataFile, type DataInfo, type DictStatus, type KeyStatus, type SpeechStatus, type WhisperDeviceInfo, type WhisperModel } from "../lib/api";
   import { recordUtterance } from "../lib/mic";
   import { showToast } from "../lib/toast.svelte";
   import { t } from "../lib/i18n.svelte";
@@ -14,8 +15,10 @@
   let voices = $state<SpeechSynthesisVoice[]>([]);
   let voicesChecked = $state(false);
   let dict = $state<DictStatus | null>(null);
+  let appVersion = $state("");
 
   onMount(async () => {
+    appVersion = await getVersion().catch(() => "");
     dict = await api.dictStatus();
     voices = await voicesReady();
     voicesChecked = true;
@@ -146,6 +149,88 @@
   let showSpending = $state(false);
   const usd = (c: number) => `$${c.toFixed(c > 0 && c < 0.1 ? 3 : 2)}`;
   const when = (s: number) => new Date(s * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  // ---------- your data (the cards database file) ----------
+
+  let data = $state<DataInfo | null>(null);
+  let dataBusy = $state(false);
+  let showBackups = $state(false);
+
+  async function refreshData() {
+    data = await api.dataInfo().catch((e) => {
+      showToast(errorText(e), "err");
+      return null;
+    });
+  }
+  onMount(refreshData);
+
+  const mb = (bytes: number) => (bytes / 1048576).toFixed(1);
+  const summary = (c: DataContents | null) =>
+    c
+      ? t(c.decks === 1 ? "settings.dataSummaryOne" : "settings.dataSummary", { cards: fmtNum(c.cards), decks: fmtNum(c.decks), reviews: fmtNum(c.reviews) })
+      : t("settings.dataUnreadable");
+
+  async function backupNow() {
+    dataBusy = true;
+    try {
+      showToast(t("settings.dataBackedUp", { name: await api.dataBackup() }));
+      await refreshData();
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      dataBusy = false;
+    }
+  }
+
+  /** Save a copy somewhere the user picks, e.g. to load into a fresh install. */
+  async function saveCopy() {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const path = await save({ defaultPath: `hanzi-cards-${stamp}.db`, filters: [{ name: t("settings.dataFiles"), extensions: ["db"] }] });
+    if (!path) return;
+    dataBusy = true;
+    try {
+      await api.dataSaveCopy(path);
+      showToast(t("settings.dataSavedCopy", { path }));
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      dataBusy = false;
+    }
+  }
+
+  /** Switch to another database file, after showing what it holds. */
+  async function useFile(path: string) {
+    let file: DataFile;
+    try {
+      file = await api.dataInspect(path);
+    } catch (e) {
+      showToast(errorText(e), "err");
+      return;
+    }
+    const message = t("settings.dataUseConfirm", {
+      what: summary(file.contents),
+      when: when(file.modified),
+      current: summary(data?.current.contents ?? null),
+    });
+    if (!(await ask(message, { kind: "warning", okLabel: t("settings.dataUse") }))) return;
+    dataBusy = true;
+    try {
+      const saved = await api.dataUseFile(path);
+      showToast(t("settings.dataSwitched", { name: saved }));
+      // every page shows the old database's cards: start over
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) {
+      showToast(errorText(e), "err");
+      await refreshData();
+    } finally {
+      dataBusy = false;
+    }
+  }
+
+  async function pickFile() {
+    const path = await open({ multiple: false, directory: false, defaultPath: data?.folder });
+    if (path) await useFile(path as string);
+  }
+
   const modelName = (m: string) => (m.includes("haiku") ? "Haiku 5.5" : m.includes("opus") ? "Opus 5.5" : m);
 
   async function exportSpending() {
@@ -517,6 +602,75 @@
     {/if}
   </section>
 
+  <h2>{t("settings.data")}</h2>
+  <section class="group card-surface">
+    <div class="row">
+      <span class="data-current">
+        {t("settings.dataCurrent")}
+        <small class="faint block">
+          {data ? `${summary(data.current.contents)} · ${t("settings.dataSize", { mb: mb(data.current.sizeBytes) })}` : "…"}
+        </small>
+        {#if data}<code class="data-path">{data.current.path}</code>{/if}
+      </span>
+      <button class="btn ghost small" onclick={() => api.dataShowInFolder().catch((e) => showToast(errorText(e), "err"))}>
+        {t("settings.dataShow")}
+      </button>
+    </div>
+    <div class="row">
+      <span>
+        {t("settings.dataBackup")}
+        <small class="faint block">{t("settings.dataBackupHint")}</small>
+      </span>
+      <span class="key-state">
+        <button class="btn ghost" disabled={dataBusy} onclick={saveCopy}>{t("settings.dataSaveCopy")}</button>
+        <button class="btn" disabled={dataBusy} onclick={backupNow}>{t("settings.dataBackupNow")}</button>
+      </span>
+    </div>
+    <div class="row">
+      <span>
+        {t("settings.dataOther")}
+        <small class="faint block">{t("settings.dataOtherHint")}</small>
+      </span>
+      <button class="btn" disabled={dataBusy} onclick={pickFile}>{t("settings.dataChoose")}</button>
+    </div>
+    {#if data?.backups.length}
+      <div class="row col">
+        <div class="line">
+          <span>{t("settings.dataBackups", { n: data.backups.length })}</span>
+          <button class="btn ghost small" onclick={() => (showBackups = !showBackups)}>
+            {showBackups ? t("settings.spendingHide") : t("settings.spendingShow")}
+          </button>
+        </div>
+        {#if showBackups}
+          <table class="spend-table">
+            <thead>
+              <tr>
+                <th>{t("settings.dataSaved")}</th>
+                <th>{t("settings.dataHolds")}</th>
+                <th class="num-c">{t("settings.dataSizeCol")}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each data.backups as b (b.path)}
+                <tr>
+                  <td title={b.name}>{when(b.modified)}</td>
+                  <td>{summary(b.contents)}</td>
+                  <td class="num-c">{mb(b.sizeBytes)} MB</td>
+                  <td class="num-c">
+                    {#if b.contents}
+                      <button class="btn ghost small" disabled={dataBusy} onclick={() => useFile(b.path)}>{t("settings.dataRestore")}</button>
+                    {/if}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        {/if}
+      </div>
+    {/if}
+  </section>
+
   <h2>{t("settings.dictionary")}</h2>
   <section class="group card-surface">
     <div class="row">
@@ -527,7 +681,7 @@
 
   <h2>{t("settings.about")}</h2>
   <section class="group card-surface">
-    <p class="muted">{t("settings.aboutText", { v: "0.1.0" })}</p>
+    <p class="muted">{t("settings.aboutText", { v: appVersion })}</p>
   </section>
 </div>
 
@@ -671,6 +825,16 @@
   }
   .key-input {
     flex: 1;
+  }
+  .data-current {
+    min-width: 0;
+  }
+  .data-path {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+    user-select: text;
   }
   .mic-text {
     font-size: 16px;

@@ -312,6 +312,32 @@ export interface DictStatus {
   importedAt: number | null;
 }
 
+/** What a cards database file holds. */
+export interface DataContents {
+  cards: number;
+  decks: number;
+  reviews: number;
+  /** Unix seconds. */
+  lastReview: number | null;
+}
+
+export interface DataFile {
+  name: string;
+  path: string;
+  sizeBytes: number;
+  /** Unix seconds. */
+  modified: number;
+  /** null when the file isn't a readable Hanzi Cards database. */
+  contents: DataContents | null;
+}
+
+export interface DataInfo {
+  current: DataFile;
+  folder: string;
+  /** Newest first. */
+  backups: DataFile[];
+}
+
 export interface ImportResult {
   imported: number;
   /** Already in the same deck, or rows without Chinese characters. */
@@ -389,6 +415,15 @@ export const api = {
   answerCard: (cardId: number, direction: Direction, rating: number, durationMs: number) =>
     invoke<AnswerResult>("answer_card", { cardId, direction, rating, durationMs }),
   getStats: (days: number) => invoke<Stats>("get_stats", { days }),
+
+  dataInfo: () => invoke<DataInfo>("data_info"),
+  /** Returns the backup's file name. */
+  dataBackup: () => invoke<string>("data_backup"),
+  dataSaveCopy: (path: string) => invoke<void>("data_save_copy", { path }),
+  dataInspect: (path: string) => invoke<DataFile>("data_inspect", { path }),
+  /** Switch to another database file; returns the name of the backup of the replaced one. */
+  dataUseFile: (path: string) => invoke<string>("data_use_file", { path }),
+  dataShowInFolder: () => invoke<void>("data_show_in_folder"),
 
   dictStatus: () => invoke<DictStatus>("dict_status"),
   dictSearch: (query: string, limit = 60) => invoke<DictEntry[]>("dict_search", { query, limit }),

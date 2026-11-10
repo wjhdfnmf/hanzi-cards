@@ -199,7 +199,8 @@ mod tests {
         let app = std::path::Path::new(&app);
         let tp = std::path::Path::new(&tp);
         let model = std::env::var("WHISPER_MODEL").unwrap_or_else(|_| "small".into());
-        let conn = Connection::open(app.join("hanzi-cards.db")).unwrap();
+        // read-only: never write to the learner's real database from a test
+        let conn = Connection::open_with_flags(app.join("hanzi-cards.db"), rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
         let meta: Vec<(usize, String, u8, String)> = std::fs::read_to_string(tp.join("meta.tsv"))
             .unwrap()
             .lines()

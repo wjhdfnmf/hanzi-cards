@@ -3,7 +3,7 @@
 use crate::error::{AppError, AppResult};
 use crate::models::*;
 use crate::stats::Stats;
-use crate::{ai, billing, cards, db, decks, dictionary, pinyin, pleco, speech, stats, study, tone_check, tones, tutor, whisper, AppState};
+use crate::{ai, billing, cards, data, db, decks, dictionary, pinyin, pleco, speech, stats, study, tone_check, tones, tutor, whisper, AppState};
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -66,6 +66,48 @@ pub fn set_setting(state: State<AppState>, key: String, value: String) -> AppRes
         whisper::set_device_preference(&value);
     }
     Ok(db::set_setting(&lock(&state), &key, &value)?)
+}
+
+// ---------- your data (the database file) ----------
+
+#[tauri::command]
+pub fn data_info(app: AppHandle, state: State<AppState>) -> AppResult<data::DataInfo> {
+    data::info(&lock(&state), &app_data(&app)?)
+}
+
+/// Back up the database now; returns the backup's file name.
+#[tauri::command]
+pub fn data_backup(app: AppHandle, state: State<AppState>) -> AppResult<String> {
+    let path = data::backup(&lock(&state), &app_data(&app)?, "")?;
+    Ok(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
+}
+
+/// Save a copy of the database to a file the user chose.
+#[tauri::command]
+pub fn data_save_copy(app: AppHandle, state: State<AppState>, path: String) -> AppResult<()> {
+    data::save_copy(&lock(&state), &app_data(&app)?, std::path::Path::new(&path))
+}
+
+/// What a database file holds, before switching to it.
+#[tauri::command]
+pub fn data_inspect(path: String) -> AppResult<data::FileInfo> {
+    data::inspect(std::path::Path::new(&path))
+}
+
+/// Switch to another database file (a backup, or one from another computer). The current
+/// one is backed up first; returns that backup's file name.
+#[tauri::command]
+pub fn data_use_file(app: AppHandle, state: State<AppState>, path: String) -> AppResult<String> {
+    let dir = app_data(&app)?;
+    let mut conn = lock(&state);
+    let saved = data::use_file(&mut conn, &dir, std::path::Path::new(&path))?;
+    whisper::set_device_preference(&db::get_setting(&conn, "whisper_device")?.unwrap_or_else(|| "auto".into()));
+    Ok(saved.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn data_show_in_folder(app: AppHandle) -> AppResult<()> {
+    data::show_in_folder(&data::db_path(&app_data(&app)?))
 }
 
 // ---------- decks ----------

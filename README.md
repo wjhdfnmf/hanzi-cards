@@ -31,6 +31,9 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   and export any deck back to Pleco (decks become categories, pinyin as tone numbers)
 - **CSV/TSV import & export** (also works with Anki and Pleco text exports); a 6th `deck` column holds
   the subdeck path, e.g. `Class 9` or `Lesson 1/Food`
+- **Your data** (Settings): shows which database file holds your cards and progress; back it up, save a copy
+  anywhere, or switch to a backup or a database from another computer. The first start of each new version
+  backs the database up automatically before changing anything (the last 3 such backups are kept)
 - English interface by default, Simplified Chinese optional; light and dark themes
 
 ## Stack

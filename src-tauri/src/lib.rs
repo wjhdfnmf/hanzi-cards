@@ -2,6 +2,7 @@ mod ai;
 mod billing;
 mod cards;
 mod commands;
+mod data;
 mod db;
 mod decks;
 mod dictionary;
@@ -36,7 +37,8 @@ pub fn run() {
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
-            let conn = db::open(&dir.join("hanzi-cards.db"))?;
+            // backs the database up first when a new version starts for the first time
+            let conn = data::open_for_version(&dir, env!("CARGO_PKG_VERSION"))?;
             gpu::init(&dir); // where downloaded GPU libraries live
             whisper::set_device_preference(
                 &db::get_setting(&conn, "whisper_device").ok().flatten().unwrap_or_else(|| "auto".into()),
@@ -56,6 +58,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
             commands::set_setting,
+            commands::data_info,
+            commands::data_backup,
+            commands::data_save_copy,
+            commands::data_inspect,
+            commands::data_use_file,
+            commands::data_show_in_folder,
             commands::list_decks,
             commands::create_deck,
             commands::update_deck,
