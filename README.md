@@ -60,6 +60,25 @@ cd src-tauri && cargo test   # Rust unit tests (scheduler, pinyin, cards, study,
 With the CUDA Toolkit installed, `scripts/dev-gpu.ps1` runs the app with Whisper on the graphics card
 (`--features gpu`); a spoken answer then takes about 0.2 s instead of 1-3 s. See `docs/gpu-whisper-plan.md`.
 
+### Windows installer
+
+```powershell
+scripts\dev-gpu.ps1 build    # -> src-tauri\target\release\bundle\nsis\Hanzi Cards_<version>_x64-setup.exe
+```
+
+The installer (NSIS, per-user, English or Simplified Chinese) contains the app and CC-CEDICT, which is
+imported on first start. It is built with GPU support but runs on the processor by default; nothing
+large is bundled:
+
+- **Whisper models** are downloaded from Hugging Face in Settings › Speech recognition (the Study page
+  offers the recommended one once: Large-v3 Turbo with a working graphics card, otherwise Small).
+- **NVIDIA's libraries** (cuBLAS, cuBLASLt, cuRAND; about 505 MB from NVIDIA's official redistributable
+  archives, SHA-256 checked) are offered in Settings only when an NVIDIA card is found. The app
+  delay-loads them, so it starts and works without them on any PC.
+
+Building it needs the CUDA Toolkit and Visual Studio C++ build tools (the script finds them); the
+plain `npm run tauri build` makes a CPU-only installer.
+
 ## Layout
 
 ```
@@ -82,7 +101,7 @@ src-tauri/src/
 
 ## Licences of data
 
-- CC-CEDICT © MDBG, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Downloaded by the user at runtime, not bundled.
+- CC-CEDICT © MDBG, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). An unmodified copy ships with the app (`src-tauri/resources/cedict_1_0_ts_utf-8_mdbg.txt.gz`, imported on first start); the Dictionary page can download the latest release.
 - FSRS default parameters from the [open-spaced-repetition](https://github.com/open-spaced-repetition) project.
 - `src-tauri/data/char_freq.tsv`: character reading frequencies from the Unicode Unihan database (`kHanyuPinlu`),
   © Unicode, Inc., [Unicode License](https://www.unicode.org/license.txt). Regenerate with `scripts/gen_char_freq.py`.

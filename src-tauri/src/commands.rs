@@ -394,8 +394,31 @@ pub async fn speech_warmup(app: AppHandle) -> AppResult<()> {
 
 /// Where Whisper runs (GPU or CPU) and why, for Settings. The first call checks the GPU.
 #[tauri::command]
-pub async fn whisper_device_info() -> AppResult<whisper::DeviceInfo> {
-    tauri::async_runtime::spawn_blocking(whisper::device_info).await.map_err(|e| AppError::msg(e.to_string()))
+pub async fn whisper_device_info(app: AppHandle) -> AppResult<whisper::DeviceInfo> {
+    let dir = app_data(&app)?;
+    tauri::async_runtime::spawn_blocking(move || whisper::device_info(&dir)).await.map_err(|e| AppError::msg(e.to_string()))
+}
+
+/// Download NVIDIA's GPU libraries (progress events "gpu-download": {received, total}).
+#[tauri::command]
+pub async fn gpu_libs_download(app: AppHandle) -> AppResult<()> {
+    let dir = app_data(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut last = std::time::Instant::now();
+        crate::gpu::download(&dir, |received, total| {
+            if last.elapsed().as_millis() >= 200 || received == total {
+                last = std::time::Instant::now();
+                let _ = app.emit("gpu-download", serde_json::json!({ "received": received, "total": total }));
+            }
+        })
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+#[tauri::command]
+pub fn gpu_libs_remove(app: AppHandle) -> AppResult<()> {
+    crate::gpu::remove(&app_data(&app)?)
 }
 
 #[tauri::command]
@@ -453,6 +476,25 @@ pub fn speech_cancel() {
 }
 
 // ---------- dictionary ----------
+
+/// First start: import the CC-CEDICT copy that ships with the app when the dictionary is
+/// empty (it can still be updated from the Dictionary page). Emits "dictionary-ready".
+pub async fn import_bundled_dictionary(app: AppHandle) -> AppResult<()> {
+    let empty = blocking(app.clone(), |conn| Ok(dictionary::status(conn)?.entries == 0)).await?;
+    if !empty {
+        return Ok(());
+    }
+    let path = app
+        .path()
+        .resolve("resources/cedict_1_0_ts_utf-8_mdbg.txt.gz", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| AppError::msg(e.to_string()))?;
+    let text = tauri::async_runtime::spawn_blocking(move || dictionary::read_file(&path))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))??;
+    let n = blocking(app.clone(), move |conn| dictionary::import(conn, &text)).await?;
+    let _ = app.emit("dictionary-ready", n);
+    Ok(())
+}
 
 #[tauri::command]
 pub fn dict_status(state: State<AppState>) -> AppResult<DictStatus> {

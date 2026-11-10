@@ -370,24 +370,9 @@ pub fn set_device_preference(pref: &str) {
     *DEVICE_PREF.lock().unwrap_or_else(|e| e.into_inner()) = pref.to_string();
 }
 
-/// Whether a CUDA GPU can be used (checked once; None = usable, Some = why not).
+/// Why the GPU can't be used (None = it can); see `gpu.rs`.
 fn gpu_problem() -> Option<String> {
-    static CHECK: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
-    CHECK
-        .get_or_init(|| {
-            #[cfg(feature = "gpu")]
-            {
-                match Device::new_cuda(0) {
-                    Ok(_) => None,
-                    Err(e) => Some(format!("No usable NVIDIA GPU: {e}")),
-                }
-            }
-            #[cfg(not(feature = "gpu"))]
-            {
-                Some("This build of the app has no GPU support.".to_string())
-            }
-        })
-        .clone()
+    crate::gpu::problem()
 }
 
 /// Where Whisper should run now.
@@ -424,6 +409,10 @@ pub struct DeviceInfo {
     pub gpu_problem: Option<String>,
     /// Where Whisper runs with the current setting: "gpu" or "cpu".
     pub using: String,
+    /// The model to suggest for this computer.
+    pub recommended: String,
+    /// NVIDIA's libraries: found a card, installed, downloaded, download size.
+    pub libs: Option<crate::gpu::GpuLibs>,
 }
 
 /// Whether a model reliably keeps English mixed into Chinese speech (measured: large-v3-turbo
@@ -442,13 +431,18 @@ pub fn using_gpu() -> bool {
     wanted_kind() == "gpu"
 }
 
-pub fn device_info() -> DeviceInfo {
+pub fn device_info(app_data: &Path) -> DeviceInfo {
     let problem = gpu_problem();
+    let libs = crate::gpu::status(app_data);
+    let using = wanted_kind();
     DeviceInfo {
-        gpu_build: cfg!(feature = "gpu"),
-        gpu: if problem.is_none() { gpu_name().or(Some("NVIDIA GPU".into())) } else { None },
+        gpu_build: crate::gpu::built_with_gpu(),
+        gpu: if problem.is_none() || libs.nvidia { gpu_name().or(Some("NVIDIA GPU".into())) } else { None },
         gpu_problem: problem,
-        using: wanted_kind().to_string(),
+        using: using.to_string(),
+        // Turbo when it runs on the graphics card (~0.3 s an answer), else small (~1 s on a CPU)
+        recommended: if using == "gpu" { "large-v3-turbo" } else { "small" }.to_string(),
+        libs: crate::gpu::built_with_gpu().then_some(libs),
     }
 }
 
@@ -974,6 +968,68 @@ mod tests {
                 let got = transcribe(Path::new(&dir), &name, &pcm, "zh", &opts).unwrap();
                 println!("  {label:26} {got}");
             }
+        }
+    }
+
+    /// Voice engines judged by ear (Whisper's): TTS_BENCH holds list.tsv
+    /// (category, text, pinyin) and raw/<engine>/[16k/]N.wav per engine in TTS_ENGINES.
+    /// Each clip is transcribed without hints and judged like a spoken answer (same
+    /// characters or same toned pinyin = right; right syllables, wrong tone = tone error).
+    /// WHISPER_DIR=<app data> TTS_BENCH=... TTS_ENGINES=huihui,yaoyao,melo cargo test --lib tts_roundtrip -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn tts_roundtrip() {
+        let (Ok(dir), Ok(bench)) = (std::env::var("WHISPER_DIR"), std::env::var("TTS_BENCH")) else { return };
+        let conn = rusqlite::Connection::open(Path::new(&dir).join("hanzi-cards.db")).unwrap();
+        let name = std::env::var("WHISPER_MODEL").unwrap_or_else(|_| "large-v3-turbo".into());
+        let bench = Path::new(&bench);
+        let list: Vec<Vec<String>> = std::fs::read_to_string(bench.join("list.tsv"))
+            .unwrap()
+            .lines()
+            .map(|l| l.split('\t').map(String::from).collect())
+            .collect();
+        let read = |path: &Path| -> Option<Vec<f32>> {
+            let b = std::fs::read(path).ok()?;
+            let at = b.windows(4).position(|w| w == b"data")? + 8; // first sample after the data chunk header
+            // 0.4 s of silence on each side for every engine (some engines trim it, which
+            // would make Whisper guess wildly on half-second clips)
+            let pad = std::iter::repeat_n(0f32, 6400);
+            let mut v: Vec<f32> = pad.clone().chain(b[at..].chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0)).chain(pad).collect();
+            // same loudness for every engine (peak 0.5), as a player would
+            let peak = v.iter().fold(0f32, |m, x| m.max(x.abs()));
+            if peak > 1e-4 {
+                v.iter_mut().for_each(|x| *x *= 0.5 / peak);
+            }
+            Some(v)
+        };
+        let opts = Options { chinese_only: true, ..Default::default() };
+        for engine in std::env::var("TTS_ENGINES").unwrap_or_default().split(',').filter(|e| !e.is_empty()) {
+            let mut tally: std::collections::BTreeMap<String, (u32, u32, u32)> = Default::default(); // right, tone errors, total
+            let mut misses: Vec<String> = Vec::new();
+            for (i, item) in list.iter().enumerate() {
+                let (cat, text, py) = (&item[0], &item[1], &item[2]);
+                let base = bench.join("raw").join(engine);
+                let Some(pcm) = read(&base.join("16k").join(format!("{i}.wav"))).or_else(|| read(&base.join(format!("{i}.wav")))) else { continue };
+                let heard = transcribe(Path::new(&dir), &name, &pcm, "zh", &opts).unwrap();
+                let wanted: String = text.chars().filter(|c| crate::pinyin::is_hanzi(*c)).collect();
+                let plan = crate::speech::ListenPlan { phrases: vec![], accepted: vec![wanted.clone()], hanzi: wanted, pinyin: py.clone() };
+                let a = crate::speech::judge_text(&conn, &plan, &heard).unwrap();
+                let t = tally.entry(cat.clone()).or_default();
+                t.2 += 1;
+                if a.correct {
+                    t.0 += 1;
+                } else {
+                    if a.note == "tone" {
+                        t.1 += 1;
+                    }
+                    if misses.len() < 14 && cat != "sentence" {
+                        misses.push(format!("{text}({py})→{}", a.heard));
+                    }
+                }
+            }
+            let parts: Vec<String> = tally.iter().map(|(c, (r, te, n))| format!("{c} {r}/{n} (tone errors {te})")).collect();
+            println!("{engine:15} {}", parts.join(" · "));
+            println!("{:15} misses: {}", "", misses.join(" "));
         }
     }
 

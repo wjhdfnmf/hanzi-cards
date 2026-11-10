@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { listen as onTauriEvent } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import {
     api,
@@ -13,8 +14,8 @@
   } from "../lib/api";
   import { t } from "../lib/i18n.svelte";
   import { intervalLabel, durationLabel, pct } from "../lib/format";
-  import { nav } from "../lib/nav.svelte";
-  import { settings } from "../lib/settings.svelte";
+  import { goto, nav } from "../lib/nav.svelte";
+  import { settings, saveSetting } from "../lib/settings.svelte";
   import { speak, stopSpeaking } from "../lib/speech";
   import { showToast } from "../lib/toast.svelte";
   import Hanzi from "../components/Hanzi.svelte";
@@ -82,6 +83,50 @@
   /** Rating suggested from the spoken answer (highlighted; Enter accepts it). */
   let suggested = $state<number | null>(null);
 
+  // ---------- first run: offer the recommended speech model ----------
+  let suggestModel = $state<{ name: string; mb: number } | null>(null);
+  let modelProgress = $state<number | null>(null);
+  async function checkSpeechModel() {
+    try {
+      if (localStorage.getItem("speech-model-offer") === "dismissed") return;
+    } catch {}
+    if (speech.whisperModels.length) {
+      suggestModel = null;
+      return;
+    }
+    try {
+      const [info, models] = await Promise.all([api.whisperDeviceInfo(), api.whisperModels()]);
+      const m = models.find((x) => x.name === info.recommended);
+      if (m) suggestModel = { name: m.name, mb: m.sizeMb };
+    } catch {}
+  }
+  function dismissModelOffer() {
+    suggestModel = null;
+    try {
+      localStorage.setItem("speech-model-offer", "dismissed");
+    } catch {}
+  }
+  async function installSuggested() {
+    if (!suggestModel) return;
+    const name = suggestModel.name;
+    modelProgress = 0;
+    const stop = await onTauriEvent<{ name: string; received: number; total: number }>("whisper-download", (e) => {
+      if (e.payload.name === name) modelProgress = e.payload.total ? Math.floor((e.payload.received / e.payload.total) * 100) : 0;
+    });
+    try {
+      await api.whisperDownload(name);
+      await saveSetting("whisperModel", name);
+      showToast(t("speech.modelReady"));
+      suggestModel = null;
+      speech = await api.speechStatus();
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      stop();
+      modelProgress = null;
+    }
+  }
+
   /** Why a direction can't be studied on this computer ("" = it can). */
   function dirOff(d: Direction): string {
     if (d === "speaking" || d === "read_aloud") return speech.available ? "" : (speech.reason ?? t("speech.unavailable"));
@@ -136,6 +181,7 @@
       api.speechStatus().catch(() => speech),
     ]);
     sel.directions = sel.directions.filter((d) => !dirOff(d));
+    checkSpeechModel();
     if (!sel.directions.length) sel.directions = ["recognition"];
     // Forget decks/tags that no longer exist.
     sel.deckIds = sel.deckIds.filter((id) => decks.some((d) => d.id === id));
@@ -371,6 +417,22 @@
         <p class="muted">{t("study.subtitle")}</p>
       </div>
     </div>
+
+    {#if suggestModel}
+      <div class="notice model-offer">
+        <span>{t("speech.offerModel", { name: suggestModel.name, mb: suggestModel.mb })}</span>
+        <span class="offer-actions">
+          {#if modelProgress !== null}
+            <progress max="100" value={modelProgress}></progress>
+            <span class="small">{t("settings.downloading", { p: modelProgress })}</span>
+          {:else}
+            <button class="btn primary small" onclick={installSuggested}>{t("speech.offerInstall")}</button>
+            <button class="btn ghost small" onclick={() => goto("settings")}>{t("speech.offerChoose")}</button>
+            <button class="btn ghost small" onclick={dismissModelOffer}>{t("speech.offerLater")}</button>
+          {/if}
+        </span>
+      </div>
+    {/if}
 
     <div class="setup">
       <div class="options">
@@ -661,6 +723,24 @@
   }
   .heard.wrong {
     color: var(--accent);
+  }
+  .model-offer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .offer-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .offer-actions .btn.small {
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12.5px;
   }
   .override {
     margin-top: 6px;

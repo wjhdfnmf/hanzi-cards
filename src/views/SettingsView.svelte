@@ -37,6 +37,38 @@
     device = await api.whisperDeviceInfo().catch(() => null);
   }
 
+  // NVIDIA's libraries for the graphics card (downloaded on request)
+  let gpuProgress = $state<number | null>(null);
+  onMount(() => {
+    let unlisten: (() => void) | undefined;
+    listen<{ received: number; total: number }>("gpu-download", (e) => {
+      gpuProgress = e.payload.total ? Math.floor((e.payload.received / e.payload.total) * 100) : 0;
+    }).then((f) => (unlisten = f));
+    return () => unlisten?.();
+  });
+
+  async function downloadGpuLibs() {
+    gpuProgress = 0;
+    try {
+      await api.gpuLibsDownload();
+      showToast(t("settings.gpuReady"));
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      gpuProgress = null;
+      await refreshSpeech();
+    }
+  }
+
+  async function removeGpuLibs() {
+    try {
+      await api.gpuLibsRemove();
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+    await refreshSpeech();
+  }
+
   async function setDevice(value: string) {
     await saveSetting("whisperDevice", value);
     device = await api.whisperDeviceInfo().catch(() => null);
@@ -321,12 +353,39 @@
         <option value="cpu">{t("settings.whisperDevice.cpu")}</option>
       </select>
     </label>
+    {#if device?.libs?.nvidia}
+      <div class="row">
+        <span>
+          {t("settings.gpuLibs")}
+          <small class="faint block">
+            {device.libs.installed
+              ? device.libs.downloaded
+                ? t("settings.gpuLibsInstalled")
+                : t("settings.gpuLibsToolkit")
+              : t("settings.gpuLibsHint", { gpu: device.gpu ?? "NVIDIA", mb: device.libs.downloadMb })}
+          </small>
+        </span>
+        <span class="model-actions">
+          {#if gpuProgress !== null}
+            <progress max="100" value={gpuProgress}></progress>
+            <span class="small">{t("settings.downloading", { p: gpuProgress })}</span>
+          {:else if !device.libs.installed}
+            <button class="btn small" onclick={downloadGpuLibs}>{t("settings.download")}</button>
+          {:else if device.libs.downloaded}
+            <button class="btn ghost small" onclick={removeGpuLibs}>{t("settings.delete")}</button>
+          {/if}
+        </span>
+      </div>
+    {/if}
     <div class="row col">
       <small class="faint">{t("settings.whisperHint")}</small>
       <div class="models">
         {#each models as m (m.name)}
           <div class="model">
-            <strong>{t("settings.whisperModel", { name: m.name })}</strong>
+            <strong
+              >{t("settings.whisperModel", { name: m.name })}{#if device?.recommended === m.name}
+                <span class="rec">{t("settings.recommended")}</span>{/if}</strong
+            >
             <span class="small faint"
               >{t("settings.whisperSize", { n: m.sizeMb })}{#if m.gpuRecommended}<br />{t("settings.gpuRecommended")}{/if}</span
             >
@@ -531,6 +590,15 @@
   }
   .model progress {
     width: 140px;
+  }
+  .rec {
+    margin-left: 4px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--accent-soft);
+    color: var(--accent);
   }
   .in-use {
     color: var(--ok);

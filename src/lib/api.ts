@@ -168,6 +168,10 @@ export interface WhisperDeviceInfo {
   gpuProblem: string | null;
   /** "gpu" | "cpu" */
   using: string;
+  /** The Whisper model to suggest for this computer. */
+  recommended: string;
+  /** NVIDIA's libraries (GPU builds only). */
+  libs: { nvidia: boolean; installed: boolean; downloaded: boolean; downloadMb: number } | null;
 }
 
 export interface WhisperModel {
@@ -350,6 +354,9 @@ export const api = {
   /** Load Whisper ahead of the first spoken answer (fire and forget). */
   speechWarmup: () => invoke<void>("speech_warmup"),
   whisperDeviceInfo: () => invoke<WhisperDeviceInfo>("whisper_device_info"),
+  /** Download NVIDIA's GPU libraries (progress: "gpu-download" events). */
+  gpuLibsDownload: () => invoke<void>("gpu_libs_download"),
+  gpuLibsRemove: () => invoke<void>("gpu_libs_remove"),
   whisperModels: () => invoke<WhisperModel[]>("whisper_models"),
   whisperDownload: (name: string) => invoke<void>("whisper_download", { name }),
   whisperDelete: (name: string) => invoke<void>("whisper_delete", { name }),

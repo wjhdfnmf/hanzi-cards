@@ -6,6 +6,7 @@ mod db;
 mod decks;
 mod dictionary;
 mod error;
+mod gpu;
 mod hsk;
 mod models;
 mod pinyin;
@@ -35,11 +36,19 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let conn = db::open(&dir.join("hanzi-cards.db"))?;
+            gpu::init(&dir); // where downloaded GPU libraries live
             whisper::set_device_preference(
                 &db::get_setting(&conn, "whisper_device").ok().flatten().unwrap_or_else(|| "auto".into()),
             );
             app.manage(AppState {
                 db: Mutex::new(conn),
+            });
+            // the dictionary ships with the app: import it on first start, in the background
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = commands::import_bundled_dictionary(handle).await {
+                    eprintln!("dictionary import: {e}");
+                }
             });
             Ok(())
         })
@@ -76,6 +85,8 @@ pub fn run() {
             commands::speech_warmup,
             commands::whisper_models,
             commands::whisper_device_info,
+            commands::gpu_libs_download,
+            commands::gpu_libs_remove,
             commands::whisper_download,
             commands::whisper_delete,
             commands::ai_key_status,
