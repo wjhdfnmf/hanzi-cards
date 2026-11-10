@@ -1,0 +1,223 @@
+<title>Tone Recording Sheet</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=Noto+Sans+SC:wght@400;600&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column; instructions first, then the blocks as numbered grids, read left to right. */
+:root {
+  --bg: #f4f6f8;
+  --paper: #ffffff;
+  --ink: #18202b;
+  --muted: #5d6877;
+  --line: #d9dfe6;
+  --accent: #1d5c7a;
+  --accent-soft: #e3eef4;
+  --t1: #d92b2b; --t2: #1f8a3b; --t3: #2563c9; --t4: #8a3cc2; --t5: #77746e;
+  --hanzi: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --zh: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --latin: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --paper: #182029; --ink: #e6ebf0; --muted: #9aa6b4; --line: #2b3643;
+    --accent: #7cc0dd; --accent-soft: #1d2f3a;
+    --t1: #ff6b6b; --t2: #5ccf7a; --t3: #6aa5ff; --t4: #c48af0; --t5: #a3a19a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --paper: #182029; --ink: #e6ebf0; --muted: #9aa6b4; --line: #2b3643;
+  --accent: #7cc0dd; --accent-soft: #1d2f3a;
+  --t1: #ff6b6b; --t2: #5ccf7a; --t3: #6aa5ff; --t4: #c48af0; --t5: #a3a19a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--latin), var(--zh); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+[lang="zh-Hans"] { font-family: var(--zh); }
+.en { color: var(--muted); font-size: 0.92em; }
+p .en, li .en { display: block; }
+h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.25; }
+h1 { font-family: var(--hanzi); font-size: clamp(2rem, 6vw, 2.8rem); font-weight: 700; }
+h1 .en { display: block; font-family: var(--latin); font-size: 1.05rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-top: 6px; }
+h2 { font-size: 1.35rem; font-weight: 600; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+h2 .en { font-weight: 400; font-size: 1rem; }
+section.guide { display: flex; flex-direction: column; gap: 14px; }
+section.guide p, section.guide li { max-width: 68ch; margin: 0; }
+section.guide ul, section.guide ol { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 10px; }
+.lede { font-size: 1.08rem; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.facts li { background: var(--accent-soft); color: var(--ink); border-radius: 999px; padding: 4px 14px; font-size: 0.95rem; }
+.note { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; }
+.pass-head { display: flex; flex-direction: column; gap: 6px; border-top: 2px solid var(--ink); padding-top: 18px; }
+.pass-head p { margin: 0; max-width: 68ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.95rem; }
+.blocks { display: flex; flex-direction: column; gap: 22px; }
+.block { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
+.block header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.block h3 { font-size: 1.25rem; font-weight: 600; }
+.block h3 .en { font-weight: 400; font-size: 0.95rem; margin-left: 4px; }
+.block .meta { margin: 0; font-size: 0.92rem; color: var(--muted); flex: 1 1 auto; }
+.block .meta .en { display: inline; margin-left: 6px; }
+.done { display: inline-flex; align-items: center; gap: 6px; font-size: 0.95rem; cursor: pointer; user-select: none; }
+.done input { width: 18px; height: 18px; accent-color: var(--accent); }
+.block:has(.done input:checked) { opacity: 0.55; }
+.say { margin: 0; font-size: 0.95rem; color: var(--accent); }
+.say .en { display: inline; margin-left: 8px; }
+.items { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.items.wide { grid-template-columns: minmax(0, 1fr); }
+.items li { position: relative; border: 1px solid var(--line); border-radius: 8px; padding: 22px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; text-align: center; }
+.items.wide li { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 4px 18px; padding: 10px 14px 10px 40px; text-align: left; align-items: baseline; }
+.n { position: absolute; top: 4px; left: 8px; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.items.wide .n { top: 50%; transform: translateY(-50%); left: 14px; }
+.hz { font-family: var(--hanzi); font-weight: 500; font-size: 2.1rem; line-height: 1.2; }
+.hz.sent { font-size: 1.6rem; }
+.py { font-size: 0.95rem; }
+.py-big { font-size: 1.6rem; font-weight: 600; line-height: 1.3; padding-block: 6px; overflow-wrap: anywhere; }
+.py-big span { white-space: nowrap; }
+.t1 { color: var(--t1); } .t2 { color: var(--t2); } .t3 { color: var(--t3); } .t4 { color: var(--t4); } .t5 { color: var(--t5); }
+.reply { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+.reply pre { margin: 0; white-space: pre-wrap; font-family: var(--zh); font-size: 0.98rem; }
+.copy { align-self: flex-start; font: inherit; font-size: 0.95rem; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+.copy:focus-visible, .done input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+footer { color: var(--ink); font-size: 1.6rem; font-weight: 600; text-wrap: balance; }
+footer [lang="zh-Hans"] { font-family: var(--hanzi); font-size: 1.25em; font-weight: 700; margin-right: 10px; }
+@media print {
+  body { padding-block: 0; font-size: 12pt; }
+  main { gap: 24px; }
+  .copy, .done { display: none; }
+  .block, .items li, .reply, section.guide li { break-inside: avoid; }
+  :root { --bg: #ffffff; }
+  .pass-head { break-after: avoid; }
+  .page-break { break-before: page; }
+  h2, .block header, .say { break-after: avoid; }
+  .py-big { font-size: 1.35rem; }
+  .block:has(.done input:checked) { opacity: 1; }
+}
+@page { margin: 14mm 12mm; }
+@media (max-width: 640px) {
+  .items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hz { font-size: 1.9rem; }
+}
+</style>
+
+<main>
+<header>
+  <h1 lang="zh-Hans">声调录音表<span class="en">Tone recording sheet</span></h1>
+</header>
+
+<section class="guide">
+  <p class="lede"><span lang="zh-Hans">谢谢你帮忙！我在做一个学中文的应用，想让它能听出学生的声调对不对。现在测试用的只有电脑合成的声音，所以需要真人母语者的录音。你只要照着下面的表读出来，用手机录音就可以。</span>
+  <span class="en">Thank you for helping! I'm building an app for learning Chinese and want it to hear whether a learner's tones are right. So far it has only been tested on a synthetic voice, so it needs recordings of a real native speaker. You read from the sheet below and record yourself on your phone.</span></p>
+  <ul>
+    <li><span lang="zh-Hans">{{N}} 组，每组约 10 个。</span><span class="en">{{N}} blocks of about 10 items each.</span></li>
+    <li><span lang="zh-Hans">每组约 1 分钟。</span><span class="en">About 1 minute per block.</span></li>
+    <li><span lang="zh-Hans">共约 40 分钟，可分两次录。</span><span class="en">About 40 minutes in all, and you can split it into two sittings.</span></li>
+  </ul>
+</section>
+
+<section class="guide page-break">
+  <h2><span lang="zh-Hans">准备</span><span class="en">Before you start</span></h2>
+  <ul>
+    <li><span lang="zh-Hans">找一个安静的房间：关掉电视、音乐和风扇，关上窗户。</span><span class="en">A quiet room: TV, music and fans off, window closed.</span></li>
+    <li><span lang="zh-Hans">用手机自带的录音应用。iPhone 用「语音备忘录」，先在 设置 → App → 语音备忘录 → 音质 里选「无损」。Android 用「录音机」，有高音质选项就选高音质。</span><span class="en">Use the phone's own recorder. iPhone: Voice Memos, and first set Settings → Apps → Voice Memos → Audio Quality to Lossless. Android: the Recorder app, on its highest quality.</span></li>
+    <li><span lang="zh-Hans">把手机平放在桌上，离嘴 20–30 厘米，录音时不要拿着手机，整个过程手机位置不变。</span><span class="en">Lay the phone flat on a table 20–30 cm from your mouth. Don't hold it, and keep it in the same place throughout.</span></li>
+    <li><span lang="zh-Hans">在电脑、平板上打开这一页，或者打印出来，照着读。</span><span class="en">Read this page on a computer or tablet, or print it.</span></li>
+  </ul>
+</section>
+
+<section class="guide">
+  <h2><span lang="zh-Hans">每一组怎么录</span><span class="en">Recording one block</span></h2>
+  <ol>
+    <li><span lang="zh-Hans">开始录音，先说组号，比如「第3组」。</span><span class="en">Start recording and say the block number, e.g. “dì 3 zǔ”.</span></li>
+    <li><span lang="zh-Hans">停两秒，然后按顺序（从左到右，一行一行）把每一个读一遍。</span><span class="en">Pause two seconds, then say each item once, in order (left to right, row by row).</span></li>
+    <li><span lang="zh-Hans">每两个之间停大约两秒（心里数「一、二」）。电脑靠停顿来分开每个词。</span><span class="en">Pause about two seconds between items (count “one, two” in your head). The computer uses the pauses to cut the recording apart.</span></li>
+    <li><span lang="zh-Hans">读完最后一个，停两秒，结束录音。勾上「录好了」。</span><span class="en">After the last one, wait two seconds and stop. Tick “录好了”.</span></li>
+  </ol>
+  <p class="note"><span lang="zh-Hans">读错了、咳嗽了或者有别的声音？不要在中间补读，删掉这个录音，整组重新录。一组只要一分钟。</span><span class="en">Misread, coughed, or a noise? Don't repeat the item inside the recording: delete it and record the whole block again. A block takes a minute.</span></p>
+</section>
+
+<section class="guide">
+  <h2><span lang="zh-Hans">怎么读</span><span class="en">How to say them</span></h2>
+  <ul>
+    <li><span lang="zh-Hans">用你平时的普通话，自然地说，不要故意夸张声调。</span><span class="en">Your normal Mandarin, said naturally. Don't exaggerate the tones.</span></li>
+    <li><span lang="zh-Hans">每个字、每个词都单独说，像在教学生，而不是像念一串清单（念清单时最后一个常常会变调）。</span><span class="en">Say each item on its own, as if teaching a student, not like reading a list (the end of a list tends to change its pitch).</span></li>
+    <li><span lang="zh-Hans"><strong>第一轮</strong>（第 1–{{N1}} 组）：清楚地说，像老师给学生示范，但不要拖长或夸张。包括字、词、故意读错声调的词（第 {{C1}} 组开始）和几个句子。</span><span class="en"><strong>Pass 1</strong> (blocks 1–{{N1}}): clear, like a teacher's example, but not drawn out or exaggerated. It has syllables, words, words with wrong tones on purpose (from block {{C1}}) and a few sentences.</span></li>
+    <li><span lang="zh-Hans"><strong>第二轮</strong>（第 {{N2A}}–{{N}} 组）：同样的字和词，换了顺序，用平时说话的速度，像跟朋友聊天。最好休息一下再录，换一天更好。两轮的说法不一样正是需要的，不用刻意让它们一样。</span><span class="en"><strong>Pass 2</strong> (blocks {{N2A}}–{{N}}): the same syllables and words in a new order, at everyday speed, as you'd say them to a friend. Take a break first, or record it on another day. It's fine, and useful, if the two passes sound different.</span></li>
+    <li><span lang="zh-Hans">拼音只是提示，颜色表示声调：<span class="t1">一声</span>、<span class="t2">二声</span>、<span class="t3">三声</span>、<span class="t4">四声</span>、<span class="t5">轻声</span>。词里的变调（比如「你好」）照你平时的说法就行。</span><span class="en">The pinyin is only a hint; its colour shows the tone. Say tone changes such as 你好 the way you normally do.</span></li>
+  </ul>
+</section>
+
+<section class="pass-head page-break">
+  <h2><span lang="zh-Hans">第一轮：清楚地说</span><span class="en">Pass 1: clear speech · blocks 1–{{N1}}</span></h2>
+  <p><span lang="zh-Hans">像老师示范一样，清楚但自然。</span><span class="en">Clear but natural, like a teacher's example.</span></p>
+  <p class="note"><span lang="zh-Hans">第 {{C1}} 组开始只有拼音，声调是<strong>故意写错的</strong>，比如 lāoshī。请照着拼音的声调读，就算听起来很奇怪也没关系。这是在模仿外国学生的错误，用来测试应用能不能听出来。</span><span class="en">From block {{C1}} there is only pinyin, with tones that are <strong>wrong on purpose</strong>, e.g. lāoshī. Say the tone that is written, even if it sounds odd: it imitates a learner's mistake, to test whether the app hears it.</span></p>
+</section>
+
+<div class="blocks">{{PASS1}}</div>
+
+<section class="pass-head page-break">
+  <h2><span lang="zh-Hans">第二轮：平常语速</span><span class="en">Pass 2: everyday speed · blocks {{N2A}}–{{N}}</span></h2>
+  <p><span lang="zh-Hans">最好先休息一下，或者换一天录。这一轮用平时说话的速度，像跟朋友聊天时那样说。顺序和第一轮不一样。</span><span class="en">Best after a break or on another day. Say them at everyday speed, as you would to a friend. The order differs from pass 1.</span></p>
+</section>
+
+<div class="blocks">{{PASS2}}</div>
+
+<section class="guide page-break">
+  <h2><span lang="zh-Hans">录完以后</span><span class="en">When you're done</span></h2>
+  <ul>
+    <li><span lang="zh-Hans">文件名不用改（录音开头说的组号就够了）。</span><span class="en">No need to rename the files: the block number at the start is enough.</span></li>
+    <li><span lang="zh-Hans">把所有录音一起发给我：网盘、邮件，或者微信用「文件」发送。<strong>不要</strong>用微信语音消息，会降低音质。</span><span class="en">Send all the recordings together: a cloud drive, email, or WeChat as “File”. <strong>Not</strong> as voice messages, which lower the quality.</span></li>
+    <li><span lang="zh-Hans">复制下面这段，填好后一起发给我：</span><span class="en">Copy the text below, fill it in and send it with the files:</span></li>
+  </ul>
+  <div class="reply"><pre id="reply" lang="zh-Hans">性别 / Gender：
+年龄段 / Age range（如 20–29）：
+在哪里长大 / Where you grew up（城市、省）：
+还会说的方言或语言 / Other dialects or languages：
+用的手机和录音应用 / Phone and recorder app：
+
+同意 / Consent（保留你同意的项）：
+[ ] 录音可以用来开发和测试这个应用的声调识别。
+    The recordings may be used to develop and test the app's tone recognition.
+[ ] 录音可以用来训练应用里自带的声调模型（模型里不包含录音本身）。
+    The recordings may be used to train a tone model built into the app (the model does not contain the recordings).
+录音不会公开发布，你随时可以要求删除。
+The recordings won't be published, and you can ask for them to be deleted at any time.</pre></div>
+  <button class="copy" id="copy" type="button"><span lang="zh-Hans">复制</span> · Copy</button>
+</section>
+
+<footer><span lang="zh-Hans">非常感谢！</span> Thank you very much!</footer>
+</main>
+
+<script>
+(function () {
+  var key = "tone-sheet-done";
+  var done = {};
+  try { done = JSON.parse(localStorage.getItem(key) || "{}") || {}; } catch (e) { done = {}; }
+  document.querySelectorAll(".done input").forEach(function (box) {
+    var b = box.getAttribute("data-block");
+    box.checked = !!done[b];
+    box.addEventListener("change", function () {
+      done[b] = box.checked;
+      try { localStorage.setItem(key, JSON.stringify(done)); } catch (e) {}
+    });
+  });
+  var btn = document.getElementById("copy");
+  btn.addEventListener("click", function () {
+    var text = document.getElementById("reply").textContent;
+    var ok = function () { btn.lastChild.textContent = " · Copied"; };
+    var select = function () {
+      var r = document.createRange(); r.selectNodeContents(document.getElementById("reply"));
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    };
+    try { navigator.clipboard.writeText(text).then(ok, select); } catch (e) { select(); }
+  });
+})();
+</script>

@@ -1,0 +1,484 @@
+<title>Tone Recording Sheet</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=Noto+Sans+SC:wght@400;600&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column; instructions first, then the blocks as numbered grids, read left to right. */
+:root {
+  --bg: #f4f6f8;
+  --paper: #ffffff;
+  --ink: #18202b;
+  --muted: #5d6877;
+  --line: #d9dfe6;
+  --accent: #1d5c7a;
+  --accent-soft: #e3eef4;
+  --t1: #d92b2b; --t2: #1f8a3b; --t3: #2563c9; --t4: #8a3cc2; --t5: #77746e;
+  --hanzi: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --zh: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --latin: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --paper: #182029; --ink: #e6ebf0; --muted: #9aa6b4; --line: #2b3643;
+    --accent: #7cc0dd; --accent-soft: #1d2f3a;
+    --t1: #ff6b6b; --t2: #5ccf7a; --t3: #6aa5ff; --t4: #c48af0; --t5: #a3a19a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --paper: #182029; --ink: #e6ebf0; --muted: #9aa6b4; --line: #2b3643;
+  --accent: #7cc0dd; --accent-soft: #1d2f3a;
+  --t1: #ff6b6b; --t2: #5ccf7a; --t3: #6aa5ff; --t4: #c48af0; --t5: #a3a19a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--latin), var(--zh); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+[lang="zh-Hans"] { font-family: var(--zh); }
+.en { color: var(--muted); font-size: 0.92em; }
+p .en, li .en { display: block; }
+h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.25; }
+h1 { font-family: var(--hanzi); font-size: clamp(2rem, 6vw, 2.8rem); font-weight: 700; }
+h1 .en { display: block; font-family: var(--latin); font-size: 1.05rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-top: 6px; }
+h2 { font-size: 1.35rem; font-weight: 600; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+h2 .en { font-weight: 400; font-size: 1rem; }
+section.guide { display: flex; flex-direction: column; gap: 14px; }
+section.guide p, section.guide li { max-width: 68ch; margin: 0; }
+section.guide ul, section.guide ol { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 10px; }
+.lede { font-size: 1.08rem; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.facts li { background: var(--accent-soft); color: var(--ink); border-radius: 999px; padding: 4px 14px; font-size: 0.95rem; }
+.note { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; }
+.pass-head { display: flex; flex-direction: column; gap: 6px; border-top: 2px solid var(--ink); padding-top: 18px; }
+.pass-head p { margin: 0; max-width: 68ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.95rem; }
+.blocks { display: flex; flex-direction: column; gap: 22px; }
+.block { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
+.block header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.block h3 { font-size: 1.25rem; font-weight: 600; }
+.block h3 .en { font-weight: 400; font-size: 0.95rem; margin-left: 4px; }
+.block .meta { margin: 0; font-size: 0.92rem; color: var(--muted); flex: 1 1 auto; }
+.block .meta .en { display: inline; margin-left: 6px; }
+.done { display: inline-flex; align-items: center; gap: 6px; font-size: 0.95rem; cursor: pointer; user-select: none; }
+.done input { width: 18px; height: 18px; accent-color: var(--accent); }
+.block:has(.done input:checked) { opacity: 0.55; }
+.say { margin: 0; font-size: 0.95rem; color: var(--accent); }
+.say .en { display: inline; margin-left: 8px; }
+.items { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.items.wide { grid-template-columns: minmax(0, 1fr); }
+.items li { position: relative; border: 1px solid var(--line); border-radius: 8px; padding: 22px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; text-align: center; }
+.items.wide li { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 4px 18px; padding: 10px 14px 10px 40px; text-align: left; align-items: baseline; }
+.n { position: absolute; top: 4px; left: 8px; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.items.wide .n { top: 50%; transform: translateY(-50%); left: 14px; }
+.hz { font-family: var(--hanzi); font-weight: 500; font-size: 2.1rem; line-height: 1.2; }
+.hz.sent { font-size: 1.6rem; }
+.py { font-size: 0.95rem; }
+.py-big { font-size: 1.6rem; font-weight: 600; line-height: 1.3; padding-block: 6px; overflow-wrap: anywhere; }
+.py-big span { white-space: nowrap; }
+.t1 { color: var(--t1); } .t2 { color: var(--t2); } .t3 { color: var(--t3); } .t4 { color: var(--t4); } .t5 { color: var(--t5); }
+.reply { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+.reply pre { margin: 0; white-space: pre-wrap; font-family: var(--zh); font-size: 0.98rem; }
+.copy { align-self: flex-start; font: inherit; font-size: 0.95rem; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+.copy:focus-visible, .done input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+footer { color: var(--ink); font-size: 1.6rem; font-weight: 600; text-wrap: balance; }
+footer [lang="zh-Hans"] { font-family: var(--hanzi); font-size: 1.25em; font-weight: 700; margin-right: 10px; }
+@media print {
+  body { padding-block: 0; font-size: 12pt; }
+  main { gap: 24px; }
+  .copy, .done { display: none; }
+  .block, .items li, .reply, section.guide li { break-inside: avoid; }
+  :root { --bg: #ffffff; }
+  .pass-head { break-after: avoid; }
+  .page-break { break-before: page; }
+  h2, .block header, .say { break-after: avoid; }
+  .py-big { font-size: 1.35rem; }
+  .block:has(.done input:checked) { opacity: 1; }
+}
+@page { margin: 14mm 12mm; }
+@media (max-width: 640px) {
+  .items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hz { font-size: 1.9rem; }
+}
+</style>
+
+<main>
+<header>
+  <h1 lang="zh-Hans">声调录音表<span class="en">Tone recording sheet</span></h1>
+</header>
+
+<section class="guide">
+  <p class="lede"><span lang="zh-Hans">谢谢你帮忙！我在做一个学中文的应用，想让它能听出学生的声调对不对。现在测试用的只有电脑合成的声音，所以需要真人母语者的录音。你只要照着下面的表读出来，用手机录音就可以。</span>
+  <span class="en">Thank you for helping! I'm building an app for learning Chinese and want it to hear whether a learner's tones are right. So far it has only been tested on a synthetic voice, so it needs recordings of a real native speaker. You read from the sheet below and record yourself on your phone.</span></p>
+  <ul>
+    <li><span lang="zh-Hans">29 组，每组约 10 个。</span><span class="en">29 blocks of about 10 items each.</span></li>
+    <li><span lang="zh-Hans">每组约 1 分钟。</span><span class="en">About 1 minute per block.</span></li>
+    <li><span lang="zh-Hans">共约 40 分钟，可分两次录。</span><span class="en">About 40 minutes in all, and you can split it into two sittings.</span></li>
+  </ul>
+</section>
+
+<section class="guide page-break">
+  <h2><span lang="zh-Hans">准备</span><span class="en">Before you start</span></h2>
+  <ul>
+    <li><span lang="zh-Hans">找一个安静的房间：关掉电视、音乐和风扇，关上窗户。</span><span class="en">A quiet room: TV, music and fans off, window closed.</span></li>
+    <li><span lang="zh-Hans">用手机自带的录音应用。iPhone 用「语音备忘录」，先在 设置 → App → 语音备忘录 → 音质 里选「无损」。Android 用「录音机」，有高音质选项就选高音质。</span><span class="en">Use the phone's own recorder. iPhone: Voice Memos, and first set Settings → Apps → Voice Memos → Audio Quality to Lossless. Android: the Recorder app, on its highest quality.</span></li>
+    <li><span lang="zh-Hans">把手机平放在桌上，离嘴 20–30 厘米，录音时不要拿着手机，整个过程手机位置不变。</span><span class="en">Lay the phone flat on a table 20–30 cm from your mouth. Don't hold it, and keep it in the same place throughout.</span></li>
+    <li><span lang="zh-Hans">在电脑、平板上打开这一页，或者打印出来，照着读。</span><span class="en">Read this page on a computer or tablet, or print it.</span></li>
+  </ul>
+</section>
+
+<section class="guide">
+  <h2><span lang="zh-Hans">每一组怎么录</span><span class="en">Recording one block</span></h2>
+  <ol>
+    <li><span lang="zh-Hans">开始录音，先说组号，比如「第3组」。</span><span class="en">Start recording and say the block number, e.g. “dì 3 zǔ”.</span></li>
+    <li><span lang="zh-Hans">停两秒，然后按顺序（从左到右，一行一行）把每一个读一遍。</span><span class="en">Pause two seconds, then say each item once, in order (left to right, row by row).</span></li>
+    <li><span lang="zh-Hans">每两个之间停大约两秒（心里数「一、二」）。电脑靠停顿来分开每个词。</span><span class="en">Pause about two seconds between items (count “one, two” in your head). The computer uses the pauses to cut the recording apart.</span></li>
+    <li><span lang="zh-Hans">读完最后一个，停两秒，结束录音。勾上「录好了」。</span><span class="en">After the last one, wait two seconds and stop. Tick “录好了”.</span></li>
+  </ol>
+  <p class="note"><span lang="zh-Hans">读错了、咳嗽了或者有别的声音？不要在中间补读，删掉这个录音，整组重新录。一组只要一分钟。</span><span class="en">Misread, coughed, or a noise? Don't repeat the item inside the recording: delete it and record the whole block again. A block takes a minute.</span></p>
+</section>
+
+<section class="guide">
+  <h2><span lang="zh-Hans">怎么读</span><span class="en">How to say them</span></h2>
+  <ul>
+    <li><span lang="zh-Hans">用你平时的普通话，自然地说，不要故意夸张声调。</span><span class="en">Your normal Mandarin, said naturally. Don't exaggerate the tones.</span></li>
+    <li><span lang="zh-Hans">每个字、每个词都单独说，像在教学生，而不是像念一串清单（念清单时最后一个常常会变调）。</span><span class="en">Say each item on its own, as if teaching a student, not like reading a list (the end of a list tends to change its pitch).</span></li>
+    <li><span lang="zh-Hans"><strong>第一轮</strong>（第 1–16 组）：清楚地说，像老师给学生示范，但不要拖长或夸张。包括字、词、故意读错声调的词（第 14 组开始）和几个句子。</span><span class="en"><strong>Pass 1</strong> (blocks 1–16): clear, like a teacher's example, but not drawn out or exaggerated. It has syllables, words, words with wrong tones on purpose (from block 14) and a few sentences.</span></li>
+    <li><span lang="zh-Hans"><strong>第二轮</strong>（第 17–29 组）：同样的字和词，换了顺序，用平时说话的速度，像跟朋友聊天。最好休息一下再录，换一天更好。两轮的说法不一样正是需要的，不用刻意让它们一样。</span><span class="en"><strong>Pass 2</strong> (blocks 17–29): the same syllables and words in a new order, at everyday speed, as you'd say them to a friend. Take a break first, or record it on another day. It's fine, and useful, if the two passes sound different.</span></li>
+    <li><span lang="zh-Hans">拼音只是提示，颜色表示声调：<span class="t1">一声</span>、<span class="t2">二声</span>、<span class="t3">三声</span>、<span class="t4">四声</span>、<span class="t5">轻声</span>。词里的变调（比如「你好」）照你平时的说法就行。</span><span class="en">The pinyin is only a hint; its colour shows the tone. Say tone changes such as 你好 the way you normally do.</span></li>
+  </ul>
+</section>
+
+<section class="pass-head page-break">
+  <h2><span lang="zh-Hans">第一轮：清楚地说</span><span class="en">Pass 1: clear speech · blocks 1–16</span></h2>
+  <p><span lang="zh-Hans">像老师示范一样，清楚但自然。</span><span class="en">Clear but natural, like a teacher's example.</span></p>
+  <p class="note"><span lang="zh-Hans">第 14 组开始只有拼音，声调是<strong>故意写错的</strong>，比如 lāoshī。请照着拼音的声调读，就算听起来很奇怪也没关系。这是在模仿外国学生的错误，用来测试应用能不能听出来。</span><span class="en">From block 14 there is only pinyin, with tones that are <strong>wrong on purpose</strong>, e.g. lāoshī. Say the tone that is written, even if it sounds odd: it imitates a learner's mistake, to test whether the app hears it.</span></p>
+</section>
+
+<div class="blocks">
+<section class="block" id="b1">
+  <header>
+    <h3><span lang="zh-Hans">第 1 组</span> <span class="en">Block 1</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done1" data-block="1"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第1组」</span> <span class="en">Start recording, then say “dì 1 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">服</span><span class="py"><span class="t2">fú</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">复杂</span><span class="py"><span class="t4">fù</span><span class="t2">zá</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">飞机</span><span class="py"><span class="t1">fēi</span><span class="t1">jī</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">温</span><span class="py"><span class="t1">wēn</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">起</span><span class="py"><span class="t3">qǐ</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">无</span><span class="py"><span class="t2">wú</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">衣</span><span class="py"><span class="t1">yī</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">床</span><span class="py"><span class="t2">chuáng</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">忘</span><span class="py"><span class="t4">wàng</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">诗</span><span class="py"><span class="t1">shī</span></span></li></ol>
+</section>
+<section class="block" id="b2">
+  <header>
+    <h3><span lang="zh-Hans">第 2 组</span> <span class="en">Block 2</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done2" data-block="2"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第2组」</span> <span class="en">Start recording, then say “dì 2 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">椅</span><span class="py"><span class="t3">yǐ</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">漂亮</span><span class="py"><span class="t4">piào</span><span class="t5">liang</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">虎</span><span class="py"><span class="t3">hǔ</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">电话</span><span class="py"><span class="t4">diàn</span><span class="t4">huà</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">新闻</span><span class="py"><span class="t1">xīn</span><span class="t2">wén</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">府</span><span class="py"><span class="t3">fǔ</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">竹</span><span class="py"><span class="t2">zhú</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">电脑</span><span class="py"><span class="t4">diàn</span><span class="t3">nǎo</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">米</span><span class="py"><span class="t3">mǐ</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">房</span><span class="py"><span class="t2">fáng</span></span></li></ol>
+</section>
+<section class="block" id="b3">
+  <header>
+    <h3><span lang="zh-Hans">第 3 组</span> <span class="en">Block 3</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done3" data-block="3"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第3组」</span> <span class="en">Start recording, then say “dì 3 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">不好</span><span class="py"><span class="t4">bù</span> <span class="t3">hǎo</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">汪</span><span class="py"><span class="t1">wāng</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">考试</span><span class="py"><span class="t3">kǎo</span><span class="t4">shì</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">中国</span><span class="py"><span class="t1">Zhōng</span><span class="t2">guó</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">面包</span><span class="py"><span class="t4">miàn</span><span class="t1">bāo</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">第一</span><span class="py"><span class="t4">dì</span><span class="t1">yī</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">身体</span><span class="py"><span class="t1">shēn</span><span class="t3">tǐ</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">呼</span><span class="py"><span class="t1">hū</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">屋</span><span class="py"><span class="t1">wū</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">湖</span><span class="py"><span class="t2">hú</span></span></li></ol>
+</section>
+<section class="block" id="b4">
+  <header>
+    <h3><span lang="zh-Hans">第 4 组</span> <span class="en">Block 4</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done4" data-block="4"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第4组」</span> <span class="en">Start recording, then say “dì 4 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">习</span><span class="py"><span class="t2">xí</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">骑</span><span class="py"><span class="t2">qí</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">问</span><span class="py"><span class="t4">wèn</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">户</span><span class="py"><span class="t4">hù</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">跳舞</span><span class="py"><span class="t4">tiào</span><span class="t3">wǔ</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">浅</span><span class="py"><span class="t3">qiǎn</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">时</span><span class="py"><span class="t2">shí</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">同意</span><span class="py"><span class="t2">tóng</span><span class="t4">yì</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">通</span><span class="py"><span class="t1">tōng</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">秃</span><span class="py"><span class="t1">tū</span></span></li></ol>
+</section>
+<section class="block" id="b5">
+  <header>
+    <h3><span lang="zh-Hans">第 5 组</span> <span class="en">Block 5</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done5" data-block="5"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第5组」</span> <span class="en">Start recording, then say “dì 5 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">妈</span><span class="py"><span class="t1">mā</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">眯</span><span class="py"><span class="t1">mī</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">谢谢</span><span class="py"><span class="t4">xiè</span><span class="t5">xie</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">喜欢</span><span class="py"><span class="t3">xǐ</span><span class="t5">huan</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">美国</span><span class="py"><span class="t3">Měi</span><span class="t2">guó</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">拔</span><span class="py"><span class="t2">bá</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">细</span><span class="py"><span class="t4">xì</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">意</span><span class="py"><span class="t4">yì</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">千</span><span class="py"><span class="t1">qiān</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">苹果</span><span class="py"><span class="t2">píng</span><span class="t3">guǒ</span></span></li></ol>
+</section>
+<section class="block" id="b6">
+  <header>
+    <h3><span lang="zh-Hans">第 6 组</span> <span class="en">Block 6</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done6" data-block="6"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第6组」</span> <span class="en">Start recording, then say “dì 6 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">音乐</span><span class="py"><span class="t1">yīn</span><span class="t4">yuè</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">洗</span><span class="py"><span class="t3">xǐ</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">昨天</span><span class="py"><span class="t2">zuó</span><span class="t1">tiān</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">欠</span><span class="py"><span class="t4">qiàn</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">星期</span><span class="py"><span class="t1">xīng</span><span class="t1">qī</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">父</span><span class="py"><span class="t4">fù</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">骂</span><span class="py"><span class="t4">mà</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">八</span><span class="py"><span class="t1">bā</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">铅笔</span><span class="py"><span class="t1">qiān</span><span class="t3">bǐ</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">迷</span><span class="py"><span class="t2">mí</span></span></li></ol>
+</section>
+<section class="block" id="b7">
+  <header>
+    <h3><span lang="zh-Hans">第 7 组</span> <span class="en">Block 7</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done7" data-block="7"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第7组」</span> <span class="en">Start recording, then say “dì 7 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">主</span><span class="py"><span class="t3">zhǔ</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">麻</span><span class="py"><span class="t2">má</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">稳</span><span class="py"><span class="t3">wěn</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">不是</span><span class="py"><span class="t2">bú</span> <span class="t4">shì</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">钱</span><span class="py"><span class="t2">qián</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">痛</span><span class="py"><span class="t4">tòng</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">王</span><span class="py"><span class="t2">wáng</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">闯</span><span class="py"><span class="t3">chuǎng</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">夫</span><span class="py"><span class="t1">fū</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">放</span><span class="py"><span class="t4">fàng</span></span></li></ol>
+</section>
+<section class="block" id="b8">
+  <header>
+    <h3><span lang="zh-Hans">第 8 组</span> <span class="en">Block 8</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done8" data-block="8"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第8组」</span> <span class="en">Start recording, then say “dì 8 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">不来</span><span class="py"><span class="t4">bù</span> <span class="t2">lái</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">妈妈</span><span class="py"><span class="t1">mā</span><span class="t5">ma</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">使</span><span class="py"><span class="t3">shǐ</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">烫</span><span class="py"><span class="t4">tàng</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">银行</span><span class="py"><span class="t2">yín</span><span class="t2">háng</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">是</span><span class="py"><span class="t4">shì</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">姨</span><span class="py"><span class="t2">yí</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">往</span><span class="py"><span class="t3">wǎng</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">汽车</span><span class="py"><span class="t4">qì</span><span class="t1">chē</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">雾</span><span class="py"><span class="t4">wù</span></span></li></ol>
+</section>
+<section class="block" id="b9">
+  <header>
+    <h3><span lang="zh-Hans">第 9 组</span> <span class="en">Block 9</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done9" data-block="9"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第9组」</span> <span class="en">Start recording, then say “dì 9 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">学习</span><span class="py"><span class="t2">xué</span><span class="t2">xí</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">兔</span><span class="py"><span class="t4">tù</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">爸</span><span class="py"><span class="t4">bà</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">问题</span><span class="py"><span class="t4">wèn</span><span class="t2">tí</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">住</span><span class="py"><span class="t4">zhù</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">马</span><span class="py"><span class="t3">mǎ</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">躺</span><span class="py"><span class="t3">tǎng</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">眼</span><span class="py"><span class="t3">yǎn</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">图</span><span class="py"><span class="t2">tú</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">老师</span><span class="py"><span class="t3">lǎo</span><span class="t1">shī</span></span></li></ol>
+</section>
+<section class="block" id="b10">
+  <header>
+    <h3><span lang="zh-Hans">第 10 组</span> <span class="en">Block 10</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done10" data-block="10"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第10组」</span> <span class="en">Start recording, then say “dì 10 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">再见</span><span class="py"><span class="t4">zài</span><span class="t4">jiàn</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">旅行</span><span class="py"><span class="t3">lǚ</span><span class="t2">xíng</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">文</span><span class="py"><span class="t2">wén</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">工作</span><span class="py"><span class="t1">gōng</span><span class="t4">zuò</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">访</span><span class="py"><span class="t3">fǎng</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">一起</span><span class="py"><span class="t4">yì</span><span class="t3">qǐ</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">窗</span><span class="py"><span class="t1">chuāng</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">西</span><span class="py"><span class="t1">xī</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">创</span><span class="py"><span class="t4">chuàng</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">密</span><span class="py"><span class="t4">mì</span></span></li></ol>
+</section>
+<section class="block" id="b11">
+  <header>
+    <h3><span lang="zh-Hans">第 11 组</span> <span class="en">Block 11</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done11" data-block="11"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第11组」</span> <span class="en">Start recording, then say “dì 11 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">词典</span><span class="py"><span class="t2">cí</span><span class="t3">diǎn</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">言</span><span class="py"><span class="t2">yán</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">一天</span><span class="py"><span class="t4">yì</span> <span class="t1">tiān</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">好看</span><span class="py"><span class="t3">hǎo</span><span class="t4">kàn</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">水果</span><span class="py"><span class="t3">shuǐ</span><span class="t3">guǒ</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">明天</span><span class="py"><span class="t2">míng</span><span class="t1">tiān</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">猪</span><span class="py"><span class="t1">zhū</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">汤</span><span class="py"><span class="t1">tāng</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">把</span><span class="py"><span class="t3">bǎ</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">烟</span><span class="py"><span class="t1">yān</span></span></li></ol>
+</section>
+<section class="block" id="b12">
+  <header>
+    <h3><span lang="zh-Hans">第 12 组</span> <span class="en">Block 12</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done12" data-block="12"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第12组」</span> <span class="en">Start recording, then say “dì 12 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">学校</span><span class="py"><span class="t2">xué</span><span class="t4">xiào</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">糖</span><span class="py"><span class="t2">táng</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">北京</span><span class="py"><span class="t3">Běi</span><span class="t1">jīng</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">东西</span><span class="py"><span class="t1">dōng</span><span class="t5">xi</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">方</span><span class="py"><span class="t1">fāng</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">五</span><span class="py"><span class="t3">wǔ</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">你好</span><span class="py"><span class="t3">nǐ</span> <span class="t3">hǎo</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">气</span><span class="py"><span class="t4">qì</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">燕</span><span class="py"><span class="t4">yàn</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">土</span><span class="py"><span class="t3">tǔ</span></span></li></ol>
+</section>
+<section class="block" id="b13">
+  <header>
+    <h3><span lang="zh-Hans">第 13 组</span> <span class="en">Block 13</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 字和词</span> <span class="en">Pass 1 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done13" data-block="13"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第13组」</span> <span class="en">Start recording, then say “dì 13 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">桶</span><span class="py"><span class="t3">tǒng</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">朋友</span><span class="py"><span class="t2">péng</span><span class="t5">you</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">一样</span><span class="py"><span class="t2">yí</span><span class="t4">yàng</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">可以</span><span class="py"><span class="t3">kě</span><span class="t3">yǐ</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">七</span><span class="py"><span class="t1">qī</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">不要</span><span class="py"><span class="t2">bú</span> <span class="t4">yào</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">同</span><span class="py"><span class="t2">tóng</span></span></li></ol>
+</section>
+<section class="block" id="b14">
+  <header>
+    <h3><span lang="zh-Hans">第 14 组</span> <span class="en">Block 14</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 故意读错的声调</span> <span class="en">Pass 1 · Wrong tones on purpose</span></p>
+    <label class="done"><input type="checkbox" id="done14" data-block="14"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第14组」</span> <span class="en">Start recording, then say “dì 14 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="py-big"><span class="t1">shēn</span><span class="t2">tí</span></span></li><li><span class="n">2</span><span class="py-big"><span class="t1">yīn</span><span class="t2">yué</span></span></li><li><span class="n">3</span><span class="py-big"><span class="t3">xuě</span><span class="t4">xiào</span></span></li><li><span class="n">4</span><span class="py-big"><span class="t1">lāo</span><span class="t1">shī</span></span></li><li><span class="n">5</span><span class="py-big"><span class="t2">xué</span><span class="t4">xì</span></span></li><li><span class="n">6</span><span class="py-big"><span class="t2">míng</span><span class="t4">tiàn</span></span></li><li><span class="n">7</span><span class="py-big"><span class="t3">hǎo</span><span class="t1">kān</span></span></li><li><span class="n">8</span><span class="py-big"><span class="t3">běi</span><span class="t4">jìng</span></span></li><li><span class="n">9</span><span class="py-big"><span class="t3">yǐn</span><span class="t2">háng</span></span></li><li><span class="n">10</span><span class="py-big"><span class="t1">fēi</span><span class="t2">jí</span></span></li></ol>
+</section>
+<section class="block" id="b15">
+  <header>
+    <h3><span lang="zh-Hans">第 15 组</span> <span class="en">Block 15</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 故意读错的声调</span> <span class="en">Pass 1 · Wrong tones on purpose</span></p>
+    <label class="done"><input type="checkbox" id="done15" data-block="15"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第15组」</span> <span class="en">Start recording, then say “dì 15 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="py-big"><span class="t1">pīng</span><span class="t3">guǒ</span></span></li><li><span class="n">2</span><span class="py-big"><span class="t2">wén</span><span class="t2">tí</span></span></li><li><span class="n">3</span><span class="py-big"><span class="t2">qí</span><span class="t1">chē</span></span></li><li><span class="n">4</span><span class="py-big"><span class="t3">lǚ</span><span class="t4">xìng</span></span></li><li><span class="n">5</span><span class="py-big"><span class="t2">dián</span><span class="t3">nǎo</span></span></li><li><span class="n">6</span><span class="py-big"><span class="t3">kǎo</span><span class="t2">shí</span></span></li><li><span class="n">7</span><span class="py-big"><span class="t1">zhōng</span><span class="t3">guǒ</span></span></li><li><span class="n">8</span><span class="py-big"><span class="t4">gòng</span><span class="t4">zuò</span></span></li><li><span class="n">9</span><span class="py-big"><span class="t3">zǎi</span><span class="t4">jiàn</span></span></li><li><span class="n">10</span><span class="py-big"><span class="t1">tiāo</span><span class="t3">wǔ</span></span></li></ol>
+</section>
+<section class="block" id="b16">
+  <header>
+    <h3><span lang="zh-Hans">第 16 组</span> <span class="en">Block 16</span></h3>
+    <p class="meta"><span lang="zh-Hans">第一轮 · 句子</span> <span class="en">Pass 1 · Sentences</span></p>
+    <label class="done"><input type="checkbox" id="done16" data-block="16"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第16组」</span> <span class="en">Start recording, then say “dì 16 zǔ”</span></p>
+  <ol class="items wide"><li><span class="n">1</span><span class="hz sent" lang="zh-Hans">他是老师。</span><span class="py"><span class="t1">tā</span> <span class="t4">shì</span> <span class="t3">lǎo</span><span class="t1">shī</span></span></li><li><span class="n">2</span><span class="hz sent" lang="zh-Hans">我们去学校。</span><span class="py"><span class="t3">wǒ</span><span class="t5">men</span> <span class="t4">qù</span> <span class="t2">xué</span><span class="t4">xiào</span></span></li><li><span class="n">3</span><span class="hz sent" lang="zh-Hans">今天天气很热。</span><span class="py"><span class="t1">jīn</span><span class="t1">tiān</span> <span class="t1">tiān</span><span class="t4">qì</span> <span class="t3">hěn</span> <span class="t4">rè</span></span></li><li><span class="n">4</span><span class="hz sent" lang="zh-Hans">你喜欢喝茶吗？</span><span class="py"><span class="t3">nǐ</span> <span class="t3">xǐ</span><span class="t5">huan</span> <span class="t1">hē</span> <span class="t2">chá</span> <span class="t5">ma</span></span></li><li><span class="n">5</span><span class="hz sent" lang="zh-Hans">她不想去。</span><span class="py"><span class="t1">tā</span> <span class="t4">bù</span> <span class="t3">xiǎng</span> <span class="t4">qù</span></span></li><li><span class="n">6</span><span class="hz sent" lang="zh-Hans">明天见。</span><span class="py"><span class="t2">míng</span><span class="t1">tiān</span> <span class="t4">jiàn</span></span></li><li><span class="n">7</span><span class="hz sent" lang="zh-Hans">我爸爸在家。</span><span class="py"><span class="t3">wǒ</span> <span class="t4">bà</span><span class="t5">ba</span> <span class="t4">zài</span> <span class="t1">jiā</span></span></li><li><span class="n">8</span><span class="hz sent" lang="zh-Hans">这个苹果不贵。</span><span class="py"><span class="t4">zhè</span><span class="t5">ge</span> <span class="t2">píng</span><span class="t3">guǒ</span> <span class="t2">bú</span> <span class="t4">guì</span></span></li><li><span class="n">9</span><span class="hz sent" lang="zh-Hans">我们一起吃饭吧。</span><span class="py"><span class="t3">wǒ</span><span class="t5">men</span> <span class="t4">yì</span><span class="t3">qǐ</span> <span class="t1">chī</span><span class="t4">fàn</span> <span class="t5">ba</span></span></li><li><span class="n">10</span><span class="hz sent" lang="zh-Hans">谢谢你的帮助。</span><span class="py"><span class="t4">xiè</span><span class="t5">xie</span> <span class="t3">nǐ</span> <span class="t5">de</span> <span class="t1">bāng</span><span class="t4">zhù</span></span></li></ol>
+</section></div>
+
+<section class="pass-head page-break">
+  <h2><span lang="zh-Hans">第二轮：平常语速</span><span class="en">Pass 2: everyday speed · blocks 17–29</span></h2>
+  <p><span lang="zh-Hans">最好先休息一下，或者换一天录。这一轮用平时说话的速度，像跟朋友聊天时那样说。顺序和第一轮不一样。</span><span class="en">Best after a break or on another day. Say them at everyday speed, as you would to a friend. The order differs from pass 1.</span></p>
+</section>
+
+<div class="blocks">
+<section class="block" id="b17">
+  <header>
+    <h3><span lang="zh-Hans">第 17 组</span> <span class="en">Block 17</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done17" data-block="17"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第17组」</span> <span class="en">Start recording, then say “dì 17 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">是</span><span class="py"><span class="t4">shì</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">访</span><span class="py"><span class="t3">fǎng</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">妈</span><span class="py"><span class="t1">mā</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">一天</span><span class="py"><span class="t4">yì</span> <span class="t1">tiān</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">痛</span><span class="py"><span class="t4">tòng</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">父</span><span class="py"><span class="t4">fù</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">猪</span><span class="py"><span class="t1">zhū</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">电脑</span><span class="py"><span class="t4">diàn</span><span class="t3">nǎo</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">漂亮</span><span class="py"><span class="t4">piào</span><span class="t5">liang</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">烟</span><span class="py"><span class="t1">yān</span></span></li></ol>
+</section>
+<section class="block" id="b18">
+  <header>
+    <h3><span lang="zh-Hans">第 18 组</span> <span class="en">Block 18</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done18" data-block="18"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第18组」</span> <span class="en">Start recording, then say “dì 18 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">服</span><span class="py"><span class="t2">fú</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">时</span><span class="py"><span class="t2">shí</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">通</span><span class="py"><span class="t1">tōng</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">银行</span><span class="py"><span class="t2">yín</span><span class="t2">háng</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">苹果</span><span class="py"><span class="t2">píng</span><span class="t3">guǒ</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">稳</span><span class="py"><span class="t3">wěn</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">马</span><span class="py"><span class="t3">mǎ</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">起</span><span class="py"><span class="t3">qǐ</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">拔</span><span class="py"><span class="t2">bá</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">千</span><span class="py"><span class="t1">qiān</span></span></li></ol>
+</section>
+<section class="block" id="b19">
+  <header>
+    <h3><span lang="zh-Hans">第 19 组</span> <span class="en">Block 19</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done19" data-block="19"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第19组」</span> <span class="en">Start recording, then say “dì 19 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">躺</span><span class="py"><span class="t3">tǎng</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">飞机</span><span class="py"><span class="t1">fēi</span><span class="t1">jī</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">秃</span><span class="py"><span class="t1">tū</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">词典</span><span class="py"><span class="t2">cí</span><span class="t3">diǎn</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">五</span><span class="py"><span class="t3">wǔ</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">爸</span><span class="py"><span class="t4">bà</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">身体</span><span class="py"><span class="t1">shēn</span><span class="t3">tǐ</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">雾</span><span class="py"><span class="t4">wù</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">喜欢</span><span class="py"><span class="t3">xǐ</span><span class="t5">huan</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">可以</span><span class="py"><span class="t3">kě</span><span class="t3">yǐ</span></span></li></ol>
+</section>
+<section class="block" id="b20">
+  <header>
+    <h3><span lang="zh-Hans">第 20 组</span> <span class="en">Block 20</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done20" data-block="20"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第20组」</span> <span class="en">Start recording, then say “dì 20 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">跳舞</span><span class="py"><span class="t4">tiào</span><span class="t3">wǔ</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">不是</span><span class="py"><span class="t2">bú</span> <span class="t4">shì</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">洗</span><span class="py"><span class="t3">xǐ</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">汪</span><span class="py"><span class="t1">wāng</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">老师</span><span class="py"><span class="t3">lǎo</span><span class="t1">shī</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">兔</span><span class="py"><span class="t4">tù</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">户</span><span class="py"><span class="t4">hù</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">文</span><span class="py"><span class="t2">wén</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">往</span><span class="py"><span class="t3">wǎng</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">铅笔</span><span class="py"><span class="t1">qiān</span><span class="t3">bǐ</span></span></li></ol>
+</section>
+<section class="block" id="b21">
+  <header>
+    <h3><span lang="zh-Hans">第 21 组</span> <span class="en">Block 21</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done21" data-block="21"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第21组」</span> <span class="en">Start recording, then say “dì 21 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">迷</span><span class="py"><span class="t2">mí</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">面包</span><span class="py"><span class="t4">miàn</span><span class="t1">bāo</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">住</span><span class="py"><span class="t4">zhù</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">无</span><span class="py"><span class="t2">wú</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">竹</span><span class="py"><span class="t2">zhú</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">水果</span><span class="py"><span class="t3">shuǐ</span><span class="t3">guǒ</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">房</span><span class="py"><span class="t2">fáng</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">旅行</span><span class="py"><span class="t3">lǚ</span><span class="t2">xíng</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">问</span><span class="py"><span class="t4">wèn</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">桶</span><span class="py"><span class="t3">tǒng</span></span></li></ol>
+</section>
+<section class="block" id="b22">
+  <header>
+    <h3><span lang="zh-Hans">第 22 组</span> <span class="en">Block 22</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done22" data-block="22"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第22组」</span> <span class="en">Start recording, then say “dì 22 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">朋友</span><span class="py"><span class="t2">péng</span><span class="t5">you</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">烫</span><span class="py"><span class="t4">tàng</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">燕</span><span class="py"><span class="t4">yàn</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">创</span><span class="py"><span class="t4">chuàng</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">习</span><span class="py"><span class="t2">xí</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">中国</span><span class="py"><span class="t1">Zhōng</span><span class="t2">guó</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">意</span><span class="py"><span class="t4">yì</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">星期</span><span class="py"><span class="t1">xīng</span><span class="t1">qī</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">钱</span><span class="py"><span class="t2">qián</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">忘</span><span class="py"><span class="t4">wàng</span></span></li></ol>
+</section>
+<section class="block" id="b23">
+  <header>
+    <h3><span lang="zh-Hans">第 23 组</span> <span class="en">Block 23</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done23" data-block="23"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第23组」</span> <span class="en">Start recording, then say “dì 23 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">言</span><span class="py"><span class="t2">yán</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">使</span><span class="py"><span class="t3">shǐ</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">谢谢</span><span class="py"><span class="t4">xiè</span><span class="t5">xie</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">屋</span><span class="py"><span class="t1">wū</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">闯</span><span class="py"><span class="t3">chuǎng</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">再见</span><span class="py"><span class="t4">zài</span><span class="t4">jiàn</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">电话</span><span class="py"><span class="t4">diàn</span><span class="t4">huà</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">浅</span><span class="py"><span class="t3">qiǎn</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">工作</span><span class="py"><span class="t1">gōng</span><span class="t4">zuò</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">椅</span><span class="py"><span class="t3">yǐ</span></span></li></ol>
+</section>
+<section class="block" id="b24">
+  <header>
+    <h3><span lang="zh-Hans">第 24 组</span> <span class="en">Block 24</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done24" data-block="24"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第24组」</span> <span class="en">Start recording, then say “dì 24 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">一起</span><span class="py"><span class="t4">yì</span><span class="t3">qǐ</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">密</span><span class="py"><span class="t4">mì</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">府</span><span class="py"><span class="t3">fǔ</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">窗</span><span class="py"><span class="t1">chuāng</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">骑</span><span class="py"><span class="t2">qí</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">湖</span><span class="py"><span class="t2">hú</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">把</span><span class="py"><span class="t3">bǎ</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">米</span><span class="py"><span class="t3">mǐ</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">方</span><span class="py"><span class="t1">fāng</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">主</span><span class="py"><span class="t3">zhǔ</span></span></li></ol>
+</section>
+<section class="block" id="b25">
+  <header>
+    <h3><span lang="zh-Hans">第 25 组</span> <span class="en">Block 25</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done25" data-block="25"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第25组」</span> <span class="en">Start recording, then say “dì 25 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">诗</span><span class="py"><span class="t1">shī</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">不好</span><span class="py"><span class="t4">bù</span> <span class="t3">hǎo</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">糖</span><span class="py"><span class="t2">táng</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">土</span><span class="py"><span class="t3">tǔ</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">夫</span><span class="py"><span class="t1">fū</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">八</span><span class="py"><span class="t1">bā</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">汽车</span><span class="py"><span class="t4">qì</span><span class="t1">chē</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">第一</span><span class="py"><span class="t4">dì</span><span class="t1">yī</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">眯</span><span class="py"><span class="t1">mī</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">图</span><span class="py"><span class="t2">tú</span></span></li></ol>
+</section>
+<section class="block" id="b26">
+  <header>
+    <h3><span lang="zh-Hans">第 26 组</span> <span class="en">Block 26</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done26" data-block="26"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第26组」</span> <span class="en">Start recording, then say “dì 26 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">音乐</span><span class="py"><span class="t1">yīn</span><span class="t4">yuè</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">美国</span><span class="py"><span class="t3">Měi</span><span class="t2">guó</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">欠</span><span class="py"><span class="t4">qiàn</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">西</span><span class="py"><span class="t1">xī</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">气</span><span class="py"><span class="t4">qì</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">你好</span><span class="py"><span class="t3">nǐ</span> <span class="t3">hǎo</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">虎</span><span class="py"><span class="t3">hǔ</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">明天</span><span class="py"><span class="t2">míng</span><span class="t1">tiān</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">眼</span><span class="py"><span class="t3">yǎn</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">麻</span><span class="py"><span class="t2">má</span></span></li></ol>
+</section>
+<section class="block" id="b27">
+  <header>
+    <h3><span lang="zh-Hans">第 27 组</span> <span class="en">Block 27</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done27" data-block="27"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第27组」</span> <span class="en">Start recording, then say “dì 27 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">衣</span><span class="py"><span class="t1">yī</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">细</span><span class="py"><span class="t4">xì</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">一样</span><span class="py"><span class="t2">yí</span><span class="t4">yàng</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">考试</span><span class="py"><span class="t3">kǎo</span><span class="t4">shì</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">呼</span><span class="py"><span class="t1">hū</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">汤</span><span class="py"><span class="t1">tāng</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">妈妈</span><span class="py"><span class="t1">mā</span><span class="t5">ma</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">不要</span><span class="py"><span class="t2">bú</span> <span class="t4">yào</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">同</span><span class="py"><span class="t2">tóng</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">王</span><span class="py"><span class="t2">wáng</span></span></li></ol>
+</section>
+<section class="block" id="b28">
+  <header>
+    <h3><span lang="zh-Hans">第 28 组</span> <span class="en">Block 28</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done28" data-block="28"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第28组」</span> <span class="en">Start recording, then say “dì 28 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">昨天</span><span class="py"><span class="t2">zuó</span><span class="t1">tiān</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">东西</span><span class="py"><span class="t1">dōng</span><span class="t5">xi</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">床</span><span class="py"><span class="t2">chuáng</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">北京</span><span class="py"><span class="t3">Běi</span><span class="t1">jīng</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">问题</span><span class="py"><span class="t4">wèn</span><span class="t2">tí</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">复杂</span><span class="py"><span class="t4">fù</span><span class="t2">zá</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">不来</span><span class="py"><span class="t4">bù</span> <span class="t2">lái</span></span></li><li><span class="n">8</span><span class="hz" lang="zh-Hans">学校</span><span class="py"><span class="t2">xué</span><span class="t4">xiào</span></span></li><li><span class="n">9</span><span class="hz" lang="zh-Hans">温</span><span class="py"><span class="t1">wēn</span></span></li><li><span class="n">10</span><span class="hz" lang="zh-Hans">学习</span><span class="py"><span class="t2">xué</span><span class="t2">xí</span></span></li></ol>
+</section>
+<section class="block" id="b29">
+  <header>
+    <h3><span lang="zh-Hans">第 29 组</span> <span class="en">Block 29</span></h3>
+    <p class="meta"><span lang="zh-Hans">第二轮 · 字和词</span> <span class="en">Pass 2 · Syllables and words</span></p>
+    <label class="done"><input type="checkbox" id="done29" data-block="29"> <span lang="zh-Hans">录好了</span></label>
+  </header>
+  <p class="say"><span lang="zh-Hans">开始录音，先说「第29组」</span> <span class="en">Start recording, then say “dì 29 zǔ”</span></p>
+  <ol class="items"><li><span class="n">1</span><span class="hz" lang="zh-Hans">七</span><span class="py"><span class="t1">qī</span></span></li><li><span class="n">2</span><span class="hz" lang="zh-Hans">同意</span><span class="py"><span class="t2">tóng</span><span class="t4">yì</span></span></li><li><span class="n">3</span><span class="hz" lang="zh-Hans">姨</span><span class="py"><span class="t2">yí</span></span></li><li><span class="n">4</span><span class="hz" lang="zh-Hans">新闻</span><span class="py"><span class="t1">xīn</span><span class="t2">wén</span></span></li><li><span class="n">5</span><span class="hz" lang="zh-Hans">好看</span><span class="py"><span class="t3">hǎo</span><span class="t4">kàn</span></span></li><li><span class="n">6</span><span class="hz" lang="zh-Hans">骂</span><span class="py"><span class="t4">mà</span></span></li><li><span class="n">7</span><span class="hz" lang="zh-Hans">放</span><span class="py"><span class="t4">fàng</span></span></li></ol>
+</section></div>
+
+<section class="guide page-break">
+  <h2><span lang="zh-Hans">录完以后</span><span class="en">When you're done</span></h2>
+  <ul>
+    <li><span lang="zh-Hans">文件名不用改（录音开头说的组号就够了）。</span><span class="en">No need to rename the files: the block number at the start is enough.</span></li>
+    <li><span lang="zh-Hans">把所有录音一起发给我：网盘、邮件，或者微信用「文件」发送。<strong>不要</strong>用微信语音消息，会降低音质。</span><span class="en">Send all the recordings together: a cloud drive, email, or WeChat as “File”. <strong>Not</strong> as voice messages, which lower the quality.</span></li>
+    <li><span lang="zh-Hans">复制下面这段，填好后一起发给我：</span><span class="en">Copy the text below, fill it in and send it with the files:</span></li>
+  </ul>
+  <div class="reply"><pre id="reply" lang="zh-Hans">性别 / Gender：
+年龄段 / Age range（如 20–29）：
+在哪里长大 / Where you grew up（城市、省）：
+还会说的方言或语言 / Other dialects or languages：
+用的手机和录音应用 / Phone and recorder app：
+
+同意 / Consent（保留你同意的项）：
+[ ] 录音可以用来开发和测试这个应用的声调识别。
+    The recordings may be used to develop and test the app's tone recognition.
+[ ] 录音可以用来训练应用里自带的声调模型（模型里不包含录音本身）。
+    The recordings may be used to train a tone model built into the app (the model does not contain the recordings).
+录音不会公开发布，你随时可以要求删除。
+The recordings won't be published, and you can ask for them to be deleted at any time.</pre></div>
+  <button class="copy" id="copy" type="button"><span lang="zh-Hans">复制</span> · Copy</button>
+</section>
+
+<footer><span lang="zh-Hans">非常感谢！</span> Thank you very much!</footer>
+</main>
+
+<script>
+(function () {
+  var key = "tone-sheet-done";
+  var done = {};
+  try { done = JSON.parse(localStorage.getItem(key) || "{}") || {}; } catch (e) { done = {}; }
+  document.querySelectorAll(".done input").forEach(function (box) {
+    var b = box.getAttribute("data-block");
+    box.checked = !!done[b];
+    box.addEventListener("change", function () {
+      done[b] = box.checked;
+      try { localStorage.setItem(key, JSON.stringify(done)); } catch (e) {}
+    });
+  });
+  var btn = document.getElementById("copy");
+  btn.addEventListener("click", function () {
+    var text = document.getElementById("reply").textContent;
+    var ok = function () { btn.lastChild.textContent = " · Copied"; };
+    var select = function () {
+      var r = document.createRange(); r.selectNodeContents(document.getElementById("reply"));
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    };
+    try { navigator.clipboard.writeText(text).then(ok, select); } catch (e) { select(); }
+  });
+})();
+</script>
