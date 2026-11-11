@@ -16,13 +16,13 @@
   import { intervalLabel, durationLabel, pct } from "../lib/format";
   import { goto, nav } from "../lib/nav.svelte";
   import { settings, saveSetting } from "../lib/settings.svelte";
-  import { speak, stopSpeaking } from "../lib/speech";
+  import { playClip, speak, stopClip, stopSpeaking } from "../lib/speech";
   import { showToast } from "../lib/toast.svelte";
   import Hanzi from "../components/Hanzi.svelte";
   import Pinyin from "../components/Pinyin.svelte";
   import Icon from "../components/Icon.svelte";
   import DeckPicker from "../components/DeckPicker.svelte";
-  import { recordUtterance } from "../lib/mic";
+  import { recordUtterance, wavBlob } from "../lib/mic";
 
   type Phase = "setup" | "session" | "done";
   const MODES: StudyMode[] = ["due", "new", "all", "difficult"];
@@ -78,6 +78,32 @@
   /** Microphone level while recording (Whisper), 0..1. */
   let level = $state(0);
   let recording: AbortController | null = null;
+  /** The learner's last spoken answer to this card ("Play back my answers"): in memory only,
+   * dropped when the next card shows. */
+  let myAnswer = $state<Blob | null>(null);
+  let playingMine = $state(false);
+
+  function forgetMyAnswer() {
+    stopClip();
+    myAnswer = null;
+    playingMine = false;
+  }
+
+  async function playMine() {
+    if (playingMine) return forgetPlaying();
+    if (!myAnswer) return;
+    playingMine = true;
+    try {
+      await playClip(myAnswer);
+    } finally {
+      playingMine = false;
+    }
+  }
+
+  function forgetPlaying() {
+    stopClip();
+    playingMine = false;
+  }
   let spoken = $state<SpokenAnswer | null>(null);
   let attempts = 0;
   /** Rating suggested from the spoken answer (highlighted; Enter accepts it). */
@@ -264,6 +290,7 @@
     revealed = false;
     previews = [];
     spoken = null;
+    forgetMyAnswer(); // the last card's recording goes
     suggested = null;
     attempts = 0;
     const item = queue[0];
@@ -329,6 +356,7 @@
         if (!pcm) {
           res = { status: "silence", heard: "", heardPinyin: "", confidence: "", correct: false, suggested: 1, note: "" };
         } else {
+          if (settings.replayAnswers) myAnswer = wavBlob(pcm);
           listening = false;
           thinking = true;
           try {
@@ -341,7 +369,22 @@
           }
         }
       } else {
-        res = await api.speechListen(item.card.id, others);
+        // Windows' recognizer uses the microphone itself; to play the answer back, record it
+        // alongside (the system shares the microphone) and stop when the recognizer is done
+        const side = settings.replayAnswers ? { cancel: new AbortController(), stop: new AbortController() } : null;
+        const copy = side
+          ? recordUtterance({ signal: side.cancel.signal, stopSignal: side.stop.signal, startTimeoutMs: 10000, silenceMs: 3000, maxMs: 10000 }).catch(() => null)
+          : null;
+        let heardRes: SpokenAnswer | null = null;
+        try {
+          heardRes = await api.speechListen(item.card.id, others);
+        } finally {
+          // keep the copy only when there's an answer to go with it
+          if (side) (heardRes && heardRes.status !== "cancelled" ? side.stop : side.cancel).abort();
+        }
+        res = heardRes;
+        const pcm = await copy;
+        if (pcm && current === item && res.status !== "cancelled") myAnswer = wavBlob(pcm);
       }
       if (current !== item || res.status === "cancelled") return;
       attempts++;
@@ -367,6 +410,7 @@
 
   function endSession() {
     stopListening();
+    forgetMyAnswer();
     phase = result.reviewed ? "done" : "setup";
   }
 
@@ -581,11 +625,21 @@
                         : t("speech.wrong")}
                 {/if}
               </div>
-              {#if !spoken.correct && (spoken.status === "heard" || spoken.status === "unclear")}
-                <button class="btn ghost small override" onclick={markRight} title={t("speech.overrideHint")}>
-                  <Icon name="check" size={14} />
-                  {t("speech.override")}
-                </button>
+              {#if myAnswer || (!spoken.correct && (spoken.status === "heard" || spoken.status === "unclear"))}
+                <div class="answer-actions">
+                  {#if myAnswer}
+                    <button class="btn ghost small" onclick={playMine}>
+                      <Icon name="speaker" size={14} />
+                      {playingMine ? t("speech.stopMine") : t("speech.playMine")}
+                    </button>
+                  {/if}
+                  {#if !spoken.correct && (spoken.status === "heard" || spoken.status === "unclear")}
+                    <button class="btn ghost small override" onclick={markRight} title={t("speech.overrideHint")}>
+                      <Icon name="check" size={14} />
+                      {t("speech.override")}
+                    </button>
+                  {/if}
+                </div>
               {/if}
             {/if}
           {:else}
@@ -741,6 +795,21 @@
     height: 28px;
     padding: 0 10px;
     font-size: 12.5px;
+  }
+  .answer-actions {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .answer-actions .btn {
+    margin-top: 6px;
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
   .override {
     margin-top: 6px;

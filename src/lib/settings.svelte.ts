@@ -13,6 +13,10 @@ export const settings = $state({
   speechRate: 0.9,
   autoplayAudio: false,
   voice: "",
+  /** Where speech plays: "" = the system's default output, else a device id (with its name,
+   * to find it again if the id changes). */
+  audioOutput: "",
+  audioOutputLabel: "",
   /** "auto" | "windows" | "whisper" */
   speechEngine: "auto",
   whisperModel: "base",
@@ -20,6 +24,8 @@ export const settings = $state({
   whisperDevice: "auto",
   /** Re-check Whisper's word against same-syllable words in other tones by pitch. */
   pitchTones: false,
+  /** Keep the spoken answer (in memory, until the next card) so it can be played back. */
+  replayAnswers: true,
   tutorModel: "claude-opus-5-5",
   /** Keep calibration recordings for checking the tone detector (always on in dev builds). */
   debugMode: false,
@@ -35,10 +41,13 @@ const KEYS: Record<string, keyof typeof settings> = {
   speech_rate: "speechRate",
   autoplay_audio: "autoplayAudio",
   voice: "voice",
+  audio_output: "audioOutput",
+  audio_output_label: "audioOutputLabel",
   speech_engine: "speechEngine",
   whisper_model: "whisperModel",
   whisper_device: "whisperDevice",
   pitch_tones: "pitchTones",
+  replay_answers: "replayAnswers",
   tutor_model: "tutorModel",
   debug_mode: "debugMode",
 };

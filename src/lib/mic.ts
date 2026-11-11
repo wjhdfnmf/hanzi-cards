@@ -36,6 +36,27 @@ export interface RecordOptions {
 
 export const SAMPLE_RATE = 16000;
 
+/** A recording as a 16-bit mono WAV, for playing it back (kept in memory only). */
+export function wavBlob(pcm: Float32Array, rate = SAMPLE_RATE): Blob {
+  const buf = new ArrayBuffer(44 + pcm.length * 2);
+  const v = new DataView(buf);
+  const text = (at: number, s: string) => [...s].forEach((c, i) => v.setUint8(at + i, c.charCodeAt(0)));
+  text(0, "RIFF");
+  v.setUint32(4, 36 + pcm.length * 2, true);
+  text(8, "WAVEfmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // mono
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  text(36, "data");
+  v.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 0x7fff, true);
+  return new Blob([buf], { type: "audio/wav" });
+}
+
 /** Resolves with the recording, or null if nothing was said (or it was aborted). */
 export async function recordUtterance(opts: RecordOptions = {}): Promise<Float32Array | null> {
   const { startTimeoutMs = 6000, silenceMs = 900, maxMs = 10000, signal, stopSignal, onLevel, onSamples } = opts;

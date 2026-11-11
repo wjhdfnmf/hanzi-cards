@@ -448,6 +448,10 @@ export const api = {
   speechCancel: () => invoke<void>("speech_cancel"),
   speechCheckAudio: (cardId: number, others: string[], pcm: Float32Array) =>
     invoke<SpokenAnswer>("speech_check_audio", { cardId, others, pcm: Array.from(pcm) }),
+  /** Whether the app can make speech itself, so it can go to a chosen output device. */
+  ttsAvailable: () => invoke<boolean>("tts_available"),
+  /** Speech for `text` as a WAV file (Windows' speech engine). */
+  ttsWav: (text: string, voice: string, rate: number) => invoke<ArrayBuffer>("tts_wav", { text, voice, rate }),
   pitchProfileInfo: () => invoke<PitchProfileInfo>("pitch_profile_info"),
   /** `tone`: the tone asked for (one syllable), or null for a sentence. `earlier`: the
    * calibration's earlier recordings' pitch tracks. Saves nothing. */

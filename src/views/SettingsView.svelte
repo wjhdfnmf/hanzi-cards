@@ -11,7 +11,7 @@
   import { fmtNum } from "../lib/format";
   import { goto } from "../lib/nav.svelte";
   import { settings, saveSetting } from "../lib/settings.svelte";
-  import { speak, voicesReady } from "../lib/speech";
+  import { outputDevices, routingReady, speak, voicesReady } from "../lib/speech";
 
   let voices = $state<SpeechSynthesisVoice[]>([]);
   let voicesChecked = $state(false);
@@ -24,6 +24,49 @@
     voices = await voicesReady();
     voicesChecked = true;
   });
+
+  // ---------- audio output ----------
+
+  let canChooseOutput = $state(false);
+  let outputs = $state<MediaDeviceInfo[]>([]);
+  /** The chosen device as the list knows it now (its id may have changed since it was saved). */
+  const outputValue = $derived(
+    outputs.find((d) => d.deviceId === settings.audioOutput)?.deviceId ??
+      outputs.find((d) => settings.audioOutputLabel && d.label === settings.audioOutputLabel)?.deviceId ??
+      settings.audioOutput,
+  );
+
+  async function refreshOutputs() {
+    outputs = await outputDevices();
+  }
+
+  onMount(() => {
+    routingReady.then((ok) => {
+      canChooseOutput = ok && !!navigator.mediaDevices?.enumerateDevices;
+      if (canChooseOutput) refreshOutputs();
+    });
+    // plugging in or removing headphones
+    const changed = () => refreshOutputs();
+    navigator.mediaDevices?.addEventListener?.("devicechange", changed);
+    return () => navigator.mediaDevices?.removeEventListener?.("devicechange", changed);
+  });
+
+  async function chooseOutput(id: string) {
+    const label = outputs.find((d) => d.deviceId === id)?.label ?? "";
+    await saveSetting("audioOutputLabel", id ? label : "");
+    await saveSetting("audioOutput", id);
+  }
+
+  /** Device names are only shown once the page may use the microphone: ask, then stop. */
+  async function showOutputNames() {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      s.getTracks().forEach((tr) => tr.stop());
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+    await refreshOutputs();
+  }
 
   // ---------- speech recognition ----------
 
@@ -389,6 +432,29 @@
         {#each voices as v (v.name)}<option value={v.name}>{v.name}</option>{/each}
       </select>
     </label>
+    {#if canChooseOutput}
+      <label class="row">
+        <span>
+          {t("settings.output")}
+          <small class="faint block">{t("settings.outputHint")}</small>
+        </span>
+        <select value={outputValue} onchange={(e) => chooseOutput(e.currentTarget.value)}>
+          <option value="">{t("settings.outputDefault")}</option>
+          {#each outputs as d, i (d.deviceId)}
+            <option value={d.deviceId}>{d.label || t("settings.outputUnnamed", { n: i + 1 })}</option>
+          {/each}
+          {#if settings.audioOutput && !outputs.some((d) => d.deviceId === settings.audioOutput || d.label === settings.audioOutputLabel)}
+            <option value={settings.audioOutput}>{t("settings.outputMissing", { name: settings.audioOutputLabel || "?" })}</option>
+          {/if}
+        </select>
+      </label>
+      {#if outputs.length && outputs.every((d) => !d.label)}
+        <div class="row">
+          <span class="small muted">{t("settings.outputNamesHint")}</span>
+          <button class="btn small" onclick={showOutputNames}>{t("settings.outputNames")}</button>
+        </div>
+      {/if}
+    {/if}
     <div class="row">
       <span>{t("settings.rate")}</span>
       <div class="line">
@@ -511,6 +577,18 @@
     <div class="row col">
       <PitchCalibration />
     </div>
+    <label class="row">
+      <span>
+        {t("settings.replayAnswers")}
+        <small class="faint block">{t("settings.replayAnswersHint")}</small>
+      </span>
+      <input
+        type="checkbox"
+        class="toggle"
+        checked={settings.replayAnswers}
+        onchange={(e) => saveSetting("replayAnswers", e.currentTarget.checked)}
+      />
+    </label>
     {#if speech?.whisperModels.length}
       <div class="row">
         <button class="btn" disabled={micState !== "idle"} onclick={micTest}>

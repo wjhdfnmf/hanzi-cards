@@ -379,6 +379,24 @@ async fn pick_by_pitch(
     Ok(chosen.unwrap_or(text))
 }
 
+// ---------- speech output to a chosen device (Settings › Audio) ----------
+
+/// Whether the app can make speech itself (and so send it to a chosen output device).
+#[tauri::command]
+pub fn tts_available() -> bool {
+    crate::tts::available()
+}
+
+/// Speech for `text` as a WAV file (raw bytes, not JSON).
+#[tauri::command]
+pub async fn tts_wav(text: String, voice: String, rate: f64) -> AppResult<tauri::ipc::Response> {
+    let wav = tauri::async_runtime::spawn_blocking(move || crate::tts::synthesize(&text, &voice, rate))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))?
+        .map_err(AppError::msg)?;
+    Ok(tauri::ipc::Response::new(wav))
+}
+
 // ---------- tone calibration (Settings) ----------
 
 fn saved_profile(conn: &Connection) -> AppResult<tones::PitchProfile> {

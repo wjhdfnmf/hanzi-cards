@@ -19,6 +19,7 @@ mod stats;
 mod study;
 mod tone_check;
 mod tones;
+mod tts;
 mod tutor;
 mod whisper;
 mod whisper_net;
@@ -114,6 +115,8 @@ pub fn run() {
             commands::speech_listen,
             commands::speech_cancel,
             commands::speech_check_audio,
+            commands::tts_available,
+            commands::tts_wav,
             commands::pitch_profile_info,
             commands::pitch_analyze,
             commands::pitch_calibration_save,
