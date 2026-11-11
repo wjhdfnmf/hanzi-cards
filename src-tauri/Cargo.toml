@@ -3,6 +3,7 @@ name = "hanzi-cards"
 version = "0.2.1"
 description = "Mandarin Chinese flash cards with spaced repetition and a built-in dictionary"
 edition = "2021"
+license = "MIT"
 
 [lib]
 name = "hanzi_cards_lib"
@@ -48,6 +49,8 @@ keyring = { version = "3", features = ["apple-native"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
+# To let the webview use the microphone (spoken answers); the same version Tauri uses.
+webkit2gtk = "2.0"
 
 # Dependencies (Whisper maths in particular) are optimised even in dev builds.
 [profile.dev.package."*"]

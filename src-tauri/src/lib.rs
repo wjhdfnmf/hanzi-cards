@@ -30,6 +30,28 @@ pub struct AppState {
     pub db: Mutex<rusqlite::Connection>,
 }
 
+/// Linux's webview (WebKitGTK) turns the microphone off and refuses every request for it
+/// unless the app says otherwise. Spoken answers need it, so allow it for the app's own page.
+#[cfg(target_os = "linux")]
+fn allow_microphone(app: &tauri::App) {
+    use webkit2gtk::{PermissionRequestExt, SettingsExt, UserMediaPermissionRequest, WebViewExt};
+    use webkit2gtk::glib::prelude::Cast;
+    let Some(window) = app.get_webview_window("main") else { return };
+    let _ = window.with_webview(|wv| {
+        let view = wv.inner();
+        if let Some(settings) = WebViewExt::settings(&view) {
+            settings.set_enable_media_stream(true);
+        }
+        view.connect_permission_request(|_, request| {
+            if request.downcast_ref::<UserMediaPermissionRequest>().is_some() {
+                request.allow();
+                return true;
+            }
+            false // anything else: WebKitGTK's default (deny)
+        });
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -53,6 +75,8 @@ pub fn run() {
                     eprintln!("dictionary import: {e}");
                 }
             });
+            #[cfg(target_os = "linux")]
+            allow_microphone(app);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

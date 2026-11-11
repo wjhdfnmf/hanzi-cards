@@ -430,6 +430,7 @@ pub fn engine_status(conn: &Connection, app_data: &std::path::Path) -> SpeechSta
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(not(windows), allow(dead_code))] // only the Windows recognizer reports these
 pub enum HeardStatus {
     Heard,
     Silence,

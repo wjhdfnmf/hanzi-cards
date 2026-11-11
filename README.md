@@ -83,6 +83,28 @@ large is bundled:
 Building it needs the CUDA Toolkit and Visual Studio C++ build tools (the script finds them); the
 plain `npm run tauri build` makes a CPU-only installer.
 
+### Linux packages
+
+```bash
+npm run tauri build -- --bundles deb,rpm,appimage
+```
+
+This makes a `.deb` (Debian, Ubuntu, Mint), an `.rpm` (Fedora, openSUSE) and an AppImage (any
+distribution) in `src-tauri/target/release/bundle/`. On Ubuntu, building needs `build-essential
+pkg-config file libssl-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`.
+They can be built on Windows inside WSL (Ubuntu).
+
+**Arch Linux:** `packaging/arch/PKGBUILD` (`hanzi-cards-bin`) repackages the release's `.deb`:
+`cd packaging/arch && makepkg -si`. The AppImage also runs on Arch.
+
+Chinese characters need a CJK font (`fonts-noto-cjk` on Debian/Ubuntu, `noto-fonts-cjk` on Arch);
+the `.deb` and `.rpm` recommend one, and desktop installs usually have one already.
+On Linux, Whisper runs on the processor (no GPU build), and the AI tutor's key is kept in the
+Secret Service keyring (GNOME Keyring, KWallet, KeePassXC). Reading aloud uses the webview's speech
+support, which most distributions' WebKitGTK doesn't include yet, so cards may stay silent there.
+The microphone needs GStreamer's PulseAudio or PipeWire source (`gst-plugins-good` or
+`gst-plugin-pipewire`).
+
 ## Layout
 
 ```
@@ -104,6 +126,10 @@ src-tauri/src/
   tones.rs            pitch tracking and tone shapes; tone_check.rs picks words by tone
   pleco.rs            Pleco flashcard XML import/export
 ```
+
+## Licence
+
+Hanzi Cards' own code is under the [MIT licence](LICENSE). The data below keeps its own licences.
 
 ## Licences of data
 

@@ -2019,6 +2019,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "thiserror 1.0.69",
  "ureq",
+ "webkit2gtk",
  "windows",
  "windows-collections",
  "windows-future",

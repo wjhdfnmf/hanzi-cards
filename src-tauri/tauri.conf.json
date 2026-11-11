@@ -40,7 +40,19 @@
     "resources": [
       "resources/cedict_1_0_ts_utf-8_mdbg.txt.gz"
     ],
-    "copyright": "Hanzi Cards. Dictionary: CC-CEDICT (CC BY-SA 4.0, MDBG).",
+    "copyright": "© 2026 wjhdfnmf, MIT licence. Dictionary: CC-CEDICT (CC BY-SA 4.0, MDBG).",
+    "license": "MIT AND CC-BY-SA-4.0",
+    "linux": {
+      "deb": {
+        "section": "education",
+        "recommends": ["fonts-noto-cjk", "gstreamer1.0-pulseaudio | gstreamer1.0-pipewire"],
+        "files": { "/usr/share/doc/hanzi-cards/LICENSE": "../LICENSE" }
+      },
+      "rpm": {
+        "recommends": ["google-noto-sans-cjk-fonts", "gstreamer1-plugins-good"],
+        "files": { "/usr/share/licenses/hanzi-cards/LICENSE": "../LICENSE" }
+      }
+    },
     "windows": {
       "nsis": {
         "installMode": "currentUser",
