@@ -1,6 +1,7 @@
 # Plan: native-speaker recordings for tone detection
 
-Status: plan and recording kit ready, written 2026-11-09. Nothing recorded yet.
+Status: plan and recording kit written 2026-11-09. First native speaker's pass 1, blocks 1-13
+(Parts A and B), recorded 2026-11-10; results and the fixes they led to at the end.
 Follows on from `tone-recognition.md`, which found that both prototypes (pitch shapes in
 `tones.rs`, Whisper's tone scoring in `whisper::score`) are limited by the test voice, an old
 synthetic voice that doesn't say its tones the way people do.
@@ -71,7 +72,7 @@ Message to send with it:
 
 Keep audio out of git: put it under `tone-data/<speaker>/` (ignored) and only commit code.
 
-1. **Cut** (`scripts/tone_cut.py`, to write): ffmpeg each file to 16 kHz mono; energy-based
+1. **Cut** (`scripts/tone_cut.py`): ffmpeg each file to 16 kHz mono; energy-based
    voice detection on 10 ms frames (threshold from the file's own noise floor); split at
    silences ≥ 600 ms; drop blips < 120 ms. Expect 1 + k segments (the "第N组" announcement plus
    the block's items). Read the block number from the announcement with Whisper, check it
@@ -114,3 +115,52 @@ same sheet's Parts A, B and D, then a native speaker **labelling** what tone the
 in each syllable. That gives real learner errors with a trustworthy label, which is the test
 that decides whether a "wrong tone" verdict can be shown to a learner. A small labelling page
 (play clip, tap the tone heard) would make that quick.
+
+## First results (2026-11-10)
+
+Speaker 1 (native, male, about 128 Hz, ±9 st), pass 1, blocks 1-13: Parts A and B. Blocks
+14-16 (Part C wrong tones, Part D sentences) and pass 2 still to come. Phone recordings (ALAC,
+44.1 kHz) with the gaps gated to digital silence. `python scripts/tone_cut.py
+docs/tone-recordings/recordings tone-data/speaker1` found the announcement plus every item in
+all 13 blocks: 127 clips.
+
+`SPEAKER_DIR=../tone-data/speaker1 cargo test --release --lib -- --ignored --nocapture
+tones::tests::speaker_bench` (the app's classifier; syllables judged right, neutral tones
+not judged, sandhi counted as said):
+
+| | Part A (alone) | Part B (in words) | Tone Perfect (6 speakers, alone) |
+|---|---|---|---|
+| before, clean | 74/80, 92% | 52/85, 61% (+3 no pitch) | 89.7% |
+| before, noisy | 67/80, 84% | 47/84, 56% (+4 no pitch) | 87.4% |
+| after, clean | 74/80, 92% | **66/88, 75%** | **90.8%** |
+| after, noisy | 67/80, 84% | **60/88, 68%** | **91.3%** |
+
+What was wrong, and the fixes (in `tones.rs`):
+
+1. **Creaky syllables disappeared.** This speaker's low stretches (3rd tones, the ends of 4th
+   tones, low 2nd tones) are often creak: loud, but with no pitch YIN can follow. Only 77% of
+   loud frames got a pitch. Syllables were found from pitched frames only, so in kǎo-shì,
+   hǎo-kàn and tiào-wǔ the creaky syllable vanished and the other one was judged in its place.
+   Now `syllables` finds syllables from pitched frames *and* creak, and `contour` counts creak
+   inside a syllable (4+ frames) as the bottom of the voice, as it already did for a creaky
+   tail. The creak level is now also at least 3× the background, so noise doesn't count as
+   voice. This alone took Part B from 52 to 59 right, and helped Tone Perfect (noisy +3.9).
+2. **No dipping 3rd tone before another syllable.** Before another syllable a 3rd tone is the
+   low half third (21), never 214, but the 214 shape was allowed everywhere and it matched
+   low 2nd tones that dip slightly before rising (zuó-tiān, míng-tiān): 59 → 63.
+3. **Height counts half in words** (`WORD_LEVEL` 0.5). Pitch drifts down through a phrase,
+   so this speaker's 2nd tones in words start at the bottom of the voice and rise only to the
+   middle (Zhōng-guó, Měi-guó, xīn-wén): by height they look like 3rd tones. 63 → 66.
+   0.3 scored 69 but sits next to a cliff (0.2: 60, 3rd tones collapse), so 0.5 until
+   another speaker can confirm.
+
+Tried and dropped: a looser YIN (`YIN_GLOBAL` 0.6: more pitch found, but wrong pitch, Part A
+92% → 79%); a 500 Hz low-pass (Part B +6 but noisy Part A −2 and noisy Part B −2); moving
+short pitch stretches that jump an octave away and back (no change here, slightly worse on
+Tone Perfect).
+
+Still missed: 2nd tones in words (29/44 right; 15 heard as 3rd), a few octave errors where
+the voice turns creaky between syllables (qiān-bǐ, shēn-tǐ heard 13→14), and 4th tones that
+fall only a little in words. Single syllables were already at 92% and didn't change.
+`SPEAKER_SHAPES=2` prints every tone-2 contour; `SPEAKER_RUNS=1` how each word was split.
+Check any further change on a second speaker and on Tone Perfect before keeping it.

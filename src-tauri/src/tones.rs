@@ -286,12 +286,21 @@ fn clean(frames: &mut [Frame]) {
     }
 }
 
-/// Split the voiced frames into `n` syllables: (start, end) frame ranges.
+/// Split the voice into `n` syllables: (start, end) frame ranges, each from its first to its
+/// last pitched frame (a creaky ending is added by `creak_tail`), or the whole stretch for a
+/// syllable that is all creak.
+///
+/// Syllables are found from pitched frames *and* creak (loud, no pitch): a low syllable said
+/// creakily can have almost no pitch, and then a word's other syllable was judged in its
+/// place. One native speaker (2026-11-10), syllables in two-syllable words right: 52 of 85
+/// (3 more got no judgement) → 59 of 88. Tone Perfect: 89.7% → 90.8% clean, 87.4% → 91.3% noisy.
 pub fn syllables(frames: &[Frame], n: usize) -> Vec<(usize, usize)> {
-    // voiced runs, bridging gaps of up to 3 frames
+    let creak = creak_level(frames);
+    let sounding = |f: &Frame| f.st.is_some() || f.rms >= creak;
+    // sounding runs, bridging gaps of up to 3 frames
     let mut runs: Vec<(usize, usize)> = Vec::new();
     for (i, f) in frames.iter().enumerate() {
-        if f.st.is_none() {
+        if !sounding(f) {
             continue;
         }
         match runs.last_mut() {
@@ -299,8 +308,11 @@ pub fn syllables(frames: &[Frame], n: usize) -> Vec<(usize, usize)> {
             _ => runs.push((i, i + 1)),
         }
     }
+    // a run with no pitch is a syllable only if it lasts (else a click or a consonant)
+    let pitched = |(s, e): (usize, usize)| frames[s..e].iter().filter(|f| f.st.is_some()).count();
+    runs.retain(|&r| pitched(r) >= 1 || r.1 - r.0 >= MIN_CREAK_SYLLABLE);
     if runs.is_empty() || n == 0 {
-        return runs;
+        return runs.into_iter().map(|r| trim_to_pitch(frames, r)).collect();
     }
     // too many: merge across the smallest gaps
     while runs.len() > n {
@@ -322,7 +334,32 @@ pub fn syllables(frames: &[Frame], n: usize) -> Vec<(usize, usize)> {
         runs[k] = (s, cut);
         runs.insert(k + 1, (cut, e));
     }
-    runs
+    runs.into_iter().map(|r| trim_to_pitch(frames, r)).collect()
+}
+
+/// A syllable with no pitch at all counts if it has this many frames of creak.
+const MIN_CREAK_SYLLABLE: usize = 8;
+
+fn trim_to_pitch(frames: &[Frame], (s, e): (usize, usize)) -> (usize, usize) {
+    match ((s..e).find(|&i| frames[i].st.is_some()), (s..e).rev().find(|&i| frames[i].st.is_some())) {
+        (Some(a), Some(b)) => (a, b + 1),
+        _ => (s, e),
+    }
+}
+
+/// How loud a frame with no pitch must be to count as creak (still voice): 10% of the
+/// loudest frame (`TONE_CREAK`), and 3× the background (the quietest tenth of the recording),
+/// so room noise doesn't pass for voice. Infinite when creak is turned off.
+pub fn creak_level(frames: &[Frame]) -> f32 {
+    let creak = std::env::var("TONE_CREAK").ok().and_then(|x| x.parse::<f32>().ok()).unwrap_or(0.1);
+    if creak <= 0.0 || frames.is_empty() {
+        return f32::INFINITY;
+    }
+    let loud = frames.iter().map(|f| f.rms).fold(0f32, f32::max);
+    let mut r: Vec<f32> = frames.iter().map(|f| f.rms).collect();
+    r.sort_by(f32::total_cmp);
+    let noise = r[r.len() / 10];
+    (loud * creak).max(noise * 3.0)
 }
 
 /// A speaker's pitch range: median and spread (10th-90th percentile), in semitones.
@@ -381,12 +418,8 @@ pub fn anchor_voice(t1: &[Frame], t3: &[Frame]) -> Option<Voice> {
 /// syllable (which has `voiced` pitched frames) count as creak.
 /// Tone Perfect, 6 speakers: 4th tones right 49% → 75%, all tones 83% → 90% (0 turns it off)
 pub fn creak_tail(frames: &[Frame], e: usize, voiced: usize) -> usize {
-    let creak = std::env::var("TONE_CREAK").ok().and_then(|x| x.parse::<f32>().ok()).unwrap_or(0.1);
-    if creak <= 0.0 {
-        return 0;
-    }
-    let loud = frames.iter().map(|f| f.rms).fold(0f32, f32::max);
-    let tail = frames[e..].iter().take_while(|f| f.st.is_none() && f.rms >= loud * creak).count();
+    let level = creak_level(frames);
+    let tail = frames[e..].iter().take_while(|f| f.st.is_none() && f.rms >= level).count();
     if tail >= 4 && tail * 4 >= voiced {
         tail
     } else {
@@ -394,28 +427,53 @@ pub fn creak_tail(frames: &[Frame], e: usize, voiced: usize) -> usize {
     }
 }
 
-/// The frames `contour` measures for a syllable: its pitched frames plus any creaky tail,
-/// without the first and last 10%. (first, last + 1), for showing which part was judged.
-pub fn measured_range(frames: &[Frame], (s, e): (usize, usize)) -> Option<(usize, usize)> {
-    let mut idx: Vec<usize> = (s..e).filter(|&i| frames[i].st.is_some()).collect();
-    if idx.len() < 5 {
-        return None;
+/// What `contour` measures for a syllable, frame by frame: Some(pitch), or None for creak (the
+/// bottom of the voice). That is its pitched frames; creak inside it (4+ frames: a 3rd tone
+/// that dips into creak and comes back up); a creaky tail (`creak_tail`); and for a syllable
+/// that is all creak, the creak.
+fn measured(frames: &[Frame], (s, e): (usize, usize)) -> Vec<(usize, Option<f32>)> {
+    let level = creak_level(frames);
+    let creaky = |i: usize| frames[i].st.is_none() && frames[i].rms >= level;
+    let voiced = frames[s..e].iter().filter(|f| f.st.is_some()).count();
+    if voiced == 0 {
+        let c: Vec<_> = (s..e).filter(|&i| creaky(i)).map(|i| (i, None)).collect();
+        return if c.len() >= MIN_CREAK_SYLLABLE { c } else { Vec::new() };
     }
-    let tail = creak_tail(frames, e, idx.len());
-    idx.extend(e..e + tail);
-    let a = idx.len() / 10;
-    Some((idx[a], idx[idx.len() - 1 - a] + 1))
+    let mut out = Vec::new();
+    let mut i = s;
+    while i < e {
+        if let Some(st) = frames[i].st {
+            out.push((i, Some(st)));
+            i += 1;
+            continue;
+        }
+        let j = (i..e).find(|&j| frames[j].st.is_some()).unwrap_or(e);
+        if j - i >= 4 && (i..j).all(creaky) {
+            out.extend((i..j).map(|k| (k, None)));
+        }
+        i = j;
+    }
+    let tail = creak_tail(frames, e, voiced);
+    out.extend((e..e + tail).map(|k| (k, None)));
+    out
 }
 
-pub fn contour(frames: &[Frame], (s, e): (usize, usize), voice: Voice) -> Option<[f32; 5]> {
-    let mut v: Vec<f32> = frames[s..e].iter().filter_map(|f| f.st).collect();
-    if v.len() < 5 {
+/// The frames `contour` measures for a syllable: its pitched frames plus any creak,
+/// without the first and last 10%. (first, last + 1), for showing which part was judged.
+pub fn measured_range(frames: &[Frame], seg: (usize, usize)) -> Option<(usize, usize)> {
+    let m = measured(frames, seg);
+    if m.len() < 5 {
         return None;
     }
-    let tail = creak_tail(frames, e, v.len());
-    if tail > 0 {
-        let floor = voice.median - voice.spread / 2.0;
-        v.extend(std::iter::repeat_n(floor, tail));
+    let a = m.len() / 10;
+    Some((m[a].0, m[m.len() - 1 - a].0 + 1))
+}
+
+pub fn contour(frames: &[Frame], seg: (usize, usize), voice: Voice) -> Option<[f32; 5]> {
+    let floor = voice.median - voice.spread / 2.0;
+    let v: Vec<f32> = measured(frames, seg).into_iter().map(|(_, st)| st.unwrap_or(floor)).collect();
+    if v.len() < 5 {
+        return None;
     }
     // onsets and offsets wobble: use the middle 80%
     let a = v.len() / 10;
@@ -430,6 +488,8 @@ pub fn contour(frames: &[Frame], (s, e): (usize, usize), voice: Voice) -> Option
     Some(out)
 }
 
+/// Index in TEMPLATES of the 3rd tone's full dip and rise.
+const DIPPING_THIRD: usize = 2;
 const TEMPLATES: [(u8, [f32; 5]); 5] = [
     (1, [1.6, 1.6, 1.6, 1.6, 1.6]),     // 55
     (2, [-0.3, -0.3, 0.3, 1.1, 1.8]),   // 35
@@ -469,12 +529,54 @@ pub fn distances(c: &[f32; 5], shape_weight: f32) -> [f32; 4] {
 }
 
 pub fn distances_with(c: &[f32; 5], shape_weight: f32, fall_weight: f32) -> [f32; 4] {
+    distances_at(c, shape_weight, fall_weight, Place::Alone)
+}
+
+/// Where a syllable is: said alone, or in a word of several (before another syllable, or last).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Place {
+    Alone,
+    BeforeAnother,
+    Last,
+}
+
+impl Place {
+    pub fn of(k: usize, n: usize) -> Place {
+        match (n, k + 1 == n) {
+            (0 | 1, _) => Place::Alone,
+            (_, false) => Place::BeforeAnother,
+            (_, true) => Place::Last,
+        }
+    }
+}
+
+/// Weight of the level term for a syllable in a word (`WORD_LEVEL` to experiment), against 1
+/// for one said alone. See `distances_at`.
+pub fn word_level_weight() -> f32 {
+    std::env::var("WORD_LEVEL").ok().and_then(|v| v.parse().ok()).unwrap_or(WORD_LEVEL)
+}
+const WORD_LEVEL: f32 = 0.5;
+/// Whether a 3rd tone before another syllable may be the dipping 214 (`WORD_DIP=1`).
+fn word_dip() -> bool {
+    std::env::var("WORD_DIP").is_ok_and(|v| v == "1")
+}
+
+/// `distances_with` for a syllable at `place`. In a word, pitch drifts down through the phrase and
+/// each tone bends toward its neighbours (Xu 1997), so how high a syllable sits says less than
+/// how it moves: a 2nd tone after another syllable or last in a word often starts at the bottom
+/// of the voice and rises only to the middle. And a 3rd tone before another syllable is the
+/// low half third (21), never the full dip and rise (214).
+pub fn distances_at(c: &[f32; 5], shape_weight: f32, fall_weight: f32, place: Place) -> [f32; 4] {
     let mean = c.iter().sum::<f32>() / 5.0;
     let (fall, rise) = fall_rise(c);
+    let level_weight = if place == Place::Alone { 1.0 } else { word_level_weight() };
     let mut d = [f32::MAX; 4];
-    for (tone, t) in TEMPLATES {
+    for (i, (tone, t)) in TEMPLATES.into_iter().enumerate() {
+        if place == Place::BeforeAnother && i == DIPPING_THIRD && !word_dip() {
+            continue;
+        }
         let tmean = t.iter().sum::<f32>() / 5.0;
-        let level = (mean - tmean).powi(2);
+        let level = level_weight * (mean - tmean).powi(2);
         let shape: f32 = c.iter().zip(t.iter()).map(|(x, y)| ((x - mean) - (y - tmean)).powi(2)).sum();
         let (tfall, trise) = fall_rise(&t);
         let movement = (fall - tfall).powi(2) + (rise - trise).powi(2);
@@ -550,7 +652,7 @@ pub fn tone_logprobs(frames: &[Frame], n: usize, voice: Voice, typical_length: O
         .map(|k| {
             let seg = *syl.get(k)?;
             let c = contour(frames, seg, voice)?;
-            let mut d = distances(&c, SHAPE_WEIGHT);
+            let mut d = distances_at(&c, SHAPE_WEIGHT, fall_weight(), Place::of(k, n));
             if let (1, Some(typical)) = (n, typical_length) {
                 let extra = length_distances(syllable_length(frames, seg) as f32, typical, length_weight(), &LENGTH_BY_TONE);
                 (0..4).for_each(|t| d[t] += extra[t]);
@@ -1076,6 +1178,123 @@ mod tests {
             );
             println!("      expected→heard (rows 1-4; columns: none,1,2,3,4): {:?}", &conf[1..]);
             println!("      misses: {}", misses.join("  "));
+        }
+    }
+
+    /// A speaker's recordings of the speaker sheet, cut by scripts/tone_cut.py, judged the way
+    /// the app judges a spoken answer (tone_logprobs: shapes, fall/rise and, for a syllable
+    /// said alone, its length against the speaker's usual). SPEAKER_DIR holds meta.tsv and
+    /// clean/N.wav, noisy/N.wav. Neutral tones aren't judged; sandhi counts as said.
+    /// SPEAKER_DIR=tone-data/<speaker> cargo test --release --lib speaker_bench -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn speaker_bench() {
+        let Ok(dir) = std::env::var("SPEAKER_DIR") else { return };
+        let dir = std::path::Path::new(&dir);
+        struct Item {
+            n: usize,
+            part: String,
+            pinyin: String,
+            said: Vec<u8>,
+            right: Vec<u8>,
+        }
+        let items: Vec<Item> = std::fs::read_to_string(dir.join("meta.tsv"))
+            .unwrap()
+            .lines()
+            .skip(1)
+            .map(|l| {
+                let f: Vec<&str> = l.split('\t').collect();
+                let digits = |s: &str| s.bytes().map(|b| b - b'0').collect();
+                Item { n: f[0].parse().unwrap(), part: f[5].into(), pinyin: f[6].into(), said: digits(f[7]), right: digits(f[8]) }
+            })
+            .collect();
+        for set in ["clean", "noisy"] {
+            let tracks: Vec<Vec<Frame>> = items.iter().map(|it| pitch_track(&read_wav(&dir.join(set).join(format!("{}.wav", it.n))))).collect();
+            let voice = Voice::from_frames(tracks.iter().flatten()).unwrap();
+            // the speaker's usual single-syllable length, as the app learns it from answers
+            let mut lens: Vec<f32> = items
+                .iter()
+                .zip(&tracks)
+                .filter(|(it, _)| it.said.len() == 1)
+                .filter_map(|(_, f)| syllables(f, 1).first().map(|&s| syllable_length(f, s) as f32))
+                .collect();
+            lens.sort_by(f32::total_cmp);
+            let own_len = lens.get(lens.len() / 2).copied();
+            // how much of the speech the tracker gives a pitch to (loud = above 15% of the clip's loudest)
+            let (mut loud, mut pitched) = (0usize, 0usize);
+            for f in &tracks {
+                let top = f.iter().map(|x| x.rms).fold(0f32, f32::max);
+                for x in f.iter().filter(|x| x.rms > top * 0.15) {
+                    loud += 1;
+                    pitched += x.st.is_some() as usize;
+                }
+            }
+            println!("{set}: pitch found in {:.0}% of loud frames", 100.0 * pitched as f32 / loud.max(1) as f32);
+            println!(
+                "{set}: voice {:.0} Hz ±{:.1} st, usual single-syllable length {} frames (app default {TYPICAL_LENGTH})",
+                hz(voice.median),
+                voice.spread,
+                own_len.map_or("?".into(), |l| format!("{l:.0}"))
+            );
+            for (label, typical) in [("no length", None), ("default length", Some(TYPICAL_LENGTH as f32)), ("own length", own_len)] {
+                let mut by_part: std::collections::BTreeMap<String, (u32, u32, u32)> = Default::default(); // ok, judged, unjudged
+                let mut conf = [[0u32; 5]; 5];
+                let mut misses = Vec::new();
+                let mut false_accepts = (0u32, 0u32);
+                for (it, f) in items.iter().zip(&tracks) {
+                    // SPEAKER_RUNS=1 prints how each word was split into syllables
+                    if set == "clean" && label == "no length" && it.said.len() > 1 && std::env::var_os("SPEAKER_RUNS").is_some() {
+                        let runs = syllables(f, 0);
+                        let syl = syllables(f, it.said.len());
+                        let pitch = |s: usize, e: usize| f[s..e].iter().filter_map(|x| x.st).map(|x| format!("{:.0}", x)).collect::<Vec<_>>().join(",");
+                        println!("    RUNS {:12} {:?} -> {:?} | {}", it.pinyin, runs, syl, syl.iter().map(|&(s, e)| format!("[{}]", pitch(s, e))).collect::<Vec<_>>().join(" "));
+                    }
+                    let probs = tone_logprobs(f, it.said.len(), voice, typical);
+                    let mut heard = String::new();
+                    let mut all_ok = true;
+                    for (k, &want) in it.said.iter().enumerate() {
+                        let got = probs.get(k).copied().flatten().map(|p| 1 + (0..4).max_by(|&a, &b| p[a].total_cmp(&p[b])).unwrap() as u8).unwrap_or(0);
+                        heard.push((b'0' + got) as char);
+                        if want == 5 {
+                            continue;
+                        }
+                        // SPEAKER_SHAPES=2 prints every contour of a tone-2 syllable, and so on
+                        if set == "clean" && label == "no length" && std::env::var("SPEAKER_SHAPES").is_ok_and(|t| t == want.to_string()) {
+                            let syl = syllables(f, it.said.len());
+                            let c = syl.get(k).and_then(|&s| contour(f, s, voice));
+                            let pos = if it.said.len() == 1 { "alone".to_string() } else { format!("{}/{}", k + 1, it.said.len()) };
+                            println!("    T{want} {:12} {pos:5} heard {got} len {:3} {:?}", it.pinyin, syl.get(k).map_or(0, |s| s.1 - s.0), c.map(|c| c.map(|x| (x * 10.0).round() / 10.0)));
+                        }
+                        let e = by_part.entry(it.part.clone()).or_default();
+                        if got == 0 {
+                            e.2 += 1;
+                        } else {
+                            e.1 += 1;
+                            e.0 += (got == want) as u32;
+                        }
+                        conf[want as usize][got as usize] += 1;
+                        all_ok &= got == want;
+                        // a wrong tone said on purpose: would the checker pass it as right?
+                        if it.right.get(k).is_some_and(|&r| r != want && r != 5) {
+                            false_accepts.1 += 1;
+                            false_accepts.0 += (got == it.right[k]) as u32;
+                        }
+                    }
+                    if !all_ok {
+                        misses.push(format!("{}:{}→{heard}", it.pinyin, it.said.iter().map(|t| (b'0' + t) as char).collect::<String>()));
+                    }
+                }
+                let parts: Vec<String> = by_part.iter().map(|(p, (ok, n, none))| format!("{p} {ok}/{n} {:.0}%{}", 100.0 * *ok as f32 / (*n).max(1) as f32, if *none > 0 { format!(" (+{none} no pitch)") } else { String::new() })).collect();
+                let by_t: Vec<String> = (1..5).map(|t| format!("T{t} {}/{}", conf[t][t], conf[t].iter().sum::<u32>())).collect();
+                println!("  {label:15} {} | {}", parts.join("  "), by_t.join(" "));
+                if false_accepts.1 > 0 {
+                    println!("  {:15} wrong tones passed as right: {}/{}", "", false_accepts.0, false_accepts.1);
+                }
+                if set == "clean" && label == "own length" {
+                    println!("  expected→heard (rows T1-T4; columns none,1,2,3,4): {:?}", &conf[1..]);
+                    println!("  misses: {}", misses.join("  "));
+                }
+            }
         }
     }
 }

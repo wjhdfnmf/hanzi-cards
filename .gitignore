@@ -10,6 +10,13 @@ imports/
 
 # Tone recordings from speakers and calibration recordings (audio stays local)
 *.wav
+*.m4a
+*.mp3
+*.aac
+*.ogg
+*.opus
+*.flac
+docs/tone-recordings/recordings/
 calibration-recordings/
 tone-data/
 TonePerfectDataset/
