@@ -1,6 +1,6 @@
 [package]
 name = "hanzi-cards"
-version = "0.2.2"
+version = "0.2.3"
 description = "Mandarin Chinese flash cards with spaced repetition and a built-in dictionary"
 edition = "2021"
 license = "MIT"
