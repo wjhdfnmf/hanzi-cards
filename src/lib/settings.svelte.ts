@@ -21,6 +21,8 @@ export const settings = $state({
   /** Re-check Whisper's word against same-syllable words in other tones by pitch. */
   pitchTones: false,
   tutorModel: "claude-opus-5-5",
+  /** Keep calibration recordings for checking the tone detector (always on in dev builds). */
+  debugMode: false,
 });
 
 const KEYS: Record<string, keyof typeof settings> = {
@@ -38,6 +40,7 @@ const KEYS: Record<string, keyof typeof settings> = {
   whisper_device: "whisperDevice",
   pitch_tones: "pitchTones",
   tutor_model: "tutorModel",
+  debug_mode: "debugMode",
 };
 
 function parse(field: keyof typeof settings, raw: string): unknown {

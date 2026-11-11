@@ -150,6 +150,83 @@ export interface Segment {
   entry: DictEntry | null;
 }
 
+/** A speaker's pitch range (semitones above 100 Hz, and Hz). */
+export interface PitchVoice {
+  medianSt: number;
+  spreadSt: number;
+  medianHz: number;
+  /** Bottom and top of the range used for tones (Chao's levels 1 and 5). */
+  lowHz: number;
+  highHz: number;
+}
+
+/** The tone detector's settings (from tones.rs). */
+export interface PitchParams {
+  hopMs: number;
+  windowMs: number;
+  f0MinHz: number;
+  f0MaxHz: number;
+  yinFirst: number;
+  yinGlobal: number;
+  lowPassHz: number;
+  shapeWeight: number;
+  /** Weight of how far a syllable falls and rises. */
+  fallWeight: number;
+  creak: number;
+  profileDecay: number;
+  minRecordings: number;
+  profileLowSt: number;
+  profileBinSt: number;
+  /** [tone, five points on Chao's scale relative to the speaker, -2..+2] */
+  templates: [number, number[]][];
+}
+
+/** The learner's pitch profile (what "Use pitch to tell tones apart" uses). */
+export interface PitchProfileInfo {
+  recordings: number;
+  ready: boolean;
+  /** Histogram of voiced frames in half-semitone bins from params.profileLowSt. */
+  bins: number[];
+  voice: PitchVoice | null;
+  params: PitchParams;
+}
+
+/** An earlier recording of the same calibration: its pitch track, the tone asked for (null:
+ * the sentence) and the syllable's length. */
+export interface PitchEarlier {
+  pitch: (number | null)[];
+  tone: number | null;
+  length: number | null;
+}
+
+/** One calibration recording, analysed. */
+export interface PitchAnalysis {
+  /** Pitch per 10 ms frame (semitones above 100 Hz), null where unvoiced. */
+  pitch: (number | null)[];
+  /** Loudness per frame, 0..1. */
+  level: number[];
+  voicedMs: number;
+  /** Mains hum found and filtered out before tracking (Hz). */
+  humHz: number[];
+  segment: [number, number] | null;
+  /** The frames the shape was measured from: the syllable's middle 80% plus a creaky ending. */
+  measured: [number, number] | null;
+  /** Frames after the syllable counted as creak (no pitch, still loud: the bottom of the voice). */
+  creakFrames: number;
+  contour: number[] | null;
+  /** Tones 1-4. */
+  probs: number[] | null;
+  heard: number | null;
+  /** How to say the asked tone more clearly (keys: t1Higher, t1Level, t2Rise, t3Lower,
+   * t4Higher, t4Fall), with where the voice should be and where it was. */
+  advice: { key: string; targetHz: number; actualHz: number }[];
+  /** How long the syllable sounded (10 ms frames) and the speaker's usual length. */
+  lengthFrames: number | null;
+  typicalLength: number;
+  voice: PitchVoice | null;
+  profile: PitchProfileInfo;
+}
+
 /** Whether spoken answers can be checked on this machine, and with which engine. */
 export interface SpeechStatus {
   available: boolean;
@@ -371,6 +448,18 @@ export const api = {
   speechCancel: () => invoke<void>("speech_cancel"),
   speechCheckAudio: (cardId: number, others: string[], pcm: Float32Array) =>
     invoke<SpokenAnswer>("speech_check_audio", { cardId, others, pcm: Array.from(pcm) }),
+  pitchProfileInfo: () => invoke<PitchProfileInfo>("pitch_profile_info"),
+  /** `tone`: the tone asked for (one syllable), or null for a sentence. `earlier`: the
+   * calibration's earlier recordings' pitch tracks. Saves nothing. */
+  pitchAnalyze: (pcm: Float32Array, tone: number | null, earlier: PitchEarlier[]) =>
+    invoke<PitchAnalysis>("pitch_analyze", { pcm: Array.from(pcm), tone, earlier }),
+  pitchCalibrationSave: (recordings: PitchEarlier[]) =>
+    invoke<PitchProfileInfo>("pitch_calibration_save", { recordings }),
+  pitchProfileReset: () => invoke<PitchProfileInfo>("pitch_profile_reset"),
+  /** In debug mode only: keep a calibration recording as a WAV in the app-data folder and
+   * return its path (null when not in debug mode: nothing is saved). */
+  pitchSaveRecording: (pcm: Float32Array, label: string) =>
+    invoke<string | null>("pitch_save_recording", { pcm: Array.from(pcm), label }),
   /** `prompt`: words or a previous line the speech probably contains or answers. */
   /** "Say the meaning": judge an English answer against the card's meaning. */
   speechCheckEnglish: (cardId: number, pcm: Float32Array) =>

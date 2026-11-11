@@ -3,7 +3,7 @@
 use crate::error::{AppError, AppResult};
 use crate::models::*;
 use crate::stats::Stats;
-use crate::{ai, billing, cards, data, db, decks, dictionary, pinyin, pleco, speech, stats, study, tone_check, tones, tutor, whisper, AppState};
+use crate::{ai, billing, calibration, cards, data, db, decks, dictionary, pinyin, pleco, speech, stats, study, tone_check, tones, tutor, whisper, AppState};
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -47,6 +47,8 @@ pub fn get_settings(state: State<AppState>) -> AppResult<HashMap<String, String>
         ("whisper_model", "base".to_string()),
         ("whisper_device", "auto".to_string()),
         ("pitch_tones", "false".to_string()),
+        // Settings › About; development builds are in debug mode regardless (`debug_mode`)
+        ("debug_mode", "false".to_string()),
         ("tutor_model", ai::DEFAULT_MODEL.to_string()),
     ]
     .into_iter()
@@ -375,6 +377,88 @@ async fn pick_by_pitch(
     .map_err(|e| AppError::msg(e.to_string()))??;
     blocking(app.clone(), move |conn| Ok(db::set_setting(conn, "pitch_profile", &profile.serialize())?)).await?;
     Ok(chosen.unwrap_or(text))
+}
+
+// ---------- tone calibration (Settings) ----------
+
+fn saved_profile(conn: &Connection) -> AppResult<tones::PitchProfile> {
+    Ok(tones::PitchProfile::parse(&db::get_setting(conn, "pitch_profile")?.unwrap_or_default()))
+}
+
+/// The learner's pitch range so far and the tone detector's settings.
+#[tauri::command]
+pub async fn pitch_profile_info(app: AppHandle) -> AppResult<calibration::ProfileInfo> {
+    blocking(app, |conn| Ok(calibration::info(&saved_profile(conn)?))).await
+}
+
+/// Analyse one calibration recording; `earlier` are the pitch tracks of the calibration's
+/// earlier recordings. Nothing is saved.
+#[tauri::command]
+pub async fn pitch_analyze(app: AppHandle, pcm: Vec<f32>, tone: Option<u8>, earlier: Vec<calibration::Earlier>) -> AppResult<calibration::Analysis> {
+    let saved_typical = blocking(app, |conn| Ok(saved_profile(conn)?.typical_length())).await?;
+    tauri::async_runtime::spawn_blocking(move || calibration::analyze(&pcm, tone, &earlier, saved_typical))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))
+}
+
+/// Replace the pitch profile with the one a finished calibration's recordings make.
+#[tauri::command]
+pub async fn pitch_calibration_save(app: AppHandle, recordings: Vec<calibration::Earlier>) -> AppResult<calibration::ProfileInfo> {
+    blocking(app, move |conn| {
+        let profile = calibration::build(&recordings);
+        db::set_setting(conn, "pitch_profile", &profile.serialize())?;
+        Ok(calibration::info(&profile))
+    })
+    .await
+}
+
+/// Where calibration recordings are kept (for checking the pitch tracker on real voices).
+const CALIBRATION_RECORDINGS: &str = "calibration-recordings";
+/// How many recordings are kept there (the oldest are removed).
+const KEEP_CALIBRATION_RECORDINGS: usize = 40;
+
+/// Debug mode: a development build, or Settings › About › Debug mode turned on. Only then are
+/// calibration recordings kept on disk.
+fn debug_mode(conn: &Connection) -> AppResult<bool> {
+    Ok(cfg!(debug_assertions) || db::get_setting(conn, "debug_mode")?.as_deref() == Some("true"))
+}
+
+/// In debug mode, save a calibration recording (16 kHz mono) as a WAV file in the app-data
+/// folder, keeping the latest `KEEP_CALIBRATION_RECORDINGS`, and return its path. Otherwise
+/// nothing is written and it returns None: a learner's voice isn't kept unless they ask.
+#[tauri::command]
+pub async fn pitch_save_recording(app: AppHandle, pcm: Vec<f32>, label: String) -> AppResult<Option<String>> {
+    if !blocking(app.clone(), |conn| debug_mode(conn)).await? {
+        return Ok(None);
+    }
+    let dir = app_data(&app)?.join(CALIBRATION_RECORDINGS);
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<Option<String>> {
+        std::fs::create_dir_all(&dir)?;
+        let safe: String = label.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect();
+        let path = dir.join(format!("{}-{safe}.wav", chrono::Local::now().format("%Y%m%d-%H%M%S%.3f")));
+        speech::write_wav(&path, &pcm)?;
+        let mut all: Vec<PathBuf> = std::fs::read_dir(&dir)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|x| x == "wav"))
+            .collect();
+        all.sort(); // the names start with the time
+        for old in all.iter().take(all.len().saturating_sub(KEEP_CALIBRATION_RECORDINGS)) {
+            let _ = std::fs::remove_file(old);
+        }
+        Ok(Some(path.display().to_string()))
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Forget the pitch profile (it builds up again from spoken answers, or a new calibration).
+#[tauri::command]
+pub async fn pitch_profile_reset(app: AppHandle) -> AppResult<calibration::ProfileInfo> {
+    blocking(app, |conn| {
+        db::set_setting(conn, "pitch_profile", "")?;
+        Ok(calibration::info(&tones::PitchProfile::parse("")))
+    })
+    .await
 }
 
 /// How strongly Whisper is pulled toward words on the learner's cards (added to a token's

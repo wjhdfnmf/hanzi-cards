@@ -124,7 +124,7 @@ function splitErhua(sylls: string[]): string[] {
  * Pair each Chinese character with a tone, when the pinyin lines up
  * (same number of syllables as characters). Non-hanzi chars get tone 0.
  */
-export function hanziTones(hanzi: string, pinyin: string): { ch: string; tone: number }[] {
+export function hanziTones(hanzi: string, pinyin: string): { ch: string; tone: number; syl: string }[] {
   const chars = [...hanzi];
   let sylls = syllables(pinyin);
   const hanCount = chars.filter(isHanzi).length;
@@ -132,9 +132,9 @@ export function hanziTones(hanzi: string, pinyin: string): { ch: string; tone: n
   const aligned = sylls.length === hanCount;
   let k = 0;
   return chars.map((ch) => {
-    if (!isHanzi(ch)) return { ch, tone: 0 };
-    const tone = aligned ? toneOf(sylls[k]) : 0;
+    if (!isHanzi(ch)) return { ch, tone: 0, syl: "" };
+    const syl = aligned ? sylls[k] : "";
     k++;
-    return { ch, tone };
+    return { ch, tone: syl ? toneOf(syl) : 0, syl };
   });
 }

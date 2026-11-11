@@ -86,9 +86,9 @@ pub fn add_heard(conn: &Connection, cands: &mut Vec<Candidate>, heard: &str) -> 
 /// For each candidate, the summed log-probability of its tones from the pitch (neutral
 /// syllables and syllables without pitch count 0). None when no syllable could be judged or
 /// every candidate gets the same score.
-pub fn pitch_scores(frames: &[Frame], voice: Voice, cands: &[Candidate]) -> Option<Vec<f32>> {
+pub fn pitch_scores(frames: &[Frame], voice: Voice, typical_length: Option<f32>, cands: &[Candidate]) -> Option<Vec<f32>> {
     let n = cands.first()?.tones.len();
-    let probs = tones::tone_logprobs(frames, n, voice);
+    let probs = tones::tone_logprobs(frames, n, voice, typical_length);
     if probs.iter().all(Option::is_none) {
         return None;
     }
@@ -133,10 +133,17 @@ pub fn select(
     trim: Option<(f32, f32)>,
 ) -> AppResult<Option<String>> {
     let frames = tones::pitch_track(pcm);
-    let voice = profile.voice(); // the range before this recording
+    // the range and usual syllable length before this recording
+    let voice = profile.voice();
+    let typical = profile.typical_length().unwrap_or(tones::TYPICAL_LENGTH);
     profile.add(&frames);
+    if cands.first().is_some_and(|c| c.tones.len() == 1) {
+        if let Some(&seg) = tones::syllables(&frames, 1).first() {
+            profile.add_length(tones::syllable_length(&frames, seg));
+        }
+    }
     let (Some(voice), true) = (voice, cands.len() > 1 && cands.iter().any(|c| c.text == heard)) else { return Ok(None) };
-    let Some(pitch) = pitch_scores(&frames, voice, cands) else { return Ok(None) };
+    let Some(pitch) = pitch_scores(&frames, voice, Some(typical), cands) else { return Ok(None) };
     // no prompt or word bias here: they would favour the answer, which is what's being checked
     let opts = crate::whisper::Options { chinese_only: true, trim, ..Default::default() };
     let texts: Vec<String> = cands.iter().map(|c| c.text.clone()).collect();
@@ -261,7 +268,7 @@ mod tests {
                         if outside_seen.len() < 12 {
                             outside_seen.push(format!("{syl}{said}:{heard}"));
                         }
-                    } else if let Some(ps) = pitch_scores(&tones::pitch_track(&pcm), profile.voice().unwrap(), &cands) {
+                    } else if let Some(ps) = pitch_scores(&tones::pitch_track(&pcm), profile.voice().unwrap(), profile.typical_length(), &cands) {
                         let texts: Vec<String> = cands.iter().map(|c| c.text.clone()).collect();
                         let ws = crate::whisper::score(app, &model, &pcm, &crate::whisper::Options { chinese_only: true, trim, ..Default::default() }, &texts).unwrap();
                         for (k, w) in diag_weights.iter().enumerate() {
@@ -340,7 +347,7 @@ mod tests {
             for (pcm, frames, cands) in &clips {
                 let texts: Vec<String> = cands.iter().map(|c| c.text.clone()).collect();
                 let ws = crate::whisper::score(app, &model, pcm, &opts, &texts).unwrap();
-                let ps = pitch_scores(frames, voice, cands);
+                let ps = pitch_scores(frames, voice, Some(tones::TYPICAL_LENGTH), cands);
                 for (k, &w) in weights.iter().enumerate() {
                     let ok = choose(&ws, ps.as_deref(), w) == 0;
                     right[k] += ok as u32;

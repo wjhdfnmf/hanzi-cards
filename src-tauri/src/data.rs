@@ -237,8 +237,14 @@ pub fn use_file(conn: &mut Connection, app_data: &Path, source: &Path) -> AppRes
 
 /// Show the database file in the system's file manager.
 pub fn show_in_folder(path: &Path) -> AppResult<()> {
+    // Explorer only understands `/select,"C:\path with spaces\file"`: an ordinary argument
+    // gets quoted whole ("/select,C:\...") when the path has a space, and Explorer then
+    // ignores it and opens Documents instead. So pass it exactly as written.
     #[cfg(target_os = "windows")]
-    let r = std::process::Command::new("explorer").arg(format!("/select,{}", path.display())).spawn();
+    let r = {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("explorer").raw_arg(format!("/select,\"{}\"", path.display())).spawn()
+    };
     #[cfg(target_os = "macos")]
     let r = std::process::Command::new("open").arg("-R").arg(path).spawn();
     #[cfg(all(unix, not(target_os = "macos")))]

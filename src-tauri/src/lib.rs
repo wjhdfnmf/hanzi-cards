@@ -1,5 +1,6 @@
 mod ai;
 mod billing;
+mod calibration;
 mod cards;
 mod commands;
 mod data;
@@ -113,6 +114,11 @@ pub fn run() {
             commands::speech_listen,
             commands::speech_cancel,
             commands::speech_check_audio,
+            commands::pitch_profile_info,
+            commands::pitch_analyze,
+            commands::pitch_calibration_save,
+            commands::pitch_profile_reset,
+            commands::pitch_save_recording,
             commands::speech_check_english,
             commands::speech_transcribe,
             commands::speech_warmup,

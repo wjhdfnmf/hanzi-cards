@@ -8,7 +8,9 @@ src-tauri/gen/
 # Personal word lists and exports (not part of the app)
 imports/
 
-# Tone recordings from speakers (audio stays local)
+# Tone recordings from speakers and calibration recordings (audio stays local)
+*.wav
+calibration-recordings/
 tone-data/
 TonePerfectDataset/
 tts-samples/

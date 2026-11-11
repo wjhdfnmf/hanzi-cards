@@ -540,14 +540,14 @@
 
         <div class="front">
           {#if dir === "recognition"}
-            <Hanzi hanzi={c.hanzi} pinyin={c.pinyin} colored={revealed} size={c.hanzi.length > 4 ? 56 : 84} />
+            <Hanzi hanzi={c.hanzi} pinyin={c.pinyin} colored={revealed} define={revealed} size={c.hanzi.length > 4 ? 56 : 84} />
           {:else if dir === "recall"}
             <div class="meaning-q">{c.meaning || "—"}</div>
           {:else if isSpoken(dir)}
             {#if dir === "speaking"}
               <div class="meaning-q">{c.meaning || "—"}</div>
             {:else}
-              <Hanzi hanzi={c.hanzi} pinyin={c.pinyin} colored={revealed} size={c.hanzi.length > 4 ? 56 : 84} />
+              <Hanzi hanzi={c.hanzi} pinyin={c.pinyin} colored={revealed} define={revealed} size={c.hanzi.length > 4 ? 56 : 84} />
             {/if}
             {#if !revealed}
               <button
@@ -619,7 +619,7 @@
         {#if revealed}
           <div class="back">
             {#if dir !== "recognition" && dir !== "read_aloud" && dir !== "say_meaning"}
-              <Hanzi hanzi={c.hanzi} pinyin={c.pinyin} size={c.hanzi.length > 4 ? 48 : 72} />
+              <Hanzi hanzi={c.hanzi} pinyin={c.pinyin} define size={c.hanzi.length > 4 ? 48 : 72} />
             {/if}
             <div class="py-line">
               <span class="py-big"><Pinyin text={c.pinyin} /></span>

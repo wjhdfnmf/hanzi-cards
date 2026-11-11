@@ -173,6 +173,55 @@ To re-run: `python scripts/tone_perfect_prep.py TonePerfectDataset tone-data/tp`
 `TONES_DIR` on each `tone-data/tp/whisper/<speaker>-g<k>` folder. With the GPU build the test
 process can hang after printing its results; stop it then.
 
+## A learner's voice: calibration recordings (2026-11-10)
+
+Settings › Speech › *Calibrate tone detection* records a sentence and mā má mǎ mà. In debug
+mode only (development builds, or Settings › About › Debug mode) it keeps each recording in
+`<app data>/calibration-recordings` (the newest 40); otherwise nothing is saved. Check them with
+`CALIB_DIR=<folder> cargo test --lib calibration_recordings -- --ignored --nocapture` (the
+real tracker: pitch coverage, every break, the tone heard, advice) and
+`node scripts/live_pitch_check.ts <folder>` (the live trace's tracker in the page).
+
+What one learner's 36 recordings showed:
+
+- **Mains hum.** The raw microphone carried a steady 120 Hz (2 × 60 Hz) tone, a third of the
+  energy below 400 Hz in every pause. The tracker read it as pitch in pauses (the learner's
+  "middle" came out at 121 Hz: the hum) and lost the voice where they disagreed. Now
+  `tones::remove_hum` finds 50/60 Hz harmonics in the quietest half second and notches them
+  (3 Hz wide) before tracking; the live trace does the same with the quiet wait before
+  speaking. Tone Perfect: identical with and without (89.7%), so clean voices lose nothing.
+- **Browser noise suppression** chops a voice into pieces and flattens its pitch; calibration
+  records the raw microphone instead.
+- **Remaining gaps are real:** consonants, pauses, and creak (a low voice with no steady
+  pitch). Loosening YIN (`YIN_GLOBAL` 0.45 → 0.6) filled them but invented pitches: the
+  learner's tones fell from 11 to 5 of 13 right.
+- **Tone 4 vs tone 3.** The learner's 4th tones started at their middle (≈123 Hz in a
+  97-150 Hz range) and dropped into creak within 0.1 s, close to their 3rd tones (also mid,
+  then creak, but longer). Research: 4th tones start high and fall fast; the speed of the fall
+  and the onset height are the main cues; 3rd tones are the longest and 4th the shortest in
+  isolation (≈590 vs 450 ms); creak marks 3rd tones but also ends 4th tones.
+- **Fall/rise size** (`FALL_WEIGHT`, how far a syllable falls and rises whatever its timing)
+  helps on Tone Perfect: best at 1, 89.7% → 90.3% clean and 87.4% → 89.8% noisy, 4th tones
+  75% → 78% and 80% → 86%. Now on. On the learner it was a wash (coin-flip cases moved).
+- **A range anchored on the learner's own mā and mǎ** (tone 1's height = level 5, tone 3's
+  bottom = level 1) changed little on Tone Perfect (89.7% → 89.3%) and failed on the learner
+  (their tone 3's bottom is creak, with no pitch to anchor on). Not used.
+- **Advice instead of guessing:** calibration now says what to change, e.g. "Start higher:
+  tone 4 begins about where your tone 1 sits, around 165 Hz (yours began around 127 Hz)".
+- **Short 4th tones were thrown away:** calibration refused recordings with under 150 ms of
+  pitch ("too little voice"), but a 4th tone can have only 0.1 s of clear pitch before it
+  turns to creak. Now 50 ms (the 5 frames a shape needs).
+- **Syllable length** (`LENGTH_WEIGHT`, a said-alone syllable only): on Tone Perfect, against
+  each speaker's median, 4th tones are about 62% as long and 3rd tones 125% (ln ratios
+  -0.48 / +0.22; tones 1-2 about 1.0). Weight 16: all tones 90.3% → 91.8% clean, 89.8% →
+  90.5% noisy, 4th tones 78% → 81%. On the learner's 31 calibration words: 17 → 24 right,
+  4th tones 4 → 9 of 11, 3rd tones 6 → 8 of 10. The speaker's usual length is kept in the
+  pitch profile (from calibration and one-syllable answers; Tone Perfect's 58 frames until
+  three are in).
+  Next to try: noise removal for busy places
+  (RNNoise via the `nnnoiseless` crate, or a noise-robust pitch tracker such as CREPE),
+  measured on Tone Perfect with café noise mixed in.
+
 ## Recommendation
 
 1. **Build A + the sandhi rules now.** The pitch graph is useful on day one, needs no data, and

@@ -5,6 +5,7 @@
   import { getVersion } from "@tauri-apps/api/app";
   import { api, errorText, type AiSpending, type DataContents, type DataFile, type DataInfo, type DictStatus, type KeyStatus, type SpeechStatus, type WhisperDeviceInfo, type WhisperModel } from "../lib/api";
   import { recordUtterance } from "../lib/mic";
+  import PitchCalibration from "../components/PitchCalibration.svelte";
   import { showToast } from "../lib/toast.svelte";
   import { t } from "../lib/i18n.svelte";
   import { fmtNum } from "../lib/format";
@@ -507,6 +508,9 @@
         onchange={(e) => saveSetting("pitchTones", e.currentTarget.checked)}
       />
     </label>
+    <div class="row col">
+      <PitchCalibration />
+    </div>
     {#if speech?.whisperModels.length}
       <div class="row">
         <button class="btn" disabled={micState !== "idle"} onclick={micTest}>
@@ -682,6 +686,19 @@
   <h2>{t("settings.about")}</h2>
   <section class="group card-surface">
     <p class="muted">{t("settings.aboutText", { v: appVersion })}</p>
+    <label class="row">
+      <span>
+        {t("settings.debugMode")}
+        <small class="faint block">{import.meta.env.DEV ? t("settings.debugModeDev") : t("settings.debugModeHint")}</small>
+      </span>
+      <input
+        type="checkbox"
+        class="toggle"
+        checked={settings.debugMode || import.meta.env.DEV}
+        disabled={import.meta.env.DEV}
+        onchange={(e) => saveSetting("debugMode", e.currentTarget.checked)}
+      />
+    </label>
   </section>
 </div>
 
