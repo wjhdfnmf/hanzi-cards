@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { open, save, ask } from "@tauri-apps/plugin-dialog";
   import {
     api,
@@ -23,10 +23,111 @@
 
   let decks = $state<Deck[]>([]);
   let selectedDeck = $state<number | null>(null); // null = all cards
-  let cards = $state<CardRow[]>([]);
+  // raw: only ever replaced whole, so thousands of rows needn't each become a reactive proxy
+  let cards = $state.raw<CardRow[]>([]);
   let search = $state("");
   let checked = $state<number[]>([]);
+  const checkedSet = $derived(new Set(checked));
   let loading = $state(true);
+
+  // ---------- drawing a big deck a page at a time ----------
+  // Every row is a handful of components (tone-coloured hanzi and pinyin); drawing thousands at
+  // once is what made big decks slow to open. Draw the first page, then more as the list scrolls.
+  const PAGE = 150;
+  let limit = $state(PAGE);
+  /** Shows the next page when the end of the list scrolls near; re-arms after each page. */
+  function more(node: HTMLElement, _shown: number) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) limit += PAGE * 2;
+      },
+      { root: node.closest(".main"), rootMargin: "800px 0px" },
+    );
+    io.observe(node);
+    return {
+      // still in view after a page was added (a tall window): observing again reports it again
+      update() {
+        io.unobserve(node);
+        io.observe(node);
+      },
+      destroy: () => io.disconnect(),
+    };
+  }
+
+  // ---------- resizing: the deck list and the table's columns ----------
+  const SIDE_KEY = "decks.sideWidth";
+  const COLS_KEY = "decks.colWidths";
+  const SIDE_DEFAULT = 240;
+  type Col = SortKey; // every column but the checkboxes
+  // sized so every column fits a 1280px-wide window; drag for more
+  const COL_DEFAULT: Record<Col, number> = {
+    hanzi: 110,
+    pinyin: 110,
+    meaning: 100, // least width; it takes whatever room the others leave
+    deck: 120,
+    tags: 100,
+    status: 85,
+    next: 90,
+  };
+  const COL_MIN = 50;
+  function loadJson<T>(key: string, fallback: T): T {
+    try {
+      return { ...fallback, ...JSON.parse(localStorage.getItem(key) ?? "null") };
+    } catch {
+      return fallback;
+    }
+  }
+  let sideWidth = $state(loadJson(SIDE_KEY, { w: SIDE_DEFAULT }).w);
+  let colW = $state<Record<Col, number>>(loadJson(COLS_KEY, COL_DEFAULT));
+  const tableMin = $derived(
+    36 + (Object.keys(colW) as Col[]).reduce((s, k) => (k === "deck" && !showDeckColumn ? s : s + colW[k]), 0),
+  );
+  function persist() {
+    try {
+      localStorage.setItem(SIDE_KEY, JSON.stringify({ w: sideWidth }));
+      localStorage.setItem(COLS_KEY, JSON.stringify(colW));
+    } catch {
+      /* not essential */
+    }
+  }
+
+  /** Drag a handle sideways; `set` gets the start width plus how far the pointer has moved. */
+  function drag(e: PointerEvent, start: number, set: (w: number) => void) {
+    e.preventDefault();
+    e.stopPropagation();
+    const handle = e.currentTarget as HTMLElement;
+    const x0 = e.clientX;
+    handle.setPointerCapture(e.pointerId);
+    document.body.classList.add("col-resizing");
+    const move = (ev: PointerEvent) => set(start + ev.clientX - x0);
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      document.body.classList.remove("col-resizing");
+      persist();
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
+  }
+  function dragSide(e: PointerEvent) {
+    const max = Math.max(260, window.innerWidth * 0.6);
+    drag(e, sideWidth, (w) => (sideWidth = Math.round(Math.min(max, Math.max(160, w)))));
+  }
+  function dragCol(e: PointerEvent, key: Col) {
+    // start from the width on screen: the meaning column is often wider than its least width
+    const th = (e.currentTarget as HTMLElement).closest("th")!;
+    drag(e, th.getBoundingClientRect().width, (w) => (colW[key] = Math.round(Math.max(COL_MIN, w))));
+  }
+  function resetSide() {
+    sideWidth = SIDE_DEFAULT;
+    persist();
+  }
+  function resetCol(key: Col) {
+    colW[key] = COL_DEFAULT[key];
+    persist();
+  }
 
   // ---------- sorting by column (click a header: ascending, descending, off) ----------
   type SortKey = "hanzi" | "pinyin" | "meaning" | "deck" | "tags" | "status" | "next";
@@ -49,10 +150,16 @@
   const zh = new Intl.Collator("zh-CN"); // characters in pinyin order
   const text = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
   const STATUS_ORDER = { new: 0, learning: 1, review: 2 } as const;
-  /** Pinyin without tone marks, then by tone: ma1 < ma2 < ma3 < ma4. */
+  /** Pinyin without tone marks, then by tone: ma1 < ma2 < ma3 < ma4. Kept: a sort asks thousands of times. */
+  const pinyinKeys = new Map<string, { bare: string; tones: string }>();
   const pinyinKey = (p: string) => {
-    const syl = syllables(p.toLowerCase());
-    return { bare: stripTones(p.toLowerCase()).replace(/\s+/g, " ").trim(), tones: syl.map(toneOf).join("") };
+    let k = pinyinKeys.get(p);
+    if (!k) {
+      const syl = syllables(p.toLowerCase());
+      k = { bare: stripTones(p.toLowerCase()).replace(/\s+/g, " ").trim(), tones: syl.map(toneOf).join("") };
+      pinyinKeys.set(p, k);
+    }
+    return k;
   };
   const sortedCards = $derived.by(() => {
     if (!sort) return cards;
@@ -88,6 +195,7 @@
       return dir * cmp(a, b) || zh.compare(a.hanzi, b.hanzi);
     });
   });
+  const shownCards = $derived(sortedCards.length > limit ? sortedCards.slice(0, limit) : sortedCards);
 
   let editing = $state<{ card: Card | null } | null>(null);
   let deckForm = $state<{ id: number | null; name: string; description: string; parentId: number | null } | null>(
@@ -95,7 +203,7 @@
   );
 
   const deck = $derived(decks.find((d) => d.id === selectedDeck) ?? null);
-  const allChecked = $derived(cards.length > 0 && checked.length === cards.length);
+  const allChecked = $derived(cards.length > 0 && checkedSet.size === cards.length);
   const deckPath = $derived(new Map(decks.map((d) => [d.id, d.path])));
   // Show which deck each card is in when the list mixes decks.
   const showDeckColumn = $derived(selectedDeck === null || (deck?.childCount ?? 0) > 0);
@@ -142,31 +250,47 @@
 
   const indent = (d: Deck) => `${"  ".repeat(d.depth)}${d.name}`;
 
+  let ready = $state(false); // the first deck is chosen: don't load every card before that
   onMount(async () => {
     await loadDecks();
     if (decks.length) selectedDeck = decks[0].id;
+    ready = true;
   });
 
   async function loadDecks() {
     decks = await api.listDecks();
   }
 
-  async function loadCards() {
+  let request = 0;
+  /** `fresh`: a different deck or search, so start again from the first page. */
+  async function loadCards(fresh = false) {
+    const mine = ++request;
     loading = true;
     try {
-      cards = await api.listCards(selectedDeck, search);
-      checked = checked.filter((id) => cards.some((c) => c.id === id));
+      const rows = await api.listCards(selectedDeck, search);
+      if (mine !== request) return; // a newer deck or search was asked for meanwhile
+      cards = rows;
+      if (fresh) limit = PAGE;
+      const ids = new Set(rows.map((c) => c.id));
+      if (checked.some((id) => !ids.has(id))) checked = checked.filter((id) => ids.has(id));
     } finally {
-      loading = false;
+      if (mine === request) loading = false;
     }
   }
 
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastDeck: number | null | undefined;
   $effect(() => {
-    void selectedDeck;
+    const d = selectedDeck;
     void search;
+    if (!ready) return;
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(loadCards, 120);
+    if (d !== lastDeck) {
+      lastDeck = d; // a click on a deck: load straight away; typing waits for a pause
+      untrack(() => loadCards(true));
+    } else {
+      searchTimer = setTimeout(() => loadCards(true), 120);
+    }
   });
 
   async function refresh() {
@@ -198,9 +322,8 @@
     const ok = await ask(message, { title: t("decks.deleteDeck"), kind: "warning" });
     if (!ok) return;
     await api.deleteDeck(deck.id);
-    selectedDeck = null;
-    await refresh();
-    if (decks.length) selectedDeck = decks[0].id;
+    await loadDecks();
+    selectedDeck = decks.length ? decks[0].id : null; // changing deck loads its cards
   }
 
   async function removeChecked() {
@@ -335,11 +458,13 @@
     checked = allChecked ? [] : cards.map((c) => c.id);
   }
   function toggleOne(id: number) {
-    checked = checked.includes(id) ? checked.filter((x) => x !== id) : [...checked, id];
+    checked = checkedSet.has(id) ? checked.filter((x) => x !== id) : [...checked, id];
   }
 </script>
 
-<div class="layout">
+<div class="layout" style="--side:{sideWidth}px">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="side-handle" title={t("decks.resizeHint")} onpointerdown={dragSide} ondblclick={resetSide}></div>
   <aside class="decklist">
     <div class="dl-head">
       <h2>{t("decks.title")}</h2>
@@ -455,15 +580,34 @@
       </div>
     {:else}
       <div class="table card-surface">
-        <table>
+        <table style="min-width:{tableMin}px">
+          <colgroup>
+            <col style="width:36px" />
+            <col style="width:{colW.hanzi}px" />
+            <col style="width:{colW.pinyin}px" />
+            <col />
+            {#if showDeckColumn}<col style="width:{colW.deck}px" />{/if}
+            <col style="width:{colW.tags}px" />
+            <col style="width:{colW.status}px" />
+            <col style="width:{colW.next}px" />
+          </colgroup>
           <thead>
             <tr>
               <th class="cb"><input type="checkbox" checked={allChecked} onchange={toggleAll} aria-label="Select all" /></th>
               {#snippet head(key: SortKey, label: string, cls = "")}
                 <th class={cls} aria-sort={sort?.key === key ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
                   <button class="sorthead" class:on={sort?.key === key} onclick={() => sortBy(key)} title={t("decks.sortHint")}>
-                    {label}<span class="arrow" aria-hidden="true">{sort?.key === key ? (sort.dir === 1 ? "▲" : "▼") : "↕"}</span>
+                    <span class="label">{label}</span><span class="arrow" aria-hidden="true"
+                      >{sort?.key === key ? (sort.dir === 1 ? "▲" : "▼") : "↕"}</span
+                    >
                   </button>
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <span
+                    class="col-handle"
+                    title={t("decks.resizeHint")}
+                    onpointerdown={(e) => dragCol(e, key)}
+                    ondblclick={() => resetCol(key)}
+                  ></span>
                 </th>
               {/snippet}
               {@render head("hanzi", t("col.hanzi"))}
@@ -476,22 +620,29 @@
             </tr>
           </thead>
           <tbody>
-            {#each sortedCards as c (c.id)}
-              <tr onclick={() => (editing = { card: c })} class:checked={checked.includes(c.id)}>
+            {#each shownCards as c (c.id)}
+              <tr onclick={() => (editing = { card: c })} class:checked={checkedSet.has(c.id)}>
                 <td class="cb" onclick={(e) => e.stopPropagation()}>
-                  <input type="checkbox" checked={checked.includes(c.id)} onchange={() => toggleOne(c.id)} aria-label="Select" />
+                  <input type="checkbox" checked={checkedSet.has(c.id)} onchange={() => toggleOne(c.id)} aria-label="Select" />
                 </td>
-                <td class="hz"><Hanzi hanzi={c.hanzi} pinyin={c.pinyin} size={20} /></td>
-                <td><Pinyin text={c.pinyin} /></td>
-                <td class="wide meaning">{c.meaning}</td>
-                {#if showDeckColumn}<td class="small muted deckcol">{deckPath.get(c.deckId) ?? ""}</td>{/if}
-                <td>{#each c.tags as tg (tg)}<span class="chip">{tg}</span> {/each}</td>
-                <td><span class="badge {c.status}">{t(`status.${c.status}`)}</span></td>
-                <td class="small muted">{dueLabel(c.nextDue)}</td>
+                <td class="hz clip" title={c.hanzi}><Hanzi hanzi={c.hanzi} pinyin={c.pinyin} size={20} /></td>
+                <td class="clip" title={c.pinyin}><Pinyin text={c.pinyin} /></td>
+                <td class="wide clip" title={c.meaning}>{c.meaning}</td>
+                {#if showDeckColumn}<td class="small muted clip" title={deckPath.get(c.deckId) ?? ""}
+                    >{deckPath.get(c.deckId) ?? ""}</td
+                  >{/if}
+                <td class="clip" title={c.tags.join(", ")}>{#each c.tags as tg (tg)}<span class="chip">{tg}</span> {/each}</td>
+                <td class="clip"><span class="badge {c.status}">{t(`status.${c.status}`)}</span></td>
+                <td class="small muted clip">{dueLabel(c.nextDue)}</td>
               </tr>
             {/each}
           </tbody>
         </table>
+        {#if shownCards.length < sortedCards.length}
+          <div class="more small faint" use:more={shownCards.length}>
+            {t("decks.showing", { n: shownCards.length, total: sortedCards.length })}
+          </div>
+        {/if}
       </div>
     {/if}
   </section>
@@ -604,8 +755,27 @@
 <style>
   .layout {
     display: grid;
-    grid-template-columns: 240px 1fr;
+    grid-template-columns: var(--side) minmax(0, 1fr);
     height: 100%;
+    position: relative;
+  }
+  .side-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--side) - 4px);
+    width: 8px;
+    cursor: col-resize;
+    z-index: 5;
+    touch-action: none;
+  }
+  .side-handle:hover,
+  .side-handle:active {
+    background: linear-gradient(to right, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px);
+  }
+  :global(body.col-resizing) {
+    cursor: col-resize;
+    user-select: none;
   }
   .decklist {
     border-right: 1px solid var(--border);
@@ -703,11 +873,50 @@
     text-align: center;
   }
   .table {
-    overflow: hidden;
+    overflow-x: auto;
   }
   table {
     width: 100%;
     border-collapse: collapse;
+    /* widths come from the <col>s, so a column can be dragged and long rows don't reflow the table */
+    table-layout: fixed;
+  }
+  .clip {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  th {
+    position: relative;
+  }
+  .sorthead {
+    max-width: 100%;
+  }
+  .sorthead .label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .col-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -4px;
+    width: 8px;
+    cursor: col-resize;
+    z-index: 1;
+    touch-action: none;
+  }
+  .col-handle:hover,
+  .col-handle:active {
+    background: linear-gradient(to right, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px);
+  }
+  th:last-child .col-handle {
+    right: 0;
+  }
+  .more {
+    padding: 12px;
+    text-align: center;
   }
   .sorthead {
     display: inline-flex;
@@ -764,15 +973,6 @@
   }
   .cb input {
     accent-color: var(--accent);
-  }
-  .hz {
-    white-space: nowrap;
-  }
-  .meaning {
-    max-width: 320px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .menuwrap {
     position: relative;
@@ -863,9 +1063,6 @@
   }
   .crumbs {
     margin: 0 0 2px;
-  }
-  .deckcol {
-    white-space: nowrap;
   }
   .dupes {
     display: flex;

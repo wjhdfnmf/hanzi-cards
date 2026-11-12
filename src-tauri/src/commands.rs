@@ -148,8 +148,9 @@ pub fn delete_deck(state: State<AppState>, id: i64) -> AppResult<()> {
 // ---------- cards ----------
 
 #[tauri::command]
-pub fn list_cards(state: State<AppState>, deck_id: Option<i64>, search: Option<String>) -> AppResult<Vec<CardRow>> {
-    cards::list_cards(&lock(&state), deck_id, search.as_deref().unwrap_or(""))
+pub async fn list_cards(app: AppHandle, deck_id: Option<i64>, search: Option<String>) -> AppResult<Vec<CardRow>> {
+    // off the main thread: a big deck takes a moment to load, and the window shouldn't freeze meanwhile
+    blocking(app, move |conn| cards::list_cards(conn, deck_id, search.as_deref().unwrap_or(""))).await
 }
 
 #[tauri::command]
