@@ -2000,7 +2000,7 @@ dependencies = [
 
 [[package]]
 name = "hanzi-cards"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "candle-core",
  "candle-nn",
