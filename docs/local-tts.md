@@ -6,6 +6,67 @@ test once WSL is set up).
 Status: exploration + prototype measured 2026-11-09. **Result: not worth switching on
 Windows for card words; one cheap fix (stand-in characters) is worth adding.**
 
+**GPU voices, measured 2026-11-11 (GPU preferred, CPU as the backup):** the best GPU model
+is **Qwen3-TTS 0.6B CustomVoice** (Apache-2.0); the CPU backup stays **Kokoro** (ZipVoice is
+worse). None of the GPU models beat Yaoyao on isolated card words by Whisper's ear; Qwen3
+0.6B came closest (49 vs 52 of 60). Details below.
+
+## GPU-class voices (2026-11-11)
+
+Same 130 items, same judge (Whisper large-v3-turbo, Chinese only, no hints), but on the CPU
+build this time; Yaoyao re-scored the same as on the GPU (52 / 21 / 16 / 10), so the numbers
+compare directly with the 2026-11-09 table. Single words got a "。" for every neural model.
+The zero-shot models (IndexTTS, CosyVoice, ZipVoice) all cloned one reference: CosyVoice's
+bundled `zero_shot_prompt.wav` ("希望你以后能够做的比我还好呦。"). Qwen3 used its built-in
+speaker Vivian. One run per model, seed 0 where the model takes one.
+
+| Voice | Card words /60 | Tone sets /40 | Two readings /20 | Sentences /10 | Time per clip | Licence |
+|---|---|---|---|---|---|---|
+| Yaoyao (Windows, baseline) | **52** | **21** | **16** | 10 | instant | system |
+| **Qwen3-TTS 0.6B CustomVoice** (GPU) | **49** | 14 | 11 | 10 | ~6 s | Apache-2.0 |
+| IndexTTS-2.5 (GPU) | 42 | 15 | 12; **12 with `<行\|HANG2>` pinyin** | 10 | 7-12 s (35 s when VRAM was full) | bilibili licence: commercial use needs their OK |
+| Qwen3-TTS 1.7B CustomVoice (GPU) | 41 | 9 | 7 | 10 | ~6 s | Apache-2.0 |
+| Kokoro v1.1 int8 (CPU, 2026-11-09) | 41 | 7 | 6 | 9 | 0.6 s | Apache-2.0 |
+| Fun-CosyVoice3 0.5B (GPU) | 37 | 5 | 6; 9 with `[h][áng]` pinyin | 10 | 1.9 s per word | Apache-2.0 |
+| ZipVoice distill int8 (sherpa-onnx, CPU) | 27 | 4 | 3 | 10 | 0.9 s per word | Apache-2.0 |
+| ZipVoice, single words at speed 0.5 | 14 | 2 | 1 | 9 | — | |
+
+What stood out:
+- **Sentences are solved:** every GPU model got 10/10, so for the tutor the choice is about
+  naturalness and speed, which only listening can judge.
+- **Isolated words are the hard part** for every neural model: they are trained on
+  sentences and rush, swallow or mistone a lone syllable (妈麻马骂 especially). Whisper is
+  also a weak judge of single syllables, so the tone column is rough.
+- **Qwen3 sometimes doesn't stop:** 7 of 120 single-word clips (0.6B) and 6 of 120 (1.7B)
+  ran on for 5-41 s of babble after the word. A player would need a length cap (for example
+  0.6 s per character + 1 s) and a retry. The other models never did this.
+- **Pinyin control barely helped:** IndexTTS's `<字|PINYIN>` markup scored the same 12/20,
+  CosyVoice's `[h][áng]` hotfix syntax went from 6 to 9. Stand-in characters (above) did as
+  well with Yaoyao.
+- **ZipVoice clips are cut short:** 55 of 130 clips came out under 0.25 s; slowing single
+  words made it worse (babble). Not usable for cards; Kokoro stays the CPU voice.
+- **Speed:** all GPU models are far slower than real time on single words, so card audio
+  would be made once and cached. That's fine for decks, but too slow for a live tutor
+  except CosyVoice (~2 s).
+- **Costs of shipping a GPU voice:** these run on PyTorch (2-3 GB with CUDA) plus a 1.2-4 GB
+  model. sherpa-onnx doesn't support Qwen3-TTS (none found 2026-11-11), but there are
+  community ONNX exports (OpenVoiceOS `phoonnx-qwen3-tts` of the 0.6B CustomVoice model) and
+  NVIDIA's TensorRT-Edge-LLM export, so an ONNX Runtime path from Rust may be possible
+  (untested; one NVIDIA issue reports garbled output). Otherwise a Python sidecar.
+
+Caveats on timing: the GPU (RTX 3070, 8 GB) was shared the whole time: with each other
+while models downloaded and ran, with another session's Rust builds and Whisper, and, at the
+end, with another neural network program keeping the GPU at 100%. Times are upper bounds;
+IndexTTS dropped from ~35 s to 7-12 s per clip once it had the VRAM to itself.
+
+Listen: `tts-samples/6-qwen3-0.6b`, `7-qwen3-1.7b`, `8-indextts25`, `9-cosyvoice3`,
+`10-zipvoice-cpu` (the same 12 items as folders 1-5), `6-qwen3-0.6b/runaway` (a run-on
+clip), and `pinyin-*` (行 háng/xíng with pinyin markup).
+
+Next, if a GPU voice is wanted for cards: try the "carrier phrase" trick (say "这个字是X。"
+and cut the word out using the model's timing) and a second reference voice for the
+zero-shot models, since both could change the single-word numbers a lot.
+
 ## Prototype results (2026-11-09)
 
 Prototype: a small program on the official `sherpa-onnx` Rust crate (2.0.1, static libraries
