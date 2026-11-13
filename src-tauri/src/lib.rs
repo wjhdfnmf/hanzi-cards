@@ -213,6 +213,7 @@ pub fn run() {
             commands::ai_spending,
             commands::ai_spending_export,
             commands::get_stats,
+            commands::log_study_time,
             commands::dict_status,
             commands::dict_search,
             commands::dict_lookup,

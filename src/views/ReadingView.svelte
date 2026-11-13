@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { trackStudyTime } from "../lib/studyTime";
   import { open, ask, save } from "@tauri-apps/plugin-dialog";
   import { api, errorText, type Segment, type Story, type StoryFolder, type StoryInfo } from "../lib/api";
   import { t } from "../lib/i18n.svelte";
@@ -172,6 +173,9 @@
     return out;
   }
   let allCount = $state(0); // every story, for "All stories"
+
+  // time here counts as study time on the Statistics page
+  onMount(() => trackStudyTime("reading", 180_000));
 
   // ---------- loading ----------
   onMount(async () => {

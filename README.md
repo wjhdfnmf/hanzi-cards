@@ -27,7 +27,13 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
 - **HSK tags**: new cards are tagged with their HSK 3.0 level (2026 syllabus, with the 2021 lists filling gaps;
   combinations of list words get the highest level of their parts). The cards table sorts by any column
 - **Dictionary**: CC-CEDICT (~120k entries), searchable by characters, pinyin (with or without tones) or English; one click adds a word as a card. The card editor auto-fills pinyin and meaning from it
-- **Statistics**: reviews per day, retention, streaks, a 30-day forecast, card progress, an activity heatmap and the cards you forget most
+- **Statistics** for all decks or one, over the last week, month, quarter, year or all time. The
+  simple view has the headline figures (time studied, reviews, how much you remembered against your
+  target, new words, streak, what is due), a few sentences on what they mean, time or reviews over
+  time, card progress, an activity heatmap and a 30-day forecast. The advanced view adds progress by
+  HSK level and by deck, true retention for young and mature words, how you answered, when you study
+  (by hour and weekday), time by study direction, how long memories last and how hard words are, and
+  the words you forget most. Time on the Reading and AI Tutor pages is counted with flashcard time
 - **Tone colours** for characters and pinyin, OS text-to-speech for pronunciation
 - **Pleco flashcards** (`.xml`): import categories as (nested) decks (re-importing an updated file skips cards you
   already have; pinyin is checked against the dictionary, with Pleco's reading choosing between readings),

@@ -265,6 +265,21 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         tx.execute_batch("PRAGMA main.user_version = 11")?;
         tx.commit()?;
     }
+    if version < 12 {
+        // v12: time spent reading and with the tutor, a total for each day (the time spent
+        // answering flashcards is in review_log, answer by answer).
+        conn.execute_batch(
+            "BEGIN;
+             CREATE TABLE IF NOT EXISTS study_time (
+               day     INTEGER NOT NULL,
+               kind    TEXT NOT NULL,
+               seconds INTEGER NOT NULL DEFAULT 0,
+               PRIMARY KEY (day, kind)
+             );
+             PRAGMA main.user_version = 12;
+             COMMIT;",
+        )?;
+    }
     Ok(())
 }
 

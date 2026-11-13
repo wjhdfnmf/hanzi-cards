@@ -1016,7 +1016,7 @@ mod tests {
             decks.iter().filter(|d| d.depth == 0).map(|d| d.total_due).sum::<i64>(),
             decks.iter().filter(|d| d.depth == 0).map(|d| d.total_new).sum::<i64>()
         );
-        let stats = crate::stats::get_stats(&conn, 30).unwrap();
+        let stats = crate::stats::get_stats(&conn, &Default::default()).unwrap();
         println!("stats: cards {}, unstudied {}, learning {}, young {}, mature {}, due {}", stats.total_cards, stats.unstudied_cards, stats.learning, stats.young, stats.mature, stats.due_now);
         println!("card backups: {:?} + automatic {:?}", names(&dir, Kind::Cards), auto_names(&dir, Kind::Cards));
 

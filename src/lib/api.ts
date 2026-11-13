@@ -112,27 +112,91 @@ export interface DayStat {
   reviews: number;
   correct: number;
   newCards: number;
+  /** Answering flashcards. */
   timeMs: number;
+  readingMs: number;
+  tutorMs: number;
+}
+
+/** What the Statistics page is looking at. */
+export interface StatsFilter {
+  /** A deck with its subdecks; null = everything. */
+  deckId: number | null;
+  /** The last N days including today; null = all time. */
+  days: number | null;
+  direction: Direction | null;
+}
+
+/** Totals over a stretch of days. */
+export interface StatSum {
+  reviews: number;
+  correct: number;
+  newWords: number;
+  timeMs: number;
+  readingMs: number;
+  tutorMs: number;
+  daysStudied: number;
+  /** True retention: reviews of words already learned (the first of each day), and how many were remembered. */
+  retained: number;
+  retentionOf: number;
 }
 
 export interface Stats {
   totalCards: number;
+  totalWords: number;
+  /** Words never studied. */
   unstudiedCards: number;
   learning: number;
   young: number;
   mature: number;
   dueNow: number;
-  totalReviews: number;
-  totalTimeMs: number;
-  todayReviews: number;
-  todayCorrect: number;
-  todayTimeMs: number;
-  retention: number | null;
+  dueTomorrow: number;
+  leeches: number;
   streak: number;
   bestStreak: number;
+  targetRetention: number;
+  today: StatSum;
+  period: StatSum;
+  /** The stretch of the same length before the period (null for all time). */
+  previous: StatSum | null;
+  allTime: StatSum;
+  periodDays: number | null;
+  /** One entry per day, oldest first: at least the last 371 days, and the whole period. */
   days: DayStat[];
+  retentionTable: {
+    range: "today" | "yesterday" | "week" | "month" | "year" | "all";
+    /** [remembered, reviews] */
+    young: [number, number];
+    mature: [number, number];
+  }[];
+  /** Again, Hard, Good, Easy for words being learned, young words and mature words. */
+  buttons: [number, number, number, number][];
+  kindTimeMs: number[];
+  hours: { reviews: number; correct: number }[];
+  /** Monday first. */
+  weekdays: { reviews: number; correct: number }[];
+  byDirection: { direction: Direction; reviews: number; correct: number; timeMs: number }[];
+  byDeck: {
+    deckId: number;
+    name: string;
+    words: number;
+    studied: number;
+    mature: number;
+    reviews: number;
+    correct: number;
+    timeMs: number;
+  }[];
+  hsk: { level: string; words: number; studied: number; mature: number }[];
+  stability: number[];
+  difficulty: number[];
+  avgRetrievability: number | null;
+  knownEstimate: number;
+  studiedItems: number;
+  dailyLoad: number;
   forecast: number[];
   hardest: { cardId: number; hanzi: string; pinyin: string; meaning: string; direction: Direction; lapses: number }[];
+  /** Reading and tutor time are in the totals (not when a deck or direction is chosen). */
+  otherTimeIncluded: boolean;
 }
 
 export interface DictEntry {
@@ -628,7 +692,9 @@ export const api = {
     invoke<IntervalPreview[]>("preview_intervals", { cardId, direction }),
   answerCard: (cardId: number, direction: Direction, rating: number, durationMs: number) =>
     invoke<AnswerResult>("answer_card", { cardId, direction, rating, durationMs }),
-  getStats: (days: number) => invoke<Stats>("get_stats", { days }),
+  getStats: (filter: StatsFilter) => invoke<Stats>("get_stats", { filter }),
+  /** Time spent on the Reading or AI Tutor page, reported a little at a time. */
+  logStudyTime: (kind: "reading" | "tutor", seconds: number) => invoke<void>("log_study_time", { kind, seconds }),
 
   dataInfo: (kind: DbKind) => invoke<DataInfo>("data_info", { kind }),
   /** Returns the backup's file name. */

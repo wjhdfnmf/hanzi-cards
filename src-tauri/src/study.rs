@@ -731,13 +731,13 @@ mod tests {
         assert_eq!((of(class).due_count, of(class).total_due, of(class).total_cards), (1, 1, 2), "Class and Class 9 hold the same word");
         assert_eq!((of(lesson).due_count, of(extra).due_count), (1, 1));
         assert_eq!(of(extra).new_count, 0);
-        let stats = crate::stats::get_stats(&conn, 30).unwrap();
+        let stats = crate::stats::get_stats(&conn, &Default::default()).unwrap();
         assert_eq!(stats.due_now, 1, "one word in one direction, whatever its number of copies");
         assert_eq!(stats.forecast[0], 1);
         // a second direction of the same word is a second thing to study
         answer(&mut conn, b, "recall", 1, 1000).unwrap();
         conn.execute("UPDATE progress SET due = 0", []).unwrap();
-        assert_eq!(crate::stats::get_stats(&conn, 30).unwrap().due_now, 2);
+        assert_eq!(crate::stats::get_stats(&conn, &Default::default()).unwrap().due_now, 2);
         assert_eq!(crate::decks::list_decks(&conn).unwrap().iter().find(|d| d.id == class).unwrap().total_due, 2);
     }
 }

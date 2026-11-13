@@ -1,6 +1,7 @@
 <script lang="ts">
   // AI conversation tutor: a spoken role-play with Claude built around the learner's words.
   import { onMount, onDestroy, tick } from "svelte";
+  import { trackStudyTime } from "../lib/studyTime";
   import { listen } from "@tauri-apps/api/event";
   import {
     api,
@@ -139,6 +140,9 @@
       keySet = false;
     }
   }
+
+  // time here counts as study time on the Statistics page (listening and speaking need no clicks)
+  onMount(() => trackStudyTime("tutor", 300_000));
 
   onMount(() => {
     let unlisten: (() => void) | undefined;

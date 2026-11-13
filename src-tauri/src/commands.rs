@@ -459,8 +459,14 @@ pub fn answer_card(
 }
 
 #[tauri::command]
-pub async fn get_stats(app: AppHandle, days: i64) -> AppResult<Stats> {
-    blocking(app, move |conn| stats::get_stats(conn, days)).await
+pub async fn get_stats(app: AppHandle, filter: Option<stats::StatsFilter>) -> AppResult<Stats> {
+    blocking(app, move |conn| stats::get_stats(conn, &filter.unwrap_or_default())).await
+}
+
+/// The Reading and AI Tutor pages report the time spent on them, a little at a time.
+#[tauri::command]
+pub fn log_study_time(state: State<AppState>, kind: String, seconds: i64) -> AppResult<()> {
+    stats::log_time(&lock(&state), &kind, seconds)
 }
 
 // ---------- speaking ----------
