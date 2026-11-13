@@ -3,6 +3,8 @@
 #   Actions > macOS build > Run workflow
 #     with no tag:   builds the chosen branch; the disk images are kept as downloads of the run
 #     with a tag:    builds that release's code and adds the disk images to the release
+#     "ref" builds something other than the tag (a release tagged before the macOS settings
+#     were in the code is built from a later commit of the same version)
 #
 # The app is ad-hoc signed (tauri.conf.json > bundle > macOS > signingIdentity "-") unless the
 # repository has Apple signing secrets: see docs/building-for-mac.md.
@@ -14,8 +16,9 @@ on:
       tag:
         description: "Release tag to build and upload to (for example v0.4.0); empty = just build"
         required: false
-  push:
-    branches: [mac-build]
+      ref:
+        description: "What to build, if not the tag (a branch, tag or commit)"
+        required: false
 
 permissions:
   contents: write
@@ -32,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.ref || inputs.tag || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
