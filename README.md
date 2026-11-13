@@ -177,6 +177,13 @@ remove the warning for a brand-new publisher on day one (Microsoft's
 [SmartScreen notes](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)).
 Only the Microsoft Store avoids the warning entirely.
 
+### macOS
+
+`.github/workflows/macos.yml` builds disk images for Apple Silicon and Intel on GitHub (Actions ›
+macOS build › Run workflow, with a release's tag to add them to that release). They are ad-hoc
+signed: on first open, macOS asks for **Open Anyway** in System Settings › Privacy & Security.
+The Mac build has not been tested on a Mac yet; see [docs/building-for-mac.md](docs/building-for-mac.md).
+
 ### Linux packages
 
 ```bash

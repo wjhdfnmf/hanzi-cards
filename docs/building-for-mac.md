@@ -1,8 +1,14 @@
 # Building Hanzi Cards for macOS
 
-Written 2026-11-12, against version 0.3.1 of the code. Nothing here has been built or run on a
-Mac yet: it is a plan made from the code, Tauri's documentation and GitHub's. Each place that
-needs a real Mac to confirm says so.
+Written 2026-11-12; updated 2026-11-13 after the first builds.
+
+**Where it stands:** the build works. `.github/workflows/macos.yml` builds the app for Apple
+Silicon and Intel on GitHub (about 10 minutes), ad-hoc signed, and the 0.3.1 release has both
+disk images. **Nobody has run the app on a Mac yet**: the test list below is the next step,
+and everything in "What will behave differently" is still a prediction.
+
+For a release: Actions › macOS build › Run workflow, with the release's tag. (0.3.1 was tagged
+before the macOS settings were in the code, so its images were built with `ref` set to `main`.)
 
 ## Recommendation
 
