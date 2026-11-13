@@ -2,7 +2,12 @@
 
 A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows, macOS and Linux.
 
-![Studying a card in the Sakura theme: the characters coloured by tone, pinyin, meaning and the four answer buttons](docs/images/study.png)
+<p>
+  <img src="docs/images/study-sakura.png" width="49%" alt="A card's answer in the Sakura theme: characters coloured by tone, pinyin, meaning and the four answer buttons">
+  <img src="docs/images/study-ink.png" width="49%" alt="The same in the Ink &amp; paper theme">
+  <img src="docs/images/study-lantern.png" width="49%" alt="A card's question in the Lantern theme">
+  <img src="docs/images/study-moon.png" width="49%" alt="A card's answer in the Moon Night theme">
+</p>
 
 ![The Statistics page: what the figures mean in a few sentences, headline numbers, and time studied by day](docs/images/statistics.png)
 
