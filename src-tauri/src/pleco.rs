@@ -29,7 +29,7 @@ pub struct PlecoCard {
 // ---------- reading ----------
 
 pub fn read_file(path: &Path) -> AppResult<Vec<PlecoCard>> {
-    let bytes = std::fs::read(path)?;
+    let bytes = crate::input::read_file(path, crate::input::MAX_XML_FILE)?;
     let text = String::from_utf8(bytes).map_err(|_| AppError::msg("The Pleco file is not UTF-8 text."))?;
     parse(&text)
 }
@@ -375,7 +375,7 @@ fn targets(conn: &Connection, card: &PlecoCard, default_deck: Option<i64>) -> Ap
 
 fn usable(card: &PlecoCard) -> bool {
     let h = card.hanzi.trim();
-    !h.is_empty() && pinyin::has_hanzi(h)
+    !h.is_empty() && pinyin::has_hanzi(h) && h.chars().count() <= crate::input::MAX_HANZI && !h.chars().any(char::is_control)
 }
 
 pub fn preview(conn: &Connection, cards: &[PlecoCard], default_deck: Option<i64>) -> AppResult<PlecoPreview> {
@@ -450,8 +450,8 @@ pub fn import(conn: &mut Connection, cards: &[PlecoCard], opts: &ImportOptions) 
         let alts: Vec<String> =
             card.pron.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
         let pleco_pinyin = alts.first().map(|a| pron_to_marks(a)).unwrap_or_default();
-        let mut pinyin_text = pleco_pinyin.clone();
-        let mut meaning = clean_definition(&card.defn);
+        let mut pinyin_text = crate::input::clip(&crate::input::clean(&pleco_pinyin, false), crate::input::MAX_PINYIN);
+        let mut meaning = crate::input::clip(&crate::input::clean(&clean_definition(&card.defn), true), crate::input::MAX_MEANING);
         if use_dict {
             if let Some(p) = dictionary_pinyin(&tx, hanzi, &alts)? {
                 if !pleco_pinyin.is_empty() && compact(&p) != compact(&pleco_pinyin) {
@@ -486,6 +486,9 @@ pub fn import(conn: &mut Connection, cards: &[PlecoCard], opts: &ImportOptions) 
         }
     }
     result.decks = used_decks.len() as i64;
+    if result.imported > 0 {
+        crate::study::share_progress(&tx, None)?; // words already studied in other decks
+    }
     tx.commit()?;
     Ok(result)
 }
@@ -726,7 +729,7 @@ mod tests {
     }
 
     /// Dry run on a real export, in memory:
-    /// PLECO_FILE=flash.xml [PLECO_DICT_DB=hanzi-cards.db] cargo test -- --ignored real_file --nocapture
+    /// PLECO_FILE=flash.xml [PLECO_DICT_DB=<a copy of dictionary.db>] cargo test -- --ignored real_file --nocapture
     #[test]
     #[ignore]
     fn real_file() {

@@ -17,6 +17,93 @@ use std::sync::OnceLock;
 pub const CEDICT_URL: &str =
     "https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz";
 
+// ---------- the dictionary's own file ----------
+//
+// The dictionary lives in `dictionary.db`, next to the cards database, and is attached to the
+// cards connection as `dict`, so every query here names plain `dictionary` and can still look
+// at the cards (is this word already a card?). An import writes it through a connection of
+// its own (`open`). It holds nothing of the learner's: if the file is ever damaged it is
+// simply thrown away and made again from the copy that ships with the app.
+
+pub const DB_FILE: &str = "dictionary.db";
+
+/// `{s}` is the schema prefix: "dict." when attached, "" on the file's own connection.
+const SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS {s}dictionary (
+    id              INTEGER PRIMARY KEY,
+    traditional     TEXT NOT NULL,
+    simplified      TEXT NOT NULL,
+    pinyin_num      TEXT NOT NULL,
+    pinyin          TEXT NOT NULL,
+    pinyin_key      TEXT NOT NULL,
+    pinyin_key_tone TEXT NOT NULL,
+    definitions     TEXT NOT NULL,
+    score           INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS {s}idx_dict_simp ON dictionary(simplified);
+CREATE INDEX IF NOT EXISTS {s}idx_dict_trad ON dictionary(traditional);
+CREATE INDEX IF NOT EXISTS {s}idx_dict_pkey ON dictionary(pinyin_key, score);
+CREATE INDEX IF NOT EXISTS {s}idx_dict_pkey_tone ON dictionary(pinyin_key_tone);
+CREATE TABLE IF NOT EXISTS {s}dictionary_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+";
+
+/// Whether an error means the file itself is bad (as opposed to busy, or missing rights).
+fn is_damage(e: &rusqlite::Error) -> bool {
+    matches!(e.sqlite_error_code(), Some(rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase))
+}
+
+/// Attach the dictionary file (`None` = an empty one in memory, for tests) to the cards
+/// connection as `dict`. A damaged file is replaced by an empty one, which the app then
+/// fills again from its own copy of CC-CEDICT.
+pub fn attach(conn: &Connection, path: Option<&std::path::Path>) -> rusqlite::Result<()> {
+    let try_attach = || -> rusqlite::Result<()> {
+        let target = path.map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| ":memory:".into());
+        conn.execute("ATTACH DATABASE ?1 AS dict", [target])?;
+        let ready = (|| -> rusqlite::Result<()> {
+            if path.is_some() {
+                // write-ahead mode here: the app goes on reading while an import writes
+                conn.query_row("PRAGMA dict.journal_mode=WAL", [], |_| Ok(()))?;
+                // (and the log doesn't stay the size of an import once it has been merged)
+                conn.query_row("PRAGMA dict.journal_size_limit=1048576", [], |_| Ok(()))?;
+                let sound: String = conn.query_row("PRAGMA dict.quick_check(1)", [], |r| r.get(0))?;
+                if sound != "ok" {
+                    return Err(rusqlite::Error::SqliteFailure(
+                        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CORRUPT),
+                        Some(sound),
+                    ));
+                }
+            }
+            conn.execute_batch(&SCHEMA.replace("{s}", "dict."))
+        })();
+        if ready.is_err() {
+            let _ = conn.execute_batch("DETACH DATABASE dict");
+        }
+        ready
+    };
+    match (try_attach(), path) {
+        (Err(e), Some(p)) if is_damage(&e) => {
+            eprintln!("dictionary file damaged ({e}): starting it again");
+            for ext in ["", "-wal", "-shm"] {
+                let _ = std::fs::remove_file(format!("{}{ext}", p.display()));
+            }
+            try_attach()
+        }
+        (result, _) => result,
+    }
+}
+
+/// The dictionary file on a connection of its own, for an import.
+pub fn open(path: &std::path::Path) -> rusqlite::Result<Connection> {
+    let conn = Connection::open(path)?;
+    conn.busy_timeout(db::BUSY_WAIT)?;
+    conn.query_row("PRAGMA journal_mode=WAL", [], |_| Ok(()))?;
+    conn.execute_batch(&SCHEMA.replace("{s}", ""))?;
+    Ok(conn)
+}
+
 #[derive(Debug, PartialEq)]
 pub struct ParsedEntry {
     pub traditional: String,
@@ -89,7 +176,11 @@ pub fn import(conn: &mut Connection, text: &str) -> AppResult<i64> {
         ));
     }
     compute_scores(&tx)?;
-    db::set_setting(&tx, "dict_imported_at", &now().to_string())?;
+    tx.execute(
+        "INSERT INTO dictionary_meta (key, value) VALUES ('imported_at', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        [now().to_string()],
+    )?;
     tx.commit()?;
     Ok(n)
 }
@@ -230,14 +321,17 @@ pub fn compute_scores(conn: &Connection) -> rusqlite::Result<()> {
 
 /// Read a CC-CEDICT file from disk (plain text or .gz).
 pub fn read_file(path: &std::path::Path) -> AppResult<String> {
-    let bytes = std::fs::read(path)?;
-    decode(bytes)
+    decode(crate::input::read_file(path, crate::input::MAX_DICTIONARY)?)
 }
 
 fn decode(bytes: Vec<u8>) -> AppResult<String> {
     if bytes.starts_with(&[0x1f, 0x8b]) {
+        // (a small file can unpack to an enormous one: stop at the limit)
         let mut s = String::new();
-        GzDecoder::new(&bytes[..]).read_to_string(&mut s)?;
+        GzDecoder::new(&bytes[..]).take(crate::input::MAX_DICTIONARY + 1).read_to_string(&mut s)?;
+        if s.len() as u64 > crate::input::MAX_DICTIONARY {
+            return Err(AppError::msg("That file is too large to be a CC-CEDICT dictionary."));
+        }
         Ok(s)
     } else {
         String::from_utf8(bytes).map_err(|_| AppError::msg("Dictionary file is not UTF-8 text"))
@@ -246,7 +340,7 @@ fn decode(bytes: Vec<u8>) -> AppResult<String> {
 
 /// Download the latest CC-CEDICT release from MDBG.
 pub fn download() -> AppResult<String> {
-    let resp = ureq::get(CEDICT_URL)
+    let resp = crate::net::get(CEDICT_URL)
         .call()
         .map_err(|e| AppError::msg(format!("Download failed: {e}")))?;
     let mut bytes = Vec::new();
@@ -258,7 +352,10 @@ pub fn download() -> AppResult<String> {
 
 pub fn status(conn: &Connection) -> AppResult<DictStatus> {
     let entries = conn.query_row("SELECT COUNT(*) FROM dictionary", [], |r| r.get(0))?;
-    let imported_at = db::get_setting(conn, "dict_imported_at")?.and_then(|v| v.parse().ok());
+    let imported_at = conn
+        .query_row("SELECT value FROM dictionary_meta WHERE key = 'imported_at'", [], |r| r.get::<_, String>(0))
+        .optional()?
+        .and_then(|v| v.parse().ok());
     Ok(DictStatus {
         entries,
         imported_at,
@@ -287,25 +384,28 @@ fn entry_from_row(r: &rusqlite::Row) -> rusqlite::Result<DictEntry> {
 
 /// Search by characters, pinyin (with or without tone numbers) or English.
 pub fn search(conn: &Connection, query: &str, limit: i64) -> AppResult<Vec<DictEntry>> {
-    let q = query.trim();
+    let q = crate::input::clip(query.trim(), crate::input::MAX_QUERY);
+    let q = q.as_str();
     if q.is_empty() {
         return Ok(vec![]);
     }
     let limit = limit.clamp(1, 200);
+    // typed text inside LIKE patterns matches itself (% and _ are not wildcards there)
+    let like = crate::input::like_escape(q);
 
     if pinyin::has_hanzi(q) {
         let sql = format!(
             "SELECT {ENTRY_COLS},
                CASE WHEN d.simplified = ?1 OR d.traditional = ?1 THEN 0
-                    WHEN d.simplified LIKE ?1 || '%' OR d.traditional LIKE ?1 || '%' THEN 1
+                    WHEN d.simplified LIKE ?3 || '%' ESCAPE '\\' OR d.traditional LIKE ?3 || '%' ESCAPE '\\' THEN 1
                     ELSE 2 END AS rank
              FROM dictionary d
-             WHERE d.simplified LIKE '%' || ?1 || '%' OR d.traditional LIKE '%' || ?1 || '%'
+             WHERE d.simplified LIKE '%' || ?3 || '%' ESCAPE '\\' OR d.traditional LIKE '%' || ?3 || '%' ESCAPE '\\'
              ORDER BY rank, d.score DESC, length(d.simplified), d.id
              LIMIT ?2"
         );
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map(params![q, limit], entry_from_row)?;
+        let rows = stmt.query_map(params![q, limit, like], entry_from_row)?;
         return Ok(rows.collect::<Result<_, _>>()?);
     }
 
@@ -316,21 +416,21 @@ pub fn search(conn: &Connection, query: &str, limit: i64) -> AppResult<Vec<DictE
         pinyin::toneless_key(q)
     };
     let pcol = if has_digits { "pinyin_key_tone" } else { "pinyin_key" };
-    let english = q.to_lowercase();
+    let english = like.to_lowercase();
     // Short pinyin prefixes ("a", "s") match half the dictionary; only use exact match then.
     let allow_prefix = pkey.len() >= 2;
 
     let sql = format!(
         "SELECT {ENTRY_COLS},
            CASE WHEN ?1 <> '' AND d.{pcol} = ?1 THEN 0
-                WHEN d.definitions LIKE '%/' || ?2 || '/%' OR d.definitions LIKE '%/to ' || ?2 || '/%' THEN 1
+                WHEN d.definitions LIKE '%/' || ?2 || '/%' ESCAPE '\\' OR d.definitions LIKE '%/to ' || ?2 || '/%' ESCAPE '\\' THEN 1
                 WHEN ?3 AND ?1 <> '' AND d.{pcol} LIKE ?1 || '%' THEN 2
                 WHEN (' ' || replace(replace(replace(replace(d.definitions, '/', ' '), ',', ' '), ';', ' '), '(', ' ') || ' ')
-                     LIKE '% ' || ?2 || ' %' THEN 3
+                     LIKE '% ' || ?2 || ' %' ESCAPE '\\' THEN 3
                 ELSE 4 END AS rank
          FROM dictionary d
          WHERE (?1 <> '' AND (d.{pcol} = ?1 OR (?3 AND d.{pcol} LIKE ?1 || '%')))
-            OR d.definitions LIKE '%' || ?2 || '%'
+            OR d.definitions LIKE '%' || ?2 || '%' ESCAPE '\\'
          ORDER BY rank, d.score DESC, length(d.simplified), d.id
          LIMIT ?4"
     );
@@ -346,7 +446,8 @@ pub fn lookup(conn: &Connection, hanzi: &str) -> AppResult<Vec<DictEntry>> {
          WHERE d.simplified = ?1 OR d.traditional = ?1
          ORDER BY (d.simplified = ?1) DESC, d.score DESC, d.id"
     );
-    let mut stmt = conn.prepare(&sql)?;
+    // kept ready: imports and the card editor look words up one after another
+    let mut stmt = conn.prepare_cached(&sql)?;
     let rows = stmt.query_map([hanzi.trim()], entry_from_row)?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
@@ -604,14 +705,14 @@ pub fn candidates(conn: &Connection, query: &str, limit: usize) -> AppResult<Vec
     Ok(out)
 }
 
-fn best_entry(conn: &Connection, word: &str, prefer_sql: &str) -> AppResult<Option<DictEntry>> {
-    let sql = format!(
+/// The statement `segment` runs for every word it tries (a story is thousands of them).
+fn best_entry_sql(prefer_sql: &str) -> String {
+    format!(
         "SELECT {ENTRY_COLS} FROM dictionary d
          WHERE d.simplified = ?1 OR d.traditional = ?1
          ORDER BY d.id IN ({prefer_sql}) DESC, (d.simplified = ?1) DESC, d.score DESC
          LIMIT 1"
-    );
-    Ok(conn.query_row(&sql, [word], entry_from_row).optional()?)
+    )
 }
 
 /// Split characters into dictionary words, longest match first ("我爱你们" -> 我 / 爱 / 你们).
@@ -622,6 +723,8 @@ pub fn segment(conn: &Connection, text: &str, prefer: &[i64]) -> AppResult<Vec<S
     } else {
         prefer.iter().map(i64::to_string).collect::<Vec<_>>().join(",")
     };
+    // prepared once, not once per word
+    let mut best_entry = conn.prepare(&best_entry_sql(&prefer_sql))?;
     let chars: Vec<char> = text.chars().collect();
     let mut out: Vec<Segment> = Vec::new();
     let mut i = 0;
@@ -638,7 +741,7 @@ pub fn segment(conn: &Connection, text: &str, prefer: &[i64]) -> AppResult<Vec<S
         let mut matched = false;
         for len in (1..=run.min(8)).rev() {
             let word: String = chars[i..i + len].iter().collect();
-            if let Some(entry) = best_entry(conn, &word, &prefer_sql)? {
+            if let Some(entry) = best_entry.query_row([&word], entry_from_row).optional()? {
                 out.push(Segment { text: word, entry: Some(entry) });
                 i += len;
                 matched = true;
@@ -704,6 +807,103 @@ mod tests {
         assert!(r[0].in_cards, "seed deck contains 你好");
 
         assert_eq!(lookup(&conn, "學習").unwrap()[0].simplified, "学习");
+
+        // typed text is matched as it is: % and _ are not wildcards
+        assert!(search(&conn, "%", 10).unwrap().is_empty());
+        assert!(search(&conn, "_", 10).unwrap().is_empty());
+        assert!(search(&conn, "传%", 10).unwrap().is_empty());
+        assert_eq!(search(&conn, "People's Republic", 10).unwrap()[0].simplified, "北京");
+    }
+
+    /// The dictionary is a file of its own. An import writes it through a second connection,
+    /// so nothing else waits: the app's connection keeps reading (the old contents) and still
+    /// writes cards meanwhile, and sees the new dictionary once it is complete.
+    #[test]
+    fn the_dictionary_has_its_own_file_and_import_connection() {
+        let dir = std::env::temp_dir().join(format!("hanzi-dict-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let main = crate::db::open(&dir.join("cards.db")).unwrap();
+        let dict_path = dir.join(DB_FILE);
+        assert!(dict_path.exists(), "made next to the cards database");
+        let in_cards_file: bool = main
+            .query_row("SELECT EXISTS(SELECT 1 FROM main.sqlite_schema WHERE name = 'dictionary')", [], |r| r.get(0))
+            .unwrap();
+        assert!(!in_cards_file, "no dictionary table in the cards file");
+
+        let mut side = open(&dict_path).unwrap();
+        {
+            // an import, held open before it commits
+            let tx = side.transaction().unwrap();
+            tx.execute("INSERT INTO dictionary (traditional, simplified, pinyin_num, pinyin, pinyin_key, pinyin_key_tone, definitions) VALUES ('x', 'x', 'x', 'x', 'x', 'x', '/x/')", []).unwrap();
+            assert_eq!(status(&main).unwrap().entries, 0, "readable meanwhile, still the old contents");
+            crate::db::set_setting(&main, "language", "zh").unwrap(); // and the cards file is free to write
+        }
+        assert_eq!(import(&mut side, SAMPLE).unwrap(), 7);
+        drop(side);
+        let st = status(&main).unwrap();
+        assert_eq!(st.entries, 7);
+        assert!(st.imported_at.is_some());
+        let r = search(&main, "ni hao", 10).unwrap();
+        assert!(r[0].in_cards, "dictionary results still know the cards");
+        drop(main);
+
+        // a damaged dictionary file is thrown away and started again; the cards are untouched
+        let cards_before = std::fs::read(dir.join("cards.db")).unwrap();
+        let mut bytes = std::fs::read(&dict_path).unwrap();
+        for b in &mut bytes[4096..] {
+            *b = 0xAB;
+        }
+        std::fs::write(&dict_path, bytes).unwrap();
+        let main = crate::db::open(&dir.join("cards.db")).unwrap();
+        assert_eq!(status(&main).unwrap().entries, 0, "empty again, to be re-imported");
+        assert_eq!(crate::decks::list_decks(&main).unwrap().len(), 1);
+        drop(main);
+        assert_eq!(std::fs::read(dir.join("cards.db")).unwrap().len(), cards_before.len());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A cards database from before the dictionary had its own file: the entries move over.
+    #[test]
+    fn moves_the_dictionary_out_of_an_older_cards_database() {
+        let dir = std::env::temp_dir().join(format!("hanzi-dict-old-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("cards.db");
+        {
+            // as version 9 left it: the table in the cards file, in write-ahead mode
+            let old = Connection::open(&path).unwrap();
+            old.execute_batch(
+                "PRAGMA journal_mode=WAL;
+                 CREATE TABLE decks (id INTEGER PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, parent_id INTEGER);
+                 CREATE TABLE cards (id INTEGER PRIMARY KEY, deck_id INTEGER NOT NULL, hanzi TEXT NOT NULL, pinyin TEXT NOT NULL DEFAULT '', meaning TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+                 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 CREATE TABLE progress (card_id INTEGER NOT NULL, direction TEXT NOT NULL, state INTEGER NOT NULL, stability REAL NOT NULL, difficulty REAL NOT NULL, due INTEGER NOT NULL, last_review INTEGER NOT NULL, reps INTEGER NOT NULL, lapses INTEGER NOT NULL, step INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (card_id, direction));
+                 CREATE TABLE dictionary (id INTEGER PRIMARY KEY, traditional TEXT NOT NULL, simplified TEXT NOT NULL, pinyin_num TEXT NOT NULL, pinyin TEXT NOT NULL, pinyin_key TEXT NOT NULL, pinyin_key_tone TEXT NOT NULL, definitions TEXT NOT NULL, score INTEGER NOT NULL DEFAULT 0);
+                 CREATE INDEX idx_dict_simp ON dictionary(simplified);
+                 INSERT INTO dictionary (traditional, simplified, pinyin_num, pinyin, pinyin_key, pinyin_key_tone, definitions, score) VALUES ('你好', '你好', 'ni3 hao3', 'nǐ hǎo', 'nihao', 'ni3hao3', '/hello/', 5000);
+                 INSERT INTO settings VALUES ('dict_imported_at', '1790000000');
+                 INSERT INTO decks (name, created_at) VALUES ('Mine', 0);
+                 INSERT INTO cards (deck_id, hanzi, created_at, updated_at) VALUES (1, '你好', 0, 0);
+                 PRAGMA user_version = 9;",
+            )
+            .unwrap();
+        }
+        let conn = crate::db::open(&path).unwrap();
+        let st = status(&conn).unwrap();
+        assert_eq!((st.entries, st.imported_at), (1, Some(1_790_000_000)));
+        assert!(lookup(&conn, "你好").unwrap()[0].in_cards);
+        let left: i64 = conn.query_row("SELECT COUNT(*) FROM main.sqlite_schema WHERE name LIKE '%dict%'", [], |r| r.get(0)).unwrap();
+        assert_eq!(left, 0, "table and indexes gone from the cards file");
+        assert_eq!(conn.query_row("PRAGMA main.journal_mode", [], |r| r.get::<_, String>(0)).unwrap(), "truncate");
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM cards", [], |r| r.get::<_, i64>(0)).unwrap(), 1);
+        drop(conn);
+        assert!(!dir.join("cards.db-wal").exists(), "no write-ahead log left beside the cards");
+        // opening again changes nothing
+        let conn = crate::db::open(&path).unwrap();
+        assert_eq!(status(&conn).unwrap().entries, 1);
+        drop(conn);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     const TYPING: &str = "泥 泥 [ni2] /mud/

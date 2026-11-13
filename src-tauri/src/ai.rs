@@ -327,19 +327,14 @@ pub fn parse_stream(reader: impl Read, cancel: &AtomicBool, mut on_text: impl Fn
 
 /// Content to send back as the assistant turn. After a server-side fallback, blocks of
 /// the declined attempt (thinking, tool calls) before the last `fallback` marker are
-/// dropped; text and everything after the marker are kept.
+/// dropped; text and everything after the marker are kept. The markers themselves stay
+/// where they were: the API reads their position to check the thinking blocks around them.
 pub fn echo_content(content: Vec<Value>) -> Vec<Value> {
     let Some(last) = content.iter().rposition(|b| b["type"] == "fallback") else { return content };
     content
         .into_iter()
         .enumerate()
-        .filter(|(i, b)| {
-            let t = b["type"].as_str().unwrap_or("");
-            if t == "fallback" {
-                return false;
-            }
-            *i > last || t == "text"
-        })
+        .filter(|(i, b)| *i >= last || matches!(b["type"].as_str(), Some("text" | "fallback")))
         .map(|(_, b)| b)
         .collect()
 }
@@ -419,11 +414,13 @@ data: {\"type\":\"message_stop\"}
             json!({"type": "thinking", "thinking": "", "signature": "b"}),
             json!({"type": "text", "text": "rest"}),
         ];
-        let kept: Vec<String> = echo_content(content)
+        let once = echo_content(content);
+        assert_eq!(echo_content(once.clone()), once, "echoing again changes nothing");
+        let kept: Vec<String> = once
             .iter()
             .map(|b| format!("{}:{}", b["type"].as_str().unwrap(), b["signature"].as_str().or(b["text"].as_str()).unwrap_or("")))
             .collect();
-        assert_eq!(kept, ["text:partial ", "thinking:b", "text:rest"]);
+        assert_eq!(kept, ["text:partial ", "fallback:", "thinking:b", "text:rest"]);
     }
 
     #[test]

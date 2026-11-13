@@ -73,28 +73,77 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 "#;
 
+/// Open the cards database, with the dictionary (its own file, next to it) attached.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     let conn = Connection::open(path)?;
-    init(conn)
+    init(conn, Some(&path.with_file_name(crate::dictionary::DB_FILE)))
 }
 
 #[cfg(test)]
 pub fn open_in_memory() -> rusqlite::Result<Connection> {
-    init(Connection::open_in_memory()?)
+    init(Connection::open_in_memory()?, None)
 }
 
-fn init(conn: Connection) -> rusqlite::Result<Connection> {
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
+/// A private copy of the app's databases, for the benchmark tests that need a learner's real
+/// cards and the dictionary. Tests must never open the real files: a test process that hangs
+/// (the GPU ones do) keeps them open, and that is how the database was damaged twice.
+#[cfg(test)]
+pub fn open_copy(app_data: &Path) -> Connection {
+    let dir = std::env::temp_dir().join(format!("hanzi-copy-{}-{}", std::process::id(), now()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for file in [crate::data::DB_FILE, crate::dictionary::DB_FILE] {
+        if app_data.join(file).exists() {
+            std::fs::copy(app_data.join(file), dir.join(file)).unwrap();
+        }
+    }
+    open(&dir.join(crate::data::DB_FILE)).unwrap()
+}
+
+/// How the app holds a database of the learner's own work (cards, reading). Each choice
+/// closes off a way the file could end up damaged or out of step:
+///
+/// - **Exclusive**: this connection alone has the file for as long as the app runs. Another
+///   program (a second copy, a tool, a test) can't open it meanwhile, and if one already
+///   has it, opening fails here instead of two programs sharing it.
+/// - **Rollback journal, not a write-ahead log**: every finished change is in the main file
+///   at once. With a log, changes live in a second file until merged, and for a database
+///   that is open for days that second file is one more thing to lose or mix up (both times
+///   the cards database was damaged, the main file was days behind its log).
+/// - **Full sync**: a change is on disk before the app carries on, so a power cut loses at
+///   most the change being made.
+/// - Cell-size checks and defensive mode: damage is noticed when a page is read rather than
+///   acted on, and nothing in SQL can rewrite the file's own tables.
+pub fn secure(conn: &Connection) -> rusqlite::Result<()> {
+    conn.query_row("PRAGMA main.locking_mode=EXCLUSIVE", [], |_| Ok(()))?;
+    // (leaves write-ahead mode if the file was in it: merges and removes the log)
+    conn.query_row("PRAGMA main.journal_mode=TRUNCATE", [], |_| Ok(()))?;
+    conn.execute_batch("PRAGMA main.synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA cell_size_check=ON; PRAGMA trusted_schema=OFF;")?;
+    conn.set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)?;
+    Ok(())
+}
+
+/// How long to wait for a database someone else is using: a moment when opening (is it
+/// free at all?), longer afterwards (the dictionary's own import, see commands.rs).
+pub const OPEN_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
+pub const BUSY_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+fn init(conn: Connection, dictionary: Option<&Path>) -> rusqlite::Result<Connection> {
+    conn.busy_timeout(OPEN_WAIT)?;
+    secure(&conn)?;
+    crate::dictionary::attach(&conn, dictionary)?;
     migrate(&conn)?;
+    // the dictionary's log merged into its file (after an upgrade it holds the whole dictionary)
+    let _ = conn.execute_batch("PRAGMA dict.wal_checkpoint(TRUNCATE)");
+    conn.busy_timeout(BUSY_WAIT)?;
     Ok(conn)
 }
 
 fn migrate(conn: &Connection) -> rusqlite::Result<()> {
-    let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    let version: i64 = conn.query_row("PRAGMA main.user_version", [], |r| r.get(0))?;
     if version < 1 {
         conn.execute_batch(SCHEMA_V1)?;
         seed(conn)?;
-        conn.execute_batch("PRAGMA user_version = 1")?;
+        conn.execute_batch("PRAGMA main.user_version = 1")?;
     }
     if version < 2 {
         // v2: a usage score for ranking dictionary results, and pinyin indexes for
@@ -106,14 +155,14 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
              CREATE INDEX IF NOT EXISTS idx_dict_pkey_tone ON dictionary(pinyin_key_tone);",
         )?;
         crate::dictionary::compute_scores(&tx)?;
-        tx.execute_batch("PRAGMA user_version = 2")?;
+        tx.execute_batch("PRAGMA main.user_version = 2")?;
         tx.commit()?;
     }
     if version < 3 {
         // v3: revised scoring (reading frequency for single characters, no proper-noun penalty).
         let tx = conn.unchecked_transaction()?;
         crate::dictionary::compute_scores(&tx)?;
-        tx.execute_batch("PRAGMA user_version = 3")?;
+        tx.execute_batch("PRAGMA main.user_version = 3")?;
         tx.commit()?;
     }
     if version < 4 {
@@ -122,7 +171,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             "BEGIN;
              ALTER TABLE decks ADD COLUMN parent_id INTEGER REFERENCES decks(id) ON DELETE CASCADE;
              CREATE INDEX IF NOT EXISTS idx_decks_parent ON decks(parent_id);
-             PRAGMA user_version = 4;
+             PRAGMA main.user_version = 4;
              COMMIT;",
         )?;
     }
@@ -143,7 +192,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
                cost REAL NOT NULL DEFAULT 0
              );
              CREATE INDEX IF NOT EXISTS idx_ai_usage_at ON ai_usage(at);
-             PRAGMA user_version = 5;
+             PRAGMA main.user_version = 5;
              COMMIT;",
         )?;
     }
@@ -151,21 +200,21 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         // v6: tag existing cards with their HSK level (2026 syllabus); only adds tags.
         let tx = conn.unchecked_transaction()?;
         crate::hsk::tag_all(&tx).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.to_string().into()))?;
-        tx.execute_batch("PRAGMA user_version = 6")?;
+        tx.execute_batch("PRAGMA main.user_version = 6")?;
         tx.commit()?;
     }
     if version < 7 {
         // v7: combinations of list words are tagged too (highest level of their parts).
         let tx = conn.unchecked_transaction()?;
         crate::hsk::tag_all(&tx).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.to_string().into()))?;
-        tx.execute_batch("PRAGMA user_version = 7")?;
+        tx.execute_batch("PRAGMA main.user_version = 7")?;
         tx.commit()?;
     }
     if version < 8 {
         // v8: words missing from the 2026 syllabus take their 2021 HSK 3.0 level.
         let tx = conn.unchecked_transaction()?;
         crate::hsk::tag_all(&tx).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.to_string().into()))?;
-        tx.execute_batch("PRAGMA user_version = 8")?;
+        tx.execute_batch("PRAGMA main.user_version = 8")?;
         tx.commit()?;
     }
     if version < 9 {
@@ -173,9 +222,48 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         conn.execute_batch(
             "BEGIN;
              ALTER TABLE progress ADD COLUMN step INTEGER NOT NULL DEFAULT 0;
-             PRAGMA user_version = 9;
+             PRAGMA main.user_version = 9;
              COMMIT;",
         )?;
+    }
+    if version < 10 {
+        // v10: the dictionary moves to its own file (dictionary.db, attached as `dict`). It is
+        // five times the size of everything else and can always be made again, so backups of
+        // the cards are small, and trouble with one file can't reach the other.
+        let tx = conn.unchecked_transaction()?;
+        let old: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM main.sqlite_schema WHERE type = 'table' AND name = 'dictionary')",
+            [],
+            |r| r.get(0),
+        )?;
+        if old {
+            let empty: bool = tx.query_row("SELECT NOT EXISTS(SELECT 1 FROM dict.dictionary)", [], |r| r.get(0))?;
+            if empty {
+                tx.execute_batch(
+                    "INSERT INTO dict.dictionary
+                        (id, traditional, simplified, pinyin_num, pinyin, pinyin_key, pinyin_key_tone, definitions, score)
+                     SELECT id, traditional, simplified, pinyin_num, pinyin, pinyin_key, pinyin_key_tone, definitions, score
+                       FROM main.dictionary;
+                     INSERT OR REPLACE INTO dict.dictionary_meta (key, value)
+                     SELECT 'imported_at', value FROM main.settings WHERE key = 'dict_imported_at';",
+                )?;
+            }
+            tx.execute_batch("DROP TABLE main.dictionary; DELETE FROM main.settings WHERE key = 'dict_imported_at';")?;
+        }
+        tx.execute_batch("PRAGMA main.user_version = 10")?;
+        tx.commit()?;
+        if old {
+            // hand the dictionary's space back (it stays as it is if this can't be done now)
+            let _ = conn.execute_batch("VACUUM main");
+        }
+    }
+    if version < 11 {
+        // v11: a copy of a word added to another deck after the word was studied takes up the
+        // progress its other copies share (new copies do from now on).
+        let tx = conn.unchecked_transaction()?;
+        crate::study::share_progress(&tx, None).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.to_string().into()))?;
+        tx.execute_batch("PRAGMA main.user_version = 11")?;
+        tx.commit()?;
     }
     Ok(())
 }

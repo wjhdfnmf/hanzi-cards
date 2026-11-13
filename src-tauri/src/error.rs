@@ -10,6 +10,12 @@ pub enum AppError {
     Csv(#[from] csv::Error),
     #[error("{0}")]
     Msg(String),
+    /// A database file that fails its integrity check (the app offers its backups).
+    #[error("{0}")]
+    Damaged(String),
+    /// A database file another program has open.
+    #[error("{0}")]
+    InUse(String),
 }
 
 impl AppError {

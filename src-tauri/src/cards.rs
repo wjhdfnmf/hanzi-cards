@@ -3,7 +3,7 @@
 use crate::db::now;
 use crate::decks;
 use crate::error::{AppError, AppResult};
-use crate::models::{Card, CardInput, CardRow, DuplicateWord, ImportPreview, ImportResult};
+use crate::models::{Card, CardCopy, CardInput, CardRow, DuplicateWord, ImportPreview, ImportResult};
 use crate::pinyin;
 use rusqlite::{params, Connection, Row};
 use std::collections::{BTreeSet, HashMap};
@@ -47,17 +47,21 @@ fn join_tags(tags: &[String]) -> String {
 // ---------- cards ----------
 
 fn normalise(input: &CardInput) -> AppResult<(String, String, String, String, String)> {
-    let hanzi = input.hanzi.trim().to_string();
+    use crate::input::{clean, fits};
+    let hanzi = clean(&input.hanzi, false).trim().to_string();
     if hanzi.is_empty() {
         return Err(AppError::msg("Characters cannot be empty"));
     }
-    Ok((
-        hanzi,
-        pinyin::numbered_to_marks(input.pinyin.trim()),
-        input.meaning.trim().to_string(),
-        input.notes.trim().to_string(),
-        join_tags(&input.tags),
-    ))
+    let pinyin = pinyin::numbered_to_marks(clean(&input.pinyin, false).trim());
+    let meaning = clean(&input.meaning, true).trim().to_string();
+    let notes = clean(&input.notes, true).trim().to_string();
+    let tags = join_tags(&input.tags.iter().map(|t| clean(t, false)).collect::<Vec<_>>());
+    fits("The characters field", &hanzi, crate::input::MAX_HANZI)?;
+    fits("The pinyin", &pinyin, crate::input::MAX_PINYIN)?;
+    fits("The meaning", &meaning, crate::input::MAX_MEANING)?;
+    fits("The notes field", &notes, crate::input::MAX_NOTES)?;
+    fits("The tags field", &tags, crate::input::MAX_TAGS)?;
+    Ok((hanzi, pinyin, meaning, notes, tags))
 }
 
 pub fn get_card(conn: &Connection, id: i64) -> AppResult<Card> {
@@ -74,7 +78,9 @@ pub fn create_card(conn: &Connection, input: &CardInput) -> AppResult<Card> {
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
         params![input.deck_id, h, p, m, n, t, ts],
     )?;
-    get_card(conn, conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    crate::study::share_progress(conn, Some(id))?; // a word already studied in another deck
+    get_card(conn, id)
 }
 
 pub fn update_card(conn: &Connection, id: i64, input: &CardInput) -> AppResult<Card> {
@@ -137,6 +143,7 @@ pub fn list_cards(conn: &Connection, deck_id: Option<i64>, search: &str) -> AppR
                 "review"
             }
             .into(),
+            copies: Vec::new(),
         })
     })?;
     let all: Vec<CardRow> = rows.collect::<Result<_, _>>()?;
@@ -157,6 +164,71 @@ pub fn list_cards(conn: &Connection, deck_id: Option<i64>, search: &str) -> AppR
                 || (!qkey.is_empty() && pinyin::toneless_key(&c.pinyin).contains(&qkey))
         })
         .collect())
+}
+
+/// What makes two cards copies of one another: the same characters, the same pinyin (however
+/// it is spaced or capitalised) and the same meaning. Notes, tags and deck may differ.
+fn copy_key(c: &Card) -> (String, String, String) {
+    let pinyin = c
+        .pinyin
+        .chars()
+        .filter(|ch| !ch.is_whitespace() && !matches!(ch, '\'' | '\u{2019}' | '-' | '\u{b7}'))
+        .flat_map(char::to_lowercase)
+        .collect();
+    (c.hanzi.trim().to_string(), pinyin, c.meaning.trim().to_string())
+}
+
+/// `list_cards` for reading: a word that is in several decks with the same pinyin and meaning
+/// is one row, which lists the others as its copies. Cards that differ stay separate rows.
+/// The row shown is the copy studied most (the first in the list when none is ahead).
+pub fn list_words(conn: &Connection, deck_id: Option<i64>, search: &str) -> AppResult<Vec<CardRow>> {
+    use std::collections::hash_map::Entry;
+    let mut at: HashMap<(String, String, String), usize> = HashMap::new();
+    let mut out: Vec<CardRow> = Vec::new();
+    for row in list_cards(conn, deck_id, search)? {
+        match at.entry(copy_key(&row.card)) {
+            Entry::Vacant(e) => {
+                e.insert(out.len());
+                out.push(row);
+            }
+            Entry::Occupied(e) => {
+                let shown = &mut out[*e.get()];
+                let copy = if row.reps > shown.reps {
+                    let mut row = row;
+                    row.copies = std::mem::take(&mut shown.copies);
+                    std::mem::replace(shown, row)
+                } else {
+                    row
+                };
+                shown.copies.push(CardCopy { id: copy.card.id, deck_id: copy.card.deck_id });
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Save a card and keep its copies copies: each of `copies` that had the same characters,
+/// pinyin and meaning as the card had before this edit gets the new ones. Their decks, notes
+/// and tags are their own and stay.
+pub fn update_card_and_copies(conn: &mut Connection, id: i64, input: &CardInput, copies: &[i64]) -> AppResult<Card> {
+    let before = copy_key(&get_card(conn, id)?);
+    let tx = conn.transaction()?;
+    let card = update_card(&tx, id, input)?;
+    for &copy in copies {
+        if copy == id {
+            continue;
+        }
+        let Ok(other) = get_card(&tx, copy) else { continue }; // deleted meanwhile
+        if copy_key(&other) != before {
+            continue; // changed meanwhile: no longer a copy
+        }
+        tx.execute(
+            "UPDATE cards SET hanzi = ?2, pinyin = ?3, meaning = ?4, updated_at = ?5 WHERE id = ?1",
+            params![copy, card.hanzi, card.pinyin, card.meaning, now()],
+        )?;
+    }
+    tx.commit()?;
+    Ok(card)
 }
 
 /// Remove these tags (any case) from every card; returns how many cards changed.
@@ -354,9 +426,21 @@ pub struct CsvCard {
     pub deck: Vec<String>,
 }
 
+/// A text file's contents: UTF-8, or UTF-16 with a byte-order mark (what Excel and Notepad
+/// save as "Unicode text").
 pub fn read_text(path: &Path) -> AppResult<String> {
-    let bytes = std::fs::read(path)?;
-    Ok(String::from_utf8_lossy(&bytes).trim_start_matches('\u{feff}').to_string())
+    Ok(decode_text(&crate::input::read_file(path, crate::input::MAX_TEXT_FILE)?))
+}
+
+fn decode_text(bytes: &[u8]) -> String {
+    let utf16 = |rest: &[u8], unit: fn([u8; 2]) -> u16| {
+        String::from_utf16_lossy(&rest.chunks_exact(2).map(|c| unit([c[0], c[1]])).collect::<Vec<_>>())
+    };
+    match bytes {
+        [0xff, 0xfe, rest @ ..] => utf16(rest, u16::from_le_bytes),
+        [0xfe, 0xff, rest @ ..] => utf16(rest, u16::from_be_bytes),
+        _ => String::from_utf8_lossy(bytes).trim_start_matches('\u{feff}').to_string(),
+    }
 }
 
 /// Parse CSV or TSV. Columns: hanzi, pinyin, meaning, notes, tags, deck (subdeck path).
@@ -376,21 +460,26 @@ pub fn parse_csv(text: &str) -> AppResult<(Vec<CsvCard>, i64)> {
     let mut invalid = 0;
     for (i, rec) in reader.records().enumerate() {
         let rec = rec?;
-        let field = |n: usize| rec.get(n).unwrap_or("").trim().to_string();
-        let hanzi = field(0);
+        use crate::input::{clean, clip, unguard_cell};
+        // as stored: no control characters, the apostrophe an export put before a
+        // formula-like cell taken off again, and no field longer than the editor allows
+        let field = |n: usize, max: usize, lines: bool| {
+            clip(clean(unguard_cell(rec.get(n).unwrap_or("").trim()), lines).trim(), max)
+        };
+        let hanzi = field(0, usize::MAX, false);
         if i == 0 && HEADER_WORDS.contains(&hanzi.to_lowercase().as_str()) {
             continue;
         }
-        if hanzi.is_empty() || !pinyin::has_hanzi(&hanzi) {
+        if hanzi.is_empty() || !pinyin::has_hanzi(&hanzi) || hanzi.chars().count() > crate::input::MAX_HANZI {
             invalid += 1;
             continue;
         }
         out.push(CsvCard {
-            pinyin: pinyin::numbered_to_marks(&field(1)),
-            meaning: field(2),
-            notes: field(3),
-            tags: join_tags(&[field(4)]),
-            deck: decks::split_path(&field(5)),
+            pinyin: pinyin::numbered_to_marks(&field(1, crate::input::MAX_PINYIN, false)),
+            meaning: field(2, crate::input::MAX_MEANING, true),
+            notes: field(3, crate::input::MAX_NOTES, true),
+            tags: clip(&join_tags(&[field(4, usize::MAX, false)]), crate::input::MAX_TAGS),
+            deck: decks::split_path(&field(5, usize::MAX, false)),
             hanzi,
         });
     }
@@ -443,6 +532,9 @@ pub fn import_text(
         dups.add(DeckRef::Id(deck), &c.hanzi);
         res.imported += 1;
     }
+    if res.imported > 0 {
+        crate::study::share_progress(&tx, None)?; // words already studied in other decks
+    }
     tx.commit()?;
     Ok(res)
 }
@@ -459,7 +551,9 @@ pub fn export_file(conn: &Connection, deck_id: Option<i64>, path: &Path) -> AppR
     for row in cards.iter().rev() {
         let c = &row.card;
         let deck = paths.get(&c.deck_id).map(|p| p[base.min(p.len())..].join(&sep)).unwrap_or_default();
-        w.write_record([&c.hanzi, &c.pinyin, &c.meaning, &c.notes, &c.tags.join(";"), &deck])?;
+        // (a cell a spreadsheet would run as a formula is marked as text: input::guard_cell)
+        let cells = [&c.hanzi, &c.pinyin, &c.meaning, &c.notes, &c.tags.join(";"), &deck];
+        w.write_record(cells.iter().map(|cell| crate::input::guard_cell(cell).into_owned()))?;
     }
     w.flush()?;
     Ok(cards.len() as i64)
@@ -484,6 +578,20 @@ mod tests {
         assert!(!tags.iter().any(|t| t.eq_ignore_ascii_case("travel") || t == "Menu"), "{tags:?}");
         let lv: String = conn.query_row("SELECT tags FROM cards WHERE hanzi = '旅'", [], |r| r.get(0)).unwrap();
         assert_eq!(lv, "HSK2");
+    }
+
+    #[test]
+    fn reads_utf8_and_utf16_files() {
+        let text = "你好\tni3 hao3\thello\n";
+        let utf16 = |unit: fn(u16) -> [u8; 2], bom: [u8; 2]| -> Vec<u8> {
+            bom.into_iter().chain(text.encode_utf16().flat_map(unit)).collect()
+        };
+        assert_eq!(decode_text(text.as_bytes()), text);
+        assert_eq!(decode_text(format!("\u{feff}{text}").as_bytes()), text, "UTF-8 with a byte-order mark");
+        assert_eq!(decode_text(&utf16(u16::to_le_bytes, [0xff, 0xfe])), text);
+        assert_eq!(decode_text(&utf16(u16::to_be_bytes, [0xfe, 0xff])), text);
+        let (cards, invalid) = parse_csv(&decode_text(&utf16(u16::to_le_bytes, [0xff, 0xfe]))).unwrap();
+        assert_eq!((cards.len(), invalid, cards[0].pinyin.as_str()), (1, 0, "nǐ hǎo"));
     }
 
     #[test]
@@ -531,6 +639,59 @@ mod tests {
         assert!(tags.contains(&"food".to_string()));
         decks::delete_deck(&mut conn, deck).unwrap();
         assert_eq!(list_cards(&conn, Some(deck), "").unwrap().len(), 0);
+    }
+
+    #[test]
+    fn copies_fold_into_one_row() {
+        let mut conn = db::open_in_memory().unwrap();
+        let class = decks::create_deck(&conn, "Class", "", None).unwrap();
+        let hsk = decks::create_deck(&conn, "HSK", "", None).unwrap();
+        let add = |deck: i64, hanzi: &str, pinyin: &str, meaning: &str, notes: &str| {
+            let input = CardInput {
+                deck_id: deck,
+                hanzi: hanzi.into(),
+                pinyin: pinyin.into(),
+                meaning: meaning.into(),
+                notes: notes.into(),
+                tags: vec![],
+            };
+            create_card(&conn, &input).unwrap().id
+        };
+        let a = add(class, "图书馆", "tú shū guǎn", "library; reading room", "class note");
+        let b = add(hsk, "图书馆", "Túshūguǎn", "library; reading room", ""); // spacing and capitals don't matter
+        let c = add(hsk, "重", "zhòng", "heavy", "");
+        let d = add(class, "重", "chóng", "again", ""); // another reading: its own row
+        let e = add(class, "银行", "yín háng", "bank", "");
+        let f = add(hsk, "银行", "yín háng", "bank; banking", ""); // another meaning: its own row
+
+        assert_eq!(list_cards(&conn, None, "图书馆").unwrap().len(), 2, "the plain list has every card");
+        let words = list_words(&conn, None, "").unwrap();
+        let of = |hanzi: &str| -> Vec<&CardRow> { words.iter().filter(|r| r.card.hanzi == hanzi).collect() };
+        let study = of("图书馆");
+        assert_eq!(study.len(), 1);
+        let ids: Vec<i64> = std::iter::once(study[0].card.id).chain(study[0].copies.iter().map(|c| c.id)).collect();
+        assert_eq!({ let mut i = ids.clone(); i.sort(); i }, [a, b]);
+        assert_eq!(of("重").len(), 2);
+        assert_eq!(of("银行").len(), 2);
+        assert!(of("重").iter().chain(of("银行").iter()).all(|r| r.copies.is_empty()));
+        assert_eq!(list_words(&conn, Some(class), "").unwrap().iter().filter(|r| r.card.hanzi == "图书馆").count(), 1);
+
+        // editing one copy carries the word to the other; a card that was already different is left alone
+        let edit = CardInput {
+            deck_id: class,
+            hanzi: "图书馆".into(),
+            pinyin: "tu2 shu1 guan3".into(),
+            meaning: "library".into(),
+            notes: "new note".into(),
+            tags: vec!["mine".into()],
+        };
+        update_card_and_copies(&mut conn, a, &edit, &[b, e, f, 9999]).unwrap();
+        let (b_now, e_now) = (get_card(&conn, b).unwrap(), get_card(&conn, e).unwrap());
+        assert_eq!((b_now.meaning.as_str(), b_now.pinyin.as_str(), b_now.deck_id), ("library", "tú shū guǎn", hsk));
+        assert!(b_now.notes.is_empty() && !b_now.tags.contains(&"mine".to_string()), "its notes and tags are its own");
+        assert_eq!(e_now.meaning, "bank");
+        assert_eq!(list_words(&conn, None, "图书馆").unwrap().len(), 1, "still one row");
+        let _ = (c, d);
     }
 
     #[test]

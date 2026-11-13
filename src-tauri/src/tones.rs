@@ -688,14 +688,16 @@ impl PitchProfile {
         let mut parts = s.split(';');
         let ok = parts.next() == Some("v1");
         let recordings = parts.next().and_then(|x| x.parse().ok()).filter(|_| ok).unwrap_or(0);
-        let mut bins: Vec<f32> = parts.next().filter(|_| ok).map(|b| b.split(',').map(|x| x.parse().unwrap_or(0.0)).collect()).unwrap_or_default();
+        // (only counts: anything else in a stored value would spoil every sum made from it)
+        let count = |x: &str| x.parse::<f32>().ok().filter(|v| v.is_finite() && *v >= 0.0).unwrap_or(0.0);
+        let mut bins: Vec<f32> = parts.next().filter(|_| ok).map(|b| b.split(',').map(count).collect()).unwrap_or_default();
         bins.resize(PROFILE_BINS, 0.0);
         // optional (added later): "<mean ln length>,<count>"
         let length = parts
             .next()
             .filter(|_| ok)
             .and_then(|l| l.split_once(','))
-            .and_then(|(m, n)| Some((m.parse().ok()?, n.parse().ok()?)))
+            .and_then(|(m, n)| Some((m.parse::<f32>().ok().filter(|m| m.is_finite())?, n.parse().ok()?)))
             .unwrap_or((0.0, 0));
         PitchProfile { recordings, bins, length }
     }

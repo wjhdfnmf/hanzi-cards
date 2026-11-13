@@ -68,15 +68,19 @@ pub fn get_stats(conn: &Connection, days: i64) -> AppResult<Stats> {
     let days = days.clamp(7, 3660);
 
     let total_cards = count(conn, "SELECT COUNT(*) FROM cards", [])?;
+    // Progress is counted by word and direction: copies of a word in several decks share
+    // their progress (one row each), and are one thing to study.
+    const STUDIED: &str = "SELECT DISTINCT c.hanzi, p.direction FROM progress p JOIN cards c ON c.id = p.card_id";
+    let studied = |cond: &str| format!("SELECT COUNT(*) FROM ({STUDIED} WHERE {cond})");
     let unstudied_cards = count(
         conn,
-        "SELECT COUNT(*) FROM cards c WHERE NOT EXISTS (SELECT 1 FROM progress p WHERE p.card_id = c.id)",
+        "SELECT COUNT(DISTINCT c.hanzi) FROM cards c WHERE NOT EXISTS (SELECT 1 FROM progress p WHERE p.card_id = c.id)",
         [],
     )?;
-    let learning = count(conn, "SELECT COUNT(*) FROM progress WHERE state IN (1, 3)", [])?;
-    let young = count(conn, "SELECT COUNT(*) FROM progress WHERE state = 2 AND stability < 21", [])?;
-    let mature = count(conn, "SELECT COUNT(*) FROM progress WHERE state = 2 AND stability >= 21", [])?;
-    let due_now = count(conn, "SELECT COUNT(*) FROM progress WHERE due <= ?1", [t])?;
+    let learning = count(conn, &studied("p.state IN (1, 3)"), [])?;
+    let young = count(conn, &studied("p.state = 2 AND p.stability < 21"), [])?;
+    let mature = count(conn, &studied("p.state = 2 AND p.stability >= 21"), [])?;
+    let due_now = count(conn, &studied("p.due <= ?1"), [t])?;
 
     let (total_reviews, total_time_ms): (i64, i64) = conn.query_row(
         "SELECT COUNT(*), COALESCE(SUM(duration_ms), 0) FROM review_log",
@@ -155,7 +159,12 @@ pub fn get_stats(conn: &Connection, days: i64) -> AppResult<Stats> {
 
     let mut forecast = vec![0i64; 30];
     {
-        let mut stmt = conn.prepare("SELECT (due + ?1) / 86400 - ?2, COUNT(*) FROM progress GROUP BY 1")?;
+        let mut stmt = conn.prepare(
+            "SELECT day, COUNT(*) FROM (
+               SELECT DISTINCT c.hanzi, p.direction, (p.due + ?1) / 86400 - ?2 AS day
+               FROM progress p JOIN cards c ON c.id = p.card_id)
+             GROUP BY day",
+        )?;
         let rows = stmt.query_map([off, today], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))?;
         for row in rows {
             let (d, n) = row?;
@@ -167,9 +176,10 @@ pub fn get_stats(conn: &Connection, days: i64) -> AppResult<Stats> {
     }
 
     let mut stmt = conn.prepare(
-        "SELECT c.id, c.hanzi, c.pinyin, c.meaning, p.direction, p.lapses
+        "SELECT MIN(c.id), c.hanzi, c.pinyin, c.meaning, p.direction, MAX(p.lapses) AS lapses
          FROM progress p JOIN cards c ON c.id = p.card_id
-         WHERE p.lapses > 0 ORDER BY p.lapses DESC, p.difficulty DESC LIMIT 10",
+         WHERE p.lapses > 0 GROUP BY c.hanzi, p.direction
+         ORDER BY lapses DESC, MAX(p.difficulty) DESC LIMIT 10",
     )?;
     let hardest = stmt
         .query_map([], |r| {

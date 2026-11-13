@@ -365,6 +365,7 @@
       for (const g of summary.grades) {
         if (g.cardId === null || !reviewPick[g.hanzi]) continue;
         await api.answerCard(g.cardId, "speaking", g.correct ? 3 : 1, 0);
+        reviewPick[g.hanzi] = false; // done: trying again after an error doesn't record it twice
         n++;
       }
       recorded = true;
@@ -381,6 +382,7 @@
       for (const s of summary.suggestions) {
         if (!cardPick[s.hanzi]) continue;
         await api.createCard({ deckId: addDeck, hanzi: s.hanzi, pinyin: s.pinyin, meaning: s.meaning, notes: "", tags: ["ai-tutor"] });
+        cardPick[s.hanzi] = false; // done: trying again after an error doesn't add it twice
         n++;
       }
       added = true;

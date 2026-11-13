@@ -112,7 +112,7 @@ fn check() -> Option<String> {
 
 /// Download NVIDIA's libraries into `<app data>/cuda`, reporting (bytes so far, total).
 pub fn download(app_data: &Path, mut progress: impl FnMut(u64, u64)) -> AppResult<()> {
-    let text = ureq::get(&format!("{REDIST}/redistrib_{CUDA_RELEASE}.json"))
+    let text = crate::net::get(&format!("{REDIST}/redistrib_{CUDA_RELEASE}.json"))
         .call()
         .map_err(|e| AppError::msg(format!("Couldn't reach NVIDIA's download site: {e}")))?
         .into_string()?;
@@ -135,7 +135,7 @@ pub fn download(app_data: &Path, mut progress: impl FnMut(u64, u64)) -> AppResul
     for (url, sha, _, dlls) in parts {
         // download to a temporary file, hashing as it goes
         let tmp = dir.join("download.part");
-        let resp = ureq::get(&url).call().map_err(|e| AppError::msg(format!("Download failed: {e}")))?;
+        let resp = crate::net::get(&url).call().map_err(|e| AppError::msg(format!("Download failed: {e}")))?;
         let mut reader = resp.into_reader();
         let mut file = std::fs::File::create(&tmp)?;
         let mut hasher = <sha2::Sha256 as sha2::Digest>::new();

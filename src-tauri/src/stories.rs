@@ -49,7 +49,8 @@ pub fn open_in_memory() -> rusqlite::Result<Connection> {
 }
 
 fn init(conn: Connection) -> rusqlite::Result<Connection> {
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
+    conn.busy_timeout(crate::db::OPEN_WAIT)?;
+    crate::db::secure(&conn)?; // exclusive, every change straight into the main file
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if version < 1 {
         conn.execute_batch(&format!("BEGIN; {SCHEMA_V1} PRAGMA user_version = 1; COMMIT;"))?;
@@ -206,11 +207,18 @@ fn subtree_ids(conn: &Connection, id: i64) -> AppResult<Vec<i64>> {
 }
 
 fn clean(s: &str, what: &str) -> AppResult<String> {
-    let s = s.trim();
+    let s = crate::input::clean(s, false).trim().to_string();
     if s.is_empty() {
         return Err(AppError::msg(format!("{what} cannot be empty")));
     }
-    Ok(s.to_string())
+    crate::input::fits(what, &s, crate::input::MAX_NAME)?;
+    Ok(s)
+}
+
+fn clean_description(description: &str) -> AppResult<String> {
+    let d = crate::input::clean(description, true).trim().to_string();
+    crate::input::fits("The description", &d, crate::input::MAX_DESCRIPTION)?;
+    Ok(d)
 }
 
 fn check_folder(conn: &Connection, folder: Option<i64>) -> AppResult<()> {
@@ -228,7 +236,7 @@ pub fn create_folder(conn: &Connection, name: &str, description: &str, parent: O
     check_folder(conn, parent)?;
     conn.execute(
         "INSERT INTO story_folders (name, description, created_at, parent_id) VALUES (?1, ?2, ?3, ?4)",
-        params![clean(name, "The name")?, description.trim(), now(), parent],
+        params![clean(name, "The name")?, clean_description(description)?, now(), parent],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -242,7 +250,7 @@ pub fn update_folder(conn: &Connection, id: i64, name: &str, description: &str, 
     }
     conn.execute(
         "UPDATE story_folders SET name = ?2, description = ?3, parent_id = ?4 WHERE id = ?1",
-        params![id, clean(name, "The name")?, description.trim(), parent],
+        params![id, clean(name, "The name")?, clean_description(description)?, parent],
     )?;
     Ok(())
 }
@@ -332,8 +340,13 @@ pub fn get_story(conn: &Connection, id: i64) -> AppResult<Story> {
 /// Line endings made "\n", and no blank lines at the ends.
 fn clean_body(body: &str) -> AppResult<String> {
     let body = body.trim_start_matches('\u{feff}').replace("\r\n", "\n").replace('\r', "\n");
+    let body = crate::input::clean(&body, true);
     let body = body.trim_matches(|c: char| c == '\n' || c.is_whitespace() && c != '\u{3000}');
-    clean(body, "The story's text").map(|_| body.to_string())
+    if body.is_empty() {
+        return Err(AppError::msg("The story's text cannot be empty"));
+    }
+    crate::input::fits("The story's text", body, crate::input::MAX_STORY)?;
+    Ok(body.to_string())
 }
 
 pub fn create_story(conn: &Connection, folder: Option<i64>, title: &str, body: &str) -> AppResult<i64> {
@@ -346,7 +359,14 @@ fn insert_story(conn: &Connection, folder: Option<i64>, s: &Parsed) -> AppResult
     conn.execute(
         "INSERT INTO stories (folder_id, title, body, vocab, position, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
-        params![folder, clean(&s.title, "The title")?, clean_body(&s.body)?, s.vocab.trim(), s.position, t],
+        params![
+            folder,
+            clean(&s.title, "The title")?,
+            clean_body(&s.body)?,
+            crate::input::clip(crate::input::clean(&s.vocab, true).trim(), crate::input::MAX_NOTES),
+            s.position,
+            t
+        ],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -466,7 +486,7 @@ pub fn parse_story(stem: &str, text: &str) -> Parsed {
 
 /// Read a story file. UTF-8, or UTF-16 with a byte-order mark.
 pub fn read_file(path: &Path) -> AppResult<Parsed> {
-    let text = decode(std::fs::read(path)?, path)?;
+    let text = decode(crate::input::read_file(path, crate::input::MAX_STORY_FILE)?, path)?;
     let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     Ok(parse_story(&stem, &text))
 }
@@ -481,7 +501,7 @@ fn add_stories(conn: &Connection, folder: Option<i64>, files: &[Parsed]) -> AppR
             params![folder, f.title.trim()],
             |r| r.get(0),
         )?;
-        if exists || clean_body(&f.body).is_err() || f.title.trim().is_empty() {
+        if exists || clean_body(&f.body).is_err() || clean(&f.title, "The title").is_err() {
             skipped += 1;
             continue;
         }
@@ -506,10 +526,21 @@ pub struct FolderTree {
     pub position: i64,
     pub stories: Vec<Parsed>,
     pub children: Vec<FolderTree>,
+    /// Files that couldn't be read as stories (not text, or too large).
+    pub unreadable: usize,
 }
+
+/// Folders inside folders that are followed when importing (a link back up the tree would
+/// otherwise never end), and files taken from one folder.
+const MAX_FOLDER_DEPTH: usize = 12;
+const MAX_FOLDER_FILES: usize = 5_000;
 
 /// Read a folder: its `.txt` files are stories, its subfolders collections inside it.
 pub fn read_folder(path: &Path) -> AppResult<FolderTree> {
+    read_folder_at(path, 0)
+}
+
+fn read_folder_at(path: &Path, depth: usize) -> AppResult<FolderTree> {
     let raw = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Stories".into());
     let (number, rest) = split_number(&raw);
     let level = LEVELS.iter().position(|l| l.eq_ignore_ascii_case(rest.trim()));
@@ -523,17 +554,146 @@ pub fn read_folder(path: &Path) -> AppResult<FolderTree> {
         position: number.or(level.map(|l| l as i64 + 1)).unwrap_or(0),
         stories: Vec::new(),
         children: Vec::new(),
+        unreadable: 0,
     };
     let mut entries: Vec<PathBuf> = std::fs::read_dir(path)?.filter_map(|e| e.ok()).map(|e| e.path()).collect();
     entries.sort();
     for p in entries {
-        if p.is_dir() {
-            tree.children.push(read_folder(&p)?);
-        } else if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("txt")) {
-            tree.stories.push(read_file(&p)?);
+        // links aren't followed: only what is really inside the chosen folder
+        let Ok(meta) = std::fs::symlink_metadata(&p) else { continue };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
+        if meta.is_dir() {
+            if depth < MAX_FOLDER_DEPTH {
+                tree.children.push(read_folder_at(&p, depth + 1)?);
+            }
+        } else if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("txt")) && tree.stories.len() < MAX_FOLDER_FILES {
+            // one file that isn't text doesn't stop the rest of the folder
+            match read_file(&p) {
+                Ok(story) => tree.stories.push(story),
+                Err(_) => tree.unreadable += 1,
+            }
         }
     }
     Ok(tree)
+}
+
+// ---------- export: stories as files to keep or to share ----------
+//
+// The files are the ones the import reads (see docs/import-formats.md), so what one learner
+// exports another can import, and exporting then importing gives the same stories back.
+
+/// What an export wrote.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportSummary {
+    pub stories: usize,
+    pub collections: usize,
+    /// The file or folder that was written.
+    pub path: String,
+}
+
+/// A story as a text file: its title, its key vocabulary if it has any, then the story.
+pub fn story_text(s: &Story) -> String {
+    let mut out = format!("{}\n", s.title.trim());
+    if !s.vocab.trim().is_empty() {
+        out.push_str("\n--- Key Vocab ---\n");
+        out.push_str(s.vocab.trim());
+        out.push('\n');
+    }
+    out.push_str("\n--- Story ---\n");
+    out.push_str(&s.body);
+    out.push('\n');
+    out
+}
+
+/// A name that is a valid file or folder name on Windows, macOS and Linux.
+fn safe_name(name: &str) -> String {
+    let cleaned: String =
+        name.chars().map(|c| if c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') { '_' } else { c }).collect();
+    let cleaned: String = cleaned.trim().trim_end_matches('.').chars().take(80).collect();
+    let cleaned = cleaned.trim().to_string();
+    // names Windows keeps for devices
+    const RESERVED: [&str; 22] = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2",
+        "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    if cleaned.is_empty() {
+        "untitled".into()
+    } else if RESERVED.iter().any(|r| cleaned.eq_ignore_ascii_case(r)) {
+        format!("_{cleaned}")
+    } else {
+        cleaned
+    }
+}
+
+/// The name a story or collection is exported under. Its place in the order goes in front
+/// ("03_Name"), which is where the import reads it from; a name that itself starts with a
+/// number gets "00_" so that number isn't taken for the order.
+fn export_name(position: i64, name: &str) -> String {
+    let safe = safe_name(name);
+    if position > 0 {
+        format!("{position:02}_{safe}")
+    } else if safe.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("00_{safe}")
+    } else {
+        safe
+    }
+}
+
+/// `dir/name.ext`, or `dir/name (2).ext` … when that is taken.
+fn free_path(dir: &Path, name: &str, ext: &str) -> PathBuf {
+    let with = |n: usize| {
+        let stem = if n == 1 { name.to_string() } else { format!("{name} ({n})") };
+        dir.join(if ext.is_empty() { stem } else { format!("{stem}.{ext}") })
+    };
+    (1..).map(with).find(|p| !p.exists()).expect("some name is free")
+}
+
+/// Write one story to `path` (a file the learner chose).
+pub fn export_story(conn: &Connection, id: i64, path: &Path) -> AppResult<ExportSummary> {
+    let story = get_story(conn, id)?;
+    std::fs::write(path, story_text(&story))?;
+    Ok(ExportSummary { stories: 1, collections: 0, path: path.display().to_string() })
+}
+
+/// Write a collection as a new folder inside `dir`: its stories as text files, its
+/// subcollections as folders inside it. `None` = everything: a folder "Hanzi Cards stories"
+/// holding the top collections and the stories that are in none.
+pub fn export_folder(conn: &Connection, folder: Option<i64>, dir: &Path) -> AppResult<ExportSummary> {
+    if !dir.is_dir() {
+        return Err(AppError::msg("Choose a folder to export into."));
+    }
+    let folders = list_folders(conn)?;
+    let mut sum = ExportSummary::default();
+    let target = match folder {
+        Some(id) => {
+            let f = folders.iter().find(|f| f.id == id).ok_or_else(|| AppError::msg("That collection doesn't exist"))?;
+            free_path(dir, &export_name(f.position, &f.name), "")
+        }
+        None => free_path(dir, "Hanzi Cards stories", ""),
+    };
+
+    fn write(conn: &Connection, folders: &[StoryFolder], id: Option<i64>, target: &Path, sum: &mut ExportSummary) -> AppResult<()> {
+        std::fs::create_dir_all(target)?;
+        sum.collections += 1;
+        // the stories directly in this collection, in their order
+        let mut stmt = conn.prepare("SELECT id FROM stories WHERE folder_id IS ?1 ORDER BY position, title, id")?;
+        let ids: Vec<i64> = stmt.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+        for story in ids {
+            let s = get_story(conn, story)?;
+            std::fs::write(free_path(target, &export_name(s.position, &s.title), "txt"), story_text(&s))?;
+            sum.stories += 1;
+        }
+        for child in folders.iter().filter(|f| f.parent_id == id) {
+            write(conn, folders, Some(child.id), &free_path(target, &export_name(child.position, &child.name), ""), sum)?;
+        }
+        Ok(())
+    }
+    write(conn, &folders, folder, &target, &mut sum)?;
+    sum.path = target.display().to_string();
+    Ok(sum)
 }
 
 /// The collection called `name` in `parent`, made if there isn't one; true when made.
@@ -563,7 +723,7 @@ pub fn import_folder(conn: &mut Connection, parent: Option<i64>, tree: &FolderTr
         }
         let (added, skipped) = add_stories(conn, Some(id), &t.stories)?;
         sum.stories += added;
-        sum.skipped += skipped;
+        sum.skipped += skipped + t.unreadable;
         for c in &t.children {
             walk(conn, Some(id), c, sum)?;
         }
@@ -623,6 +783,63 @@ mod tests {
         // again: nothing new
         let again = import_folder(&mut conn, None, &read_folder(&root).unwrap()).unwrap();
         assert_eq!((again.collections, again.stories, again.skipped), (0, 0, 3));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn exported_stories_import_as_they_were() {
+        let root = std::env::temp_dir().join(format!("hc-export-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let conn = open_in_memory().unwrap();
+        // collections in an order of their own, a story with vocabulary, awkward names
+        let graded = create_folder(&conn, "Graded: readers?", "", None).unwrap();
+        let level = create_folder(&conn, "2 stars", "", Some(graded)).unwrap();
+        conn.execute("UPDATE story_folders SET position = 3 WHERE id = ?1", [level]).unwrap();
+        let fox = insert_story(
+            &conn,
+            Some(level),
+            &Parsed { title: "狐狸和葡萄".into(), body: "狐狸饿了。\n\n葡萄很高。".into(), vocab: "狐狸 – hú li – fox\n葡萄 – pú tao – grape".into(), position: 2 },
+        )
+        .unwrap();
+        insert_story(&conn, Some(level), &Parsed { title: "100 个苹果".into(), body: "苹果很多。".into(), vocab: String::new(), position: 0 }).unwrap();
+        create_story(&conn, Some(graded), "CON", "一个名字。").unwrap();
+        create_story(&conn, None, "Loose / story", "在外面。").unwrap();
+
+        // one story to a file
+        let file = root.join("fox.txt");
+        assert_eq!(export_story(&conn, fox, &file).unwrap().stories, 1);
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert_eq!(text, "狐狸和葡萄\n\n--- Key Vocab ---\n狐狸 – hú li – fox\n葡萄 – pú tao – grape\n\n--- Story ---\n狐狸饿了。\n\n葡萄很高。\n");
+        let back = parse_story("fox", &text);
+        assert_eq!((back.title.as_str(), back.body.trim(), back.vocab.lines().count()), ("狐狸和葡萄", "狐狸饿了。\n\n葡萄很高。", 2));
+
+        // a collection to a folder, and everything to a folder
+        let sum = export_folder(&conn, Some(graded), &root).unwrap();
+        assert_eq!((sum.stories, sum.collections), (3, 2));
+        assert!(std::path::Path::new(&sum.path).join("03_2 stars").join("02_狐狸和葡萄.txt").is_file(), "{}", sum.path);
+        assert!(std::path::Path::new(&sum.path).join("03_2 stars").join("00_100 个苹果.txt").is_file());
+        assert!(std::path::Path::new(&sum.path).join("_CON.txt").is_file(), "a name Windows reserves");
+        let everything = export_folder(&conn, None, &root).unwrap();
+        assert_eq!((everything.stories, everything.collections), (4, 3));
+        assert!(export_folder(&conn, Some(graded), &root).unwrap().path.ends_with("(2)"), "never into an existing folder");
+        assert!(export_folder(&conn, None, &file).is_err(), "a folder is needed");
+
+        // another learner imports the collection: the same stories, order and vocabulary
+        let mut theirs = open_in_memory().unwrap();
+        let got = import_folder(&mut theirs, None, &read_folder(std::path::Path::new(&sum.path)).unwrap()).unwrap();
+        assert_eq!((got.stories, got.collections, got.skipped), (3, 2, 0));
+        let folders = list_folders(&theirs).unwrap();
+        let stars = folders.iter().find(|f| f.name == "2 stars").unwrap();
+        assert_eq!(stars.position, 3);
+        let stories = list_stories(&theirs, Some(stars.id)).unwrap();
+        assert_eq!(stories.iter().map(|s| (s.title.as_str(), s.position)).collect::<Vec<_>>(), [("100 个苹果", 0), ("狐狸和葡萄", 2)]);
+        let fox_again = get_story(&theirs, stories[1].id).unwrap();
+        let fox_mine = get_story(&conn, fox).unwrap();
+        assert_eq!((fox_again.title, fox_again.body, fox_again.vocab), (fox_mine.title, fox_mine.body, fox_mine.vocab));
+        assert!(list_stories(&theirs, None).unwrap().iter().any(|s| s.title == "CON"), "the title is the one in the file");
+        // and the single file imports too
+        assert_eq!(import_files(&mut theirs, None, &[read_file(&file).unwrap()]).unwrap(), 1);
         let _ = std::fs::remove_dir_all(&root);
     }
 

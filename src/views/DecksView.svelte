@@ -5,6 +5,7 @@
     api,
     errorText,
     type Card,
+    type CardCopy,
     type CardRow,
     type Deck,
     type DuplicateWord,
@@ -144,7 +145,8 @@
   let sort = $state<Sort>(
     (() => {
       try {
-        return JSON.parse(localStorage.getItem("decks.sort") ?? "null") as Sort;
+        const saved = JSON.parse(localStorage.getItem("decks.sort") ?? "null");
+        return saved && saved.key in COL_DEFAULT && (saved.dir === 1 || saved.dir === -1) ? (saved as Sort) : null;
       } catch {
         return null;
       }
@@ -206,7 +208,31 @@
   });
   const shownCards = $derived(sortedCards.length > limit ? sortedCards.slice(0, limit) : sortedCards);
 
-  let editing = $state<{ card: Card | null } | null>(null);
+  let editing = $state<{ card: Card | null; copies: CardCopy[] } | null>(null);
+
+  // ---------- copies ----------
+  // A word that several decks hold with the same pinyin and meaning is listed once; its row
+  // stands for the copies too. Ticking "Show copies" lists every card.
+  const COPIES_KEY = "decks.showCopies";
+  let showCopies = $state(
+    (() => {
+      try {
+        return localStorage.getItem(COPIES_KEY) === "true";
+      } catch {
+        return false;
+      }
+    })(),
+  );
+  function saveShowCopies() {
+    try {
+      localStorage.setItem(COPIES_KEY, String(showCopies));
+    } catch {
+      /* not essential */
+    }
+  }
+  const folded = $derived(cards.reduce((n, c) => n + c.copies.length, 0));
+  /** Every deck a row's word is in, one to a line. */
+  const decksOf = (c: CardRow) => [c.deckId, ...c.copies.map((x) => x.deckId)].map((id) => deckPath.get(id) ?? "").join("\n");
   let deckForm = $state<{ id: number | null; name: string; description: string; parentId: number | null } | null>(
     null,
   );
@@ -224,7 +250,8 @@
 
   function loadCollapsed(): number[] {
     try {
-      return JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]");
+      const saved = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]");
+      return Array.isArray(saved) ? saved.filter((x) => typeof x === "number") : [];
     } catch {
       return [];
     }
@@ -267,7 +294,11 @@
   });
 
   async function loadDecks() {
-    decks = await api.listDecks();
+    try {
+      decks = await api.listDecks();
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
   }
 
   let request = 0;
@@ -276,12 +307,14 @@
     const mine = ++request;
     loading = true;
     try {
-      const rows = await api.listCards(selectedDeck, search);
+      const rows = await api.listCards(selectedDeck, search, !showCopies);
       if (mine !== request) return; // a newer deck or search was asked for meanwhile
       cards = rows;
       if (fresh) limit = PAGE;
       const ids = new Set(rows.map((c) => c.id));
       if (checked.some((id) => !ids.has(id))) checked = checked.filter((id) => ids.has(id));
+    } catch (e) {
+      if (mine === request) showToast(errorText(e), "err");
     } finally {
       if (mine === request) loading = false;
     }
@@ -292,6 +325,7 @@
   $effect(() => {
     const d = selectedDeck;
     void search;
+    void showCopies;
     if (!ready) return;
     clearTimeout(searchTimer);
     if (d !== lastDeck) {
@@ -330,16 +364,28 @@
       : t("decks.deleteConfirm", { name: deck.path, n: deck.cardCount });
     const ok = await ask(message, { title: t("decks.deleteDeck"), kind: "warning" });
     if (!ok) return;
-    await api.deleteDeck(deck.id);
+    try {
+      await api.deleteDeck(deck.id);
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
     await loadDecks();
     selectedDeck = decks.length ? decks[0].id : null; // changing deck loads its cards
   }
 
   async function removeChecked() {
-    const ok = await ask(t("decks.deleteCards", { n: checked.length }), { kind: "warning" });
+    const withCopies = cards.filter((c) => checkedSet.has(c.id) && c.copies.length).length;
+    const message = withCopies
+      ? t("decks.deleteCardsCopies", { n: checked.length, c: withCopies })
+      : t("decks.deleteCards", { n: checked.length });
+    const ok = await ask(message, { kind: "warning" });
     if (!ok) return;
-    await api.deleteCards(checked);
-    checked = [];
+    try {
+      await api.deleteCards(checked);
+      checked = [];
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
     await refresh();
   }
 
@@ -347,8 +393,12 @@
     const target = Number((e.currentTarget as HTMLSelectElement).value);
     (e.currentTarget as HTMLSelectElement).value = "";
     if (!target) return;
-    await api.moveCards(checked, target);
-    checked = [];
+    try {
+      await api.moveCards(checked, target);
+      checked = [];
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
     await refresh();
   }
 
@@ -562,7 +612,7 @@
         {#if deck}
           <button class="btn" onclick={() => studyDeck(deck.id)}><Icon name="play" size={14} />{t("decks.studyDeck")}</button>
         {/if}
-        <button class="btn primary" disabled={!decks.length} onclick={() => (editing = { card: null })}>
+        <button class="btn primary" disabled={!decks.length} onclick={() => (editing = { card: null, copies: [] })}>
           <Icon name="plus" size={16} />{t("decks.addCard")}
         </button>
       </div>
@@ -573,6 +623,12 @@
         <Icon name="search" size={16} />
         <input type="search" placeholder={t("decks.searchCards")} bind:value={search} />
       </div>
+      {#if folded || showCopies}
+        <label class="copies small muted" title={t("decks.showCopiesHint")}>
+          <input type="checkbox" bind:checked={showCopies} onchange={saveShowCopies} />
+          {showCopies ? t("decks.showCopies") : t("decks.showCopiesN", { n: folded })}
+        </label>
+      {/if}
       {#if checked.length}
         <span class="small muted">{t("decks.selected", { n: checked.length })}</span>
         <select class="move" onchange={moveChecked}>
@@ -630,15 +686,19 @@
           </thead>
           <tbody>
             {#each shownCards as c (c.id)}
-              <tr onclick={() => (editing = { card: c })} class:checked={checkedSet.has(c.id)}>
+              <tr onclick={() => (editing = { card: c, copies: c.copies })} class:checked={checkedSet.has(c.id)}>
                 <td class="cb" onclick={(e) => e.stopPropagation()}>
                   <input type="checkbox" checked={checkedSet.has(c.id)} onchange={() => toggleOne(c.id)} aria-label="Select" />
                 </td>
-                <td class="hz clip" title={c.hanzi}><Hanzi hanzi={c.hanzi} pinyin={c.pinyin} size={20} /></td>
+                <td class="hz clip" title={c.hanzi}
+                  ><Hanzi hanzi={c.hanzi} pinyin={c.pinyin} size={20} />{#if c.copies.length && !showDeckColumn}<span
+                      class="chip ncopies">×{c.copies.length + 1}</span
+                    >{/if}</td
+                >
                 <td class="clip" title={c.pinyin}><Pinyin text={c.pinyin} /></td>
                 <td class="wide clip" title={c.meaning}>{c.meaning}</td>
-                {#if showDeckColumn}<td class="small muted clip" title={deckPath.get(c.deckId) ?? ""}
-                    >{deckPath.get(c.deckId) ?? ""}</td
+                {#if showDeckColumn}<td class="small muted clip" title={decksOf(c)}
+                    >{#if c.copies.length}<span class="chip ncopies">+{c.copies.length}</span>{/if}{deckPath.get(c.deckId) ?? ""}</td
                   >{/if}
                 <td class="clip" title={c.tags.join(", ")}>{#each c.tags as tg (tg)}<span class="chip">{tg}</span> {/each}</td>
                 <td class="clip"><span class="badge {c.status}">{t(`status.${c.status}`)}</span></td>
@@ -660,6 +720,7 @@
 {#if editing}
   <CardEditor
     card={editing.card}
+    copies={editing.copies}
     {decks}
     deckId={selectedDeck}
     onclose={() => (editing = null)}
@@ -876,6 +937,25 @@
   }
   .move {
     width: auto;
+  }
+  .copies {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .copies input {
+    width: auto;
+  }
+  .ncopies {
+    margin: 0 6px 0 0;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .hz .ncopies {
+    margin: 0 0 0 8px;
+    vertical-align: middle;
   }
   .empty {
     padding: 40px;

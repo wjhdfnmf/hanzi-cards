@@ -5,8 +5,11 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
 - **Cards** with characters, pinyin, English meaning, notes and tags, organised into **nested decks**
   (e.g. Class › Class 9; a deck includes its subdecks when listing, studying and exporting)
 - **Duplicates**: the same word can be in several decks but is studied once, with progress shared
-  between the copies; the editor warns about duplicates, and imports skip same-deck duplicates and
-  ask before adding words that are already in other decks
+  between the copies (a copy added later takes it up too), and counted once in the due and new counts; the editor warns about duplicates, and imports skip same-deck duplicates and
+  ask before adding words that are already in other decks. In the card list a word that several decks
+  hold with the same pinyin and meaning is one row (a chip says how many other decks have it, and
+  editing the row keeps the copies the same); copies that differ are listed separately, and "Show
+  copies" lists every card
 - **Fast card entry**: type pinyin in the characters field and pick from a ranked list, like an input method
   (`nihao` → 你好, `woaini` → 我爱你; add a tone number to narrow: `ni3`). Pinyin and meaning fill in from the
   dictionary and update as you add characters. In the pinyin field, a digit after a syllable sets its tone
@@ -30,11 +33,17 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   already have; pinyin is checked against the dictionary, with Pleco's reading choosing between readings),
   and export any deck back to Pleco (decks become categories, pinyin as tone numbers)
 - **CSV/TSV import & export** (also works with Anki and Pleco text exports); a 6th `deck` column holds
-  the subdeck path, e.g. `Class 9` or `Lesson 1/Food`
-- **Your data** (Settings): shows which database file holds your cards and progress; back it up, save a copy
-  anywhere, or switch to a backup or a database from another computer. The first start of each new version
-  backs the database up automatically before changing anything (the last 3 such backups are kept)
-- English interface by default, Simplified Chinese optional; light and dark themes
+  the subdeck path, e.g. `Class 9` or `Lesson 1/Food`. Every file format the app reads and writes is
+  described in [docs/import-formats.md](docs/import-formats.md)
+- **Reading**: stories in nested collections (type them, or import text files or a whole folder); export a
+  story or a whole collection as plain text files, to keep or to share with other learners (importing
+  them gives the same stories back); hover a word for its pinyin and meaning; choose the typeface (free Chinese fonts can be downloaded), size and
+  spacing. Stories are kept in a database of their own
+- **Your data** (Settings): shows which database files hold your cards and your stories; back them up, save
+  a copy anywhere, or switch to a backup or a database from another computer. The app also backs up by
+  itself, in a folder of its own that it keeps tidy. See [Data safety](#data-safety)
+- English interface by default, Simplified Chinese optional; light and dark themes, and 16 illustrated
+  ones in three styles (soft & floral, bold & deep, calm & classic), each with light and dark choices
 
 ## Stack
 
@@ -44,7 +53,66 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
 | Core | Rust: `rusqlite` (bundled SQLite), FSRS-6 scheduler, CC-CEDICT parser/search |
 | UI | Svelte 5 + TypeScript + Vite |
 
-Data lives in a single SQLite file in the OS app-data folder (`com.hanzicards.app/hanzi-cards.db`).
+Data lives in three SQLite files in the OS app-data folder (`com.hanzicards.app/`):
+
+| File | Holds | Backups |
+|---|---|---|
+| `hanzi-cards.db` | cards, decks, study progress, settings, the tutor's spending record | `backups/decks` |
+| `stories.db` | Reading: stories and collections | `backups/reading` |
+| `dictionary.db` | CC-CEDICT (about 25 MB) | none needed: it is made again from the copy that ships with the app |
+
+## Data safety
+
+Your cards and stories are the one thing the app can't make again, so they are guarded in layers:
+
+- **One program at a time.** Only one copy of the app runs (starting it again brings the open window
+  forward), and it holds its two databases exclusively: no other program can open them while it runs,
+  and if another program already has one, the app says so and waits rather than sharing the file.
+- **Every change goes straight into the database file.** The cards and reading databases use SQLite's
+  rollback journal with full sync, not a write-ahead log: there is no second file holding recent work
+  that could be lost or get out of step with the first. (The dictionary, which can be rebuilt, does use
+  a log, so the app keeps reading it while it is being updated.)
+- **Checked at every start.** A database that fails SQLite's integrity check is never opened, upgraded or
+  studied on. The app opens on a recovery page instead, where a backup can be put in place; the damaged
+  file is kept, untouched, in a `damaged-<time>` folder.
+- **Backups, verified.** Each backup is read back and checked before it counts; a failed one is
+  removed, not left looking like a backup. Yours and the app's are kept apart (below).
+- **The dictionary is separate.** It is five times the size of everything else and holds nothing of yours,
+  so it has its own file: card backups stay small (a megabyte or two), and a damaged dictionary is simply
+  thrown away and rebuilt.
+- **Tests never touch the real files.** The benchmark tests that need a learner's cards work on a private
+  copy (`db::open_copy`).
+
+### Backups and their cleanup
+
+| | Where | Made | Kept |
+|---|---|---|---|
+| Your backups | `backups/decks/`, `backups/reading/` | when you press **Back up now** | until you delete them (Settings › Your data has a Delete button for each) |
+| Daily | `auto/` inside those folders | at the first start on each day the app is used | one for each of the last 7 days of use, then one a week (the newest of that week) for the 4 weeks before |
+| Before an update | `auto/` | the first time a new version starts, before it changes anything | the last 3 |
+| Replaced by switching | `auto/` | when you switch to another database | the last 3 |
+
+The app only ever deletes files in `auto/`, and only as the table says: each time it makes an automatic
+backup it removes the ones of the same sort that are no longer kept. So automatic backups can't pile
+up: at most 17 per database, about 1.6 MB each for 14,000 cards (the dictionary isn't in them), a few
+tens of megabytes in all. Nothing is cleaned up while a database is failing its check. Automatic
+backups made by earlier versions, which sat among your own, are moved into `auto/` at the first start
+and then follow the same rules.
+
+## Security
+
+- The page shows everything you type or import as plain text (it never builds HTML from it), and a
+  content security policy lets it load and run only the app's own files and talk only to the app.
+- Every database query passes values as parameters. Text is stored without control characters and within
+  generous length limits; imported files are size-limited before they are read; the page can save only
+  the settings the app knows (`src-tauri/src/input.rs`).
+- CSV exports mark cells that a spreadsheet would run as a formula (`=…`, `@…`) as text; importing the
+  file takes the mark off again.
+- The Anthropic API key is kept in the system keychain, never in a file. Speech is recognised on this
+  computer; recordings are not written to disk (only in debug mode, for checking recognition).
+- Downloads (dictionary, Whisper models, fonts, NVIDIA's libraries) use HTTPS with time limits.
+  NVIDIA's archives and Whisper's model weights are checked against the SHA-256 their publishers give,
+  and a download that is cut short or doesn't match is thrown away.
 
 ## Develop
 
@@ -56,7 +124,7 @@ npm install
 npm run tauri dev      # run the app with hot reload
 npm run tauri build    # produce installers in src-tauri/target/release/bundle
 npm run check          # type-check the front end
-cd src-tauri && cargo test   # Rust unit tests (scheduler, pinyin, cards, study, stats, dictionary)
+cd src-tauri && cargo test   # Rust unit tests (scheduler, cards, study, stats, dictionary, data safety, input checks…)
 ```
 
 ### GPU (optional, NVIDIA)
@@ -71,17 +139,31 @@ scripts\dev-gpu.ps1 build    # -> src-tauri\target\release\bundle\nsis\Hanzi Car
 ```
 
 The installer (NSIS, per-user, English or Simplified Chinese) contains the app and CC-CEDICT, which is
-imported on first start. It is built with GPU support but runs on the processor by default; nothing
-large is bundled:
+imported on first start (into `dictionary.db`). Nothing personal is in it: a new install starts with
+the 12-word sample deck "Getting Started", made by the app itself, and an empty Reading page. It is
+built with GPU support but runs on the processor by default; nothing large is bundled:
 
-- **Whisper models** are downloaded from Hugging Face in Settings › Speech recognition (the Study page
-  offers the recommended one once: Large-v3 Turbo with a working graphics card, otherwise Small).
+- **Whisper models** are downloaded from Hugging Face in Settings › Speech recognition. The Study page
+  offers the one that suits the computer, once: Large-v3 Turbo on a working graphics card with 3 GB or
+  more of its own memory (Small on a smaller card); on the processor, Small with 8 or more cores and
+  8 GB of memory, Base on a more modest computer, Tiny on a very weak one. Settings says why.
 - **NVIDIA's libraries** (cuBLAS, cuBLASLt, cuRAND; about 505 MB from NVIDIA's official redistributable
   archives, SHA-256 checked) are offered in Settings only when an NVIDIA card is found. The app
   delay-loads them, so it starts and works without them on any PC.
 
 Building it needs the CUDA Toolkit and Visual Studio C++ build tools (the script finds them); the
 plain `npm run tauri build` makes a CPU-only installer.
+
+**Signing.** The installer is not signed, so Windows SmartScreen warns on first run ("Windows
+protected your PC"; More info › Run anyway) and Smart App Control on Windows 11 may block it. To sign
+it, get a signing identity (Microsoft's Artifact Signing, about $10 a month, or an OV certificate
+from a certificate authority) and give Tauri the command or certificate in `tauri.conf.json` under
+`bundle › windows` (`signCommand`, or `certificateThumbprint` + `digestAlgorithm` + `timestampUrl`):
+see [Tauri's Windows signing guide](https://v2.tauri.app/distribute/sign/windows/). Signing shows
+your name as the publisher and lets reputation carry from one release to the next; it does not
+remove the warning for a brand-new publisher on day one (Microsoft's
+[SmartScreen notes](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)).
+Only the Microsoft Store avoids the warning entirely.
 
 ### Linux packages
 
@@ -95,7 +177,8 @@ pkg-config file libssl-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev li
 They can be built on Windows inside WSL (Ubuntu).
 
 **Arch Linux:** `packaging/arch/PKGBUILD` (`hanzi-cards-bin`) repackages the release's `.deb`:
-`cd packaging/arch && makepkg -si`. The AppImage also runs on Arch.
+`cd packaging/arch && makepkg -si`. The AppImage also runs on Arch. (The PKGBUILD names the last
+published release; it is updated, with the new checksum, once a release's `.deb` is on GitHub.)
 
 Chinese characters need a CJK font (`fonts-noto-cjk` on Debian/Ubuntu, `noto-fonts-cjk` on Arch);
 the `.deb` and `.rpm` recommend one, and desktop installs usually have one already.
@@ -109,18 +192,23 @@ The microphone needs GStreamer's PulseAudio or PipeWire source (`gst-plugins-goo
 
 ```
 src/                  Svelte front end
-  views/              Study, Decks & Cards, Dictionary, Statistics, Settings
-  components/         Card editor, tone-coloured Hanzi/Pinyin, charts, modal
+  views/              Study, AI Tutor, Decks & Cards, Reading, Dictionary, Statistics, Settings
+  components/         Card editor, tone-coloured Hanzi/Pinyin, charts, modal, recovery page
   lib/                API wrappers, i18n (en / zh), pinyin helpers, speech, settings
 src-tauri/src/
   commands.rs         IPC commands
-  db.rs               schema, migrations, settings
+  db.rs               schema, migrations, settings; how the databases are held (exclusive, journal)
+  data.rs             the database files: integrity check, backups, switching, recovery
+  input.rs            limits and cleaning for everything typed, imported or saved
+  stories.rs          Reading: stories and collections (their own database)
+  ai.rs, tutor.rs     Claude API client and the conversation tutor; billing.rs records its cost
+  net.rs              downloads (one HTTP agent with time limits)
   decks.rs            nested decks: tree, paths, CRUD
   cards.rs            cards, duplicate checks, CSV import/export
   study.rs            session building, answering
   scheduler.rs        FSRS-6
   stats.rs            statistics
-  dictionary.rs       CC-CEDICT import/download/search
+  dictionary.rs       CC-CEDICT import/download/search (its own file, dictionary.db)
   pinyin.rs           tone marks, syllables, search keys, tone sandhi
   speech.rs           checking spoken answers; whisper.rs runs Whisper
   tones.rs            pitch tracking and tone shapes; tone_check.rs picks words by tone

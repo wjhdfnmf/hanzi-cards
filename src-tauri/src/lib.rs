@@ -11,7 +11,9 @@ mod error;
 mod fonts;
 mod gpu;
 mod hsk;
+mod input;
 mod models;
+mod net;
 mod pinyin;
 mod pleco;
 mod scheduler;
@@ -34,6 +36,32 @@ use tauri::Manager;
 pub struct AppState {
     pub db: Mutex<rusqlite::Connection>,
     pub stories: Mutex<rusqlite::Connection>,
+    /// Set when a database couldn't be opened at startup (it's damaged): the app then shows
+    /// what happened and offers the backups, instead of the usual pages. Until one is put in
+    /// place, that database's connection is an empty stand-in.
+    pub startup_problem: Mutex<Option<StartupProblem>>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupProblem {
+    /// "cards" or "reading": the database that couldn't be opened.
+    pub kind: String,
+    /// "damaged" (its backups are offered), "in_use" (another program has it: try again) or
+    /// "error" (anything else, such as no permission to read the file).
+    pub reason: String,
+    pub message: String,
+}
+
+impl StartupProblem {
+    pub fn new(kind: &str, e: &error::AppError) -> Self {
+        let reason = match e {
+            error::AppError::Damaged(_) => "damaged",
+            error::AppError::InUse(_) => "in_use",
+            _ => "error",
+        };
+        StartupProblem { kind: kind.into(), reason: reason.into(), message: e.to_string() }
+    }
 }
 
 /// Linux's webview (WebKitGTK) turns the microphone off and refuses every request for it
@@ -61,24 +89,54 @@ fn allow_microphone(app: &tauri::App) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // First, so a second copy stops before it opens anything: starting the app again
+        // brings the running window forward instead.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
+            // A database that can't be opened (damaged) doesn't stop the app from starting:
+            // it opens on a page that says so and offers the backups (commands.rs).
+            let mut problem: Option<StartupProblem> = None;
             // backs the database up first when a new version starts for the first time
-            let conn = data::open_for_version(&dir, env!("CARGO_PKG_VERSION"))?;
+            let conn = match data::open_for_version(&dir, env!("CARGO_PKG_VERSION")) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("cards database: {e}");
+                    problem = Some(StartupProblem::new("cards", &e));
+                    rusqlite::Connection::open_in_memory()?
+                }
+            };
             gpu::init(&dir); // where downloaded GPU libraries live
             whisper::set_device_preference(
                 &db::get_setting(&conn, "whisper_device").ok().flatten().unwrap_or_else(|| "auto".into()),
             );
-            let stories = data::open_reading(&dir)?;
+            let stories = match data::open_reading(&dir) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("reading database: {e}");
+                    problem.get_or_insert(StartupProblem::new("reading", &e));
+                    rusqlite::Connection::open_in_memory()?
+                }
+            };
+            let healthy = problem.is_none();
             app.manage(AppState {
                 db: Mutex::new(conn),
                 stories: Mutex::new(stories),
+                startup_problem: Mutex::new(problem),
             });
             // the dictionary ships with the app: import it on first start, in the background
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
+                if !healthy {
+                    return;
+                }
                 if let Err(e) = commands::import_bundled_dictionary(handle).await {
                     eprintln!("dictionary import: {e}");
                 }
@@ -88,13 +146,17 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::startup_problem,
+            commands::startup_retry,
             commands::get_settings,
             commands::set_setting,
             commands::data_info,
             commands::data_backup,
+            commands::data_delete_backup,
             commands::data_save_copy,
             commands::data_inspect,
             commands::data_use_file,
+            commands::data_start_fresh,
             commands::data_show_in_folder,
             commands::list_decks,
             commands::create_deck,
@@ -116,6 +178,7 @@ pub fn run() {
             commands::import_pleco,
             commands::export_pleco,
             commands::build_session,
+            commands::session_counts,
             commands::preview_intervals,
             commands::answer_card,
             commands::speech_status,
@@ -168,6 +231,8 @@ pub fn run() {
             commands::delete_story,
             commands::import_stories,
             commands::import_story_folder,
+            commands::export_story,
+            commands::export_story_folder,
             commands::story_segments,
             commands::story_total,
             commands::fonts_list,
@@ -175,6 +240,23 @@ pub fn run() {
             commands::font_delete,
             commands::font_data,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Hanzi Cards");
+        .build(tauri::generate_context!())
+        .expect("error while running Hanzi Cards")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                settle_databases(app);
+            }
+        });
+}
+
+/// On the way out, merge the dictionary's write-ahead log into its file (the cards and
+/// reading databases have no log: every change is already in their main files).
+fn settle_databases(app: &tauri::AppHandle) {
+    let Some(state) = app.try_state::<AppState>() else { return };
+    // never wait here: a command still running at exit keeps its lock
+    let held = state.db.try_lock();
+    if let Ok(conn) = &held {
+        let _ = conn.execute_batch("PRAGMA dict.wal_checkpoint(TRUNCATE)");
+    }
+    drop(held);
 }

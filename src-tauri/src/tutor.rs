@@ -88,6 +88,8 @@ struct Session {
 
 static SESSIONS: Mutex<Option<HashMap<u64, Session>>> = Mutex::new(None);
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+/// Usage of turns that finished after their conversation had been ended: (session, model, usage).
+static ENDED_UNBILLED: Mutex<Vec<(u64, String, Usage)>> = Mutex::new(Vec::new());
 
 fn with_sessions<T>(f: impl FnOnce(&mut HashMap<u64, Session>) -> T) -> T {
     let mut guard = SESSIONS.lock().unwrap_or_else(|e| e.into_inner());
@@ -371,7 +373,12 @@ pub fn turn(
     let keep = result.is_ok() && !matches!(out.stop.as_str(), "refusal" | "cancelled");
     let model = st.model.clone();
     let cost = with_sessions(|s| {
-        let Some(x) = s.get_mut(&session_id) else { return 0.0 };
+        let Some(x) = s.get_mut(&session_id) else {
+            // the conversation was ended while this turn was still coming in: what it cost
+            // is still written to the spending record
+            ENDED_UNBILLED.lock().unwrap_or_else(|e| e.into_inner()).push((session_id, model.clone(), out.usage.clone()));
+            return 0.0;
+        };
         if keep {
             x.messages = std::mem::take(&mut st.messages);
             x.grades.extend(std::mem::take(&mut out.grades));
@@ -451,6 +458,13 @@ fn run_turn(
 
 /// Usage not yet written to the spending record (and the model it was used with).
 pub fn take_unbilled(session_id: u64) -> Option<(String, Usage)> {
+    {
+        let mut ended = ENDED_UNBILLED.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(at) = ended.iter().position(|(id, _, _)| *id == session_id) {
+            let (_, model, usage) = ended.swap_remove(at);
+            return Some((model, usage));
+        }
+    }
     with_sessions(|s| {
         let x = s.get_mut(&session_id)?;
         let u = std::mem::take(&mut x.unbilled);

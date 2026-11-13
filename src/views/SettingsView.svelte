@@ -13,7 +13,7 @@
   import { settings, saveSetting } from "../lib/settings.svelte";
   import { SIZE_MIN, SIZE_MAX, LINE_MIN, LINE_MAX, readingFont, clampSize } from "../lib/reading";
   import FontSelect from "../components/FontSelect.svelte";
-  import { CUSTOM_THEMES, isCustomTheme } from "../lib/themes";
+  import { CUSTOM_THEMES, THEME_GROUPS, isCustomTheme } from "../lib/themes";
   import Modal from "../components/Modal.svelte";
   import licenceText from "../../LICENSE?raw";
   import { fontFiles, downloadFont, removeFont } from "../lib/fonts.svelte";
@@ -74,7 +74,7 @@
 
   onMount(async () => {
     appVersion = await getVersion().catch(() => "");
-    dict = await api.dictStatus();
+    dict = await api.dictStatus().catch(() => null);
     voices = await voicesReady();
     voicesChecked = true;
   });
@@ -134,7 +134,11 @@
   let device = $state<WhisperDeviceInfo | null>(null);
 
   async function refreshSpeech() {
-    [speech, models] = await Promise.all([api.speechStatus(), api.whisperModels()]);
+    try {
+      [speech, models] = await Promise.all([api.speechStatus(), api.whisperModels()]);
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
     device = await api.whisperDeviceInfo().catch(() => null);
   }
 
@@ -169,6 +173,14 @@
     }
     await refreshSpeech();
   }
+
+  /** Why the marked model is the one suggested for this computer. */
+  const recWhy = $derived.by(() => {
+    if (!device) return "";
+    const gb = (mb: number | null) => (mb === null ? "?" : String(Math.round(mb / 1024)));
+    const key = `settings.recWhy.${device.recommendedReason}` as Parameters<typeof t>[0];
+    return t(key, { name: device.recommended, cores: device.cores, ram: gb(device.ramMb), vram: gb(device.gpuMemoryMb) });
+  });
 
   async function setDevice(value: string) {
     await saveSetting("whisperDevice", value);
@@ -252,7 +264,8 @@
   const DB_KINDS: DbKind[] = ["cards", "reading"];
   let data = $state<Record<DbKind, DataInfo | null>>({ cards: null, reading: null });
   let dataBusy = $state(false);
-  let showBackups = $state<Record<DbKind, boolean>>({ cards: false, reading: false });
+  /** Which backup lists are open: "cards", "cards-auto", "reading", "reading-auto". */
+  let showBackups = $state<Record<string, boolean>>({});
 
   async function refreshData() {
     const [cards, reading] = await Promise.all(
@@ -301,6 +314,22 @@
       showToast(errorText(e), "err");
     } finally {
       dataBusy = false;
+    }
+  }
+
+  /** Delete one backup file, after saying which. */
+  async function removeBackup(kind: DbKind, b: DataFile) {
+    const message = t("settings.dataDeleteConfirm", { name: b.name, what: summary(b.contents, kind), when: when(b.modified) });
+    if (!(await ask(message, { kind: "warning", okLabel: t("settings.dataDelete") }))) return;
+    dataBusy = true;
+    try {
+      await api.dataDeleteBackup(kind, b.path);
+      showToast(t("settings.dataDeleted"));
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      dataBusy = false;
+      await refreshData();
     }
   }
 
@@ -590,8 +619,12 @@
     </label>
     {#if themeMode === "custom"}
       <div class="row col">
-        <div class="swatches" role="radiogroup" aria-label={t("settings.theme.custom")}>
-          {#each CUSTOM_THEMES as th (th.key)}
+        <div class="themegroups" role="radiogroup" aria-label={t("settings.theme.custom")}>
+          {#each THEME_GROUPS as g (g)}
+          <div class="themegroup" role="group" aria-label={t(`settings.theme.group.${g}`)}>
+          <div class="tg-name">{t(`settings.theme.group.${g}`)}</div>
+          <div class="swatches">
+          {#each CUSTOM_THEMES.filter((x) => x.group === g) as th (th.key)}
             <button
               class="swatch"
               class:on={settings.theme === th.key}
@@ -606,9 +639,9 @@
                     {#each [{ x: 22, y: 24, r: 9, a: 10 }, { x: 44, y: 40, r: 11, a: 40 }, { x: 18, y: 48, r: 6, a: 70 }] as f, i (i)}
                       <g transform="translate({f.x} {f.y}) rotate({f.a})">
                         {#each [0, 72, 144, 216, 288] as rot (rot)}
-                          <ellipse cx="0" cy={-f.r * 0.95} rx={f.r * 0.55} ry={f.r * 0.95} transform="rotate({rot})" fill="#f29bb7" />
+                          <ellipse cx="0" cy={-f.r * 0.95} rx={f.r * 0.55} ry={f.r * 0.95} transform="rotate({rot})" fill="#f8b9cc" />
                         {/each}
-                        <circle r={f.r * 0.3} fill="#d6457a" />
+                        <circle r={f.r * 0.3} fill="#e2749a" />
                       </g>
                     {/each}
                   </svg>
@@ -620,6 +653,9 @@
               <span class="sw-name">{th.name}</span>
               <span class="sw-zh han faint" lang="zh-CN">{th.zh}</span>
             </button>
+          {/each}
+          </div>
+          </div>
           {/each}
         </div>
       </div>
@@ -1042,6 +1078,9 @@
     {/if}
     <div class="row col">
       <small class="faint">{t("settings.whisperHint")}</small>
+      {#if device && recWhy}
+        <small class="faint">{recWhy}</small>
+      {/if}
       <div class="models">
         {#each models as m (m.name)}
           <div class="model">
@@ -1230,47 +1269,62 @@
         </span>
         <button class="btn" disabled={dataBusy} onclick={() => pickFile(kind)}>{t("settings.dataChoose")}</button>
       </div>
-      {#if d?.backups.length}
-        <div class="row col">
-          <div class="line">
-            <span>
-              {t("settings.dataBackups", { n: d.backups.length })}
-              <small class="faint block"><code class="data-path">{d.backupFolder}</code></small>
-            </span>
-            <button class="btn ghost small" onclick={() => (showBackups[kind] = !showBackups[kind])}>
-              {showBackups[kind] ? t("settings.dataHideBackups") : t("settings.dataShowBackups")}
-            </button>
-          </div>
-          {#if showBackups[kind]}
-            <table class="spend-table">
-              <thead>
-                <tr>
-                  <th>{t("settings.dataSaved")}</th>
-                  <th>{t("settings.dataHolds")}</th>
-                  <th class="num-c">{t("settings.dataSizeCol")}</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each d.backups as b (b.path)}
+      <!-- the learner's own backups, then the app's own: two folders, two lists -->
+      {#each [{ auto: false, list: d?.backups ?? [], folder: d?.backupFolder ?? "" }, { auto: true, list: d?.autoBackups ?? [], folder: d?.autoFolder ?? "" }] as group (group.auto)}
+        {@const key = group.auto ? `${kind}-auto` : kind}
+        {#if d && (group.list.length || group.auto)}
+          <div class="row col">
+            <div class="line">
+              <span>
+                {t(group.auto ? "settings.dataAutoBackups" : "settings.dataBackups", { n: group.list.length })}
+                <small class="faint block">
+                  {group.auto ? t("settings.dataAutoHint", { ...d.keep, mb: mb(group.list.reduce((s, b) => s + b.sizeBytes, 0)) }) : t("settings.dataOwnHint")}
+                </small>
+                <small class="faint block"><code class="data-path">{group.folder}</code></small>
+              </span>
+              {#if group.list.length}
+                <button class="btn ghost small" onclick={() => (showBackups[key] = !showBackups[key])}>
+                  {showBackups[key] ? t("settings.dataHideBackups") : t("settings.dataShowBackups")}
+                </button>
+              {/if}
+            </div>
+            {#if showBackups[key] && group.list.length}
+              <table class="spend-table">
+                <thead>
                   <tr>
-                    <td title={b.name}>{when(b.modified)}</td>
-                    <td>{summary(b.contents, kind)}</td>
-                    <td class="num-c">{mb(b.sizeBytes)} MB</td>
-                    <td class="num-c">
-                      {#if b.contents}
-                        <button class="btn ghost small" disabled={dataBusy} onclick={() => useFile(kind, b.path)}
-                          >{t("settings.dataRestore")}</button
-                        >
-                      {/if}
-                    </td>
+                    <th>{t("settings.dataSaved")}</th>
+                    <th>{t("settings.dataHolds")}</th>
+                    <th class="num-c">{t("settings.dataSizeCol")}</th>
+                    <th></th>
                   </tr>
-                {/each}
-              </tbody>
-            </table>
-          {/if}
-        </div>
-      {/if}
+                </thead>
+                <tbody>
+                  {#each group.list as b (b.path)}
+                    <tr>
+                      <td title={b.name}>
+                        {when(b.modified)}
+                        {#if b.auto}<small class="faint block">{t(`settings.dataSort.${b.auto}`)}</small>{/if}
+                      </td>
+                      <td>{summary(b.contents, kind)}</td>
+                      <td class="num-c">{mb(b.sizeBytes)} MB</td>
+                      <td class="num-c">
+                        {#if b.contents}
+                          <button class="btn ghost small" disabled={dataBusy} onclick={() => useFile(kind, b.path)}
+                            >{t("settings.dataRestore")}</button
+                          >
+                        {/if}
+                        <button class="btn ghost small" disabled={dataBusy} onclick={() => removeBackup(kind, b)}
+                          >{t("settings.dataDelete")}</button
+                        >
+                      </td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
+          </div>
+        {/if}
+      {/each}
       {#if kind === "cards"}
         <label class="row">
           <span>
@@ -1473,11 +1527,24 @@
     color: var(--text-3);
     display: none;
   }
+  .themegroups {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 2px 0 6px;
+  }
+  .tg-name {
+    font-size: 12px;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    padding: 0 4px 2px;
+  }
   .swatches {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
     gap: 12px;
-    padding: 4px 0 6px;
   }
   .swatch {
     display: flex;

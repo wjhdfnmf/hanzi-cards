@@ -122,9 +122,12 @@ fn forget_stability(d: f64, s: f64, r: f64) -> f64 {
 }
 
 /// Same-day review (FSRS-6 short-term stability: grows less the more stable a card already is).
+/// As published (fsrs-rs, py-fsrs): Good and Easy never lower stability; Again and Hard may,
+/// which is what the default parameters were fitted with. (Hard still counts as a correct
+/// recall towards finishing the learning steps: that is this app's rule, not the model's.)
 fn short_term_stability(s: f64, g: u8) -> f64 {
     let mut inc = (W[17] * (g as f64 - 3.0 + W[18])).exp() * s.powf(-W[19]);
-    if g >= 2 {
+    if g >= 3 {
         inc = inc.max(1.0);
     }
     s * inc
@@ -267,20 +270,17 @@ pub fn schedule_all(mem: Option<&Memory>, now: i64, day_start: i64, cfg: &Config
         }
     }
 
-    // Keep review intervals ordered: hard <= good < easy.
+    // Keep review intervals ordered: hard <= good < easy (easy only equals good at the
+    // longest interval allowed).
+    let longest = cfg.max_days.clamp(1, MAX_DAYS as i64);
     if let (Some(h), Some(g)) = (out[1].days, out[2].days) {
         if h > g {
             out[1].days = Some(g);
         }
     }
-    if let (Some(h), Some(g)) = (out[1].days, out[2].days) {
-        if g < h {
-            out[2].days = Some(h);
-        }
-    }
     if let (Some(g), Some(e)) = (out[2].days, out[3].days) {
         if e <= g {
-            out[3].days = Some(g + 1);
+            out[3].days = Some((g + 1).min(longest));
         }
     }
     for o in out.iter_mut() {
@@ -306,6 +306,13 @@ mod tests {
         assert!((retrievability(10.0, 10.0) - 0.9).abs() < 1e-9);
         assert_eq!(interval_days(10.0, 0.9, 36_500), 10);
         assert_eq!(interval_days(10.0, 0.9, 7), 7, "maximum interval");
+        // no rating goes past the longest interval allowed, whatever the fuzz
+        let cfg = Config { max_days: 7, ..Config::default() };
+        let m = Memory { state: REVIEW, stability: 400.0, difficulty: 5.0, due: NOW, last_review: NOW - 400 * DAY, reps: 9, lapses: 0, step: 0 };
+        for seed in 0..50 {
+            let days: Vec<Option<i64>> = schedule_all(Some(&m), NOW, NOW, &cfg, seed).iter().map(|o| o.days).collect();
+            assert!(days.iter().flatten().all(|d| *d <= 7), "{days:?}");
+        }
     }
 
     #[test]
@@ -395,6 +402,24 @@ mod tests {
             assert_eq!((m.state, m.due - m.last_review), (LEARNING, 60), "the last gap repeats");
         }
         assert_eq!(schedule_all(Some(&m), m.due, NOW, &cfg, 1)[2].mem.state, REVIEW);
+    }
+
+    #[test]
+    fn same_day_reviews_follow_fsrs() {
+        // the published FSRS-6 short-term formula with the default parameters
+        let s = 2.3065; // S0(good)
+        let expect = |g: f64| s * (W[17] * (g - 3.0 + W[18])).exp() * s.powf(-W[19]);
+        assert!((short_term_stability(s, 1) - expect(1.0)).abs() < 1e-12);
+        assert!((short_term_stability(s, 2) - expect(2.0)).abs() < 1e-12, "Hard is not held up");
+        assert!(short_term_stability(s, 2) < s, "a same-day Hard lowers stability a little");
+        assert!(short_term_stability(s, 3) >= s && short_term_stability(s, 4) > short_term_stability(s, 3));
+        // Good never lowers it, however stable the card already is
+        assert!(short_term_stability(500.0, 3) >= 500.0);
+        // in a session: Hard on a learning card the same day ends below Good
+        let m = all(None, NOW)[2].mem.clone();
+        let next = all(Some(&m), NOW + 300);
+        assert!(next[1].mem.stability < next[2].mem.stability);
+        assert!(next[1].mem.stability < m.stability && next[2].mem.stability >= m.stability);
     }
 
     #[test]

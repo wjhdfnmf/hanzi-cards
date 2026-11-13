@@ -5,8 +5,9 @@
   import { settings, loadSettings, saveSetting } from "./lib/settings.svelte";
   import { refreshFonts, ensureFont, fontFiles } from "./lib/fonts.svelte";
   import { toast } from "./lib/toast.svelte";
-  import { errorText } from "./lib/api";
+  import { api, errorText, type StartupProblem } from "./lib/api";
   import Icon from "./components/Icon.svelte";
+  import Recovery from "./components/Recovery.svelte";
   import StudyView from "./views/StudyView.svelte";
   import DecksView from "./views/DecksView.svelte";
   import ReadingView from "./views/ReadingView.svelte";
@@ -16,6 +17,8 @@
   import TutorView from "./views/TutorView.svelte";
 
   let startupError = $state("");
+  /** A database that couldn't be opened (damaged): the recovery page shows instead of the app. */
+  let problem = $state<StartupProblem | null>(null);
   let tutorOpened = $state(false);
   $effect(() => {
     if (nav.view === "tutor") tutorOpened = true;
@@ -23,6 +26,13 @@
 
   onMount(async () => {
     try {
+      const found = await api.startupProblem();
+      if (found) {
+        // language and theme, when the settings can still be read (they're with the cards)
+        await loadSettings().catch(() => {});
+        problem = found;
+        return;
+      }
       await loadSettings();
       await refreshFonts();
     } catch (e) {
@@ -33,7 +43,7 @@
   // the Reading font, when it's one the app downloaded
   $effect(() => {
     void fontFiles.list;
-    if (settings.loaded) ensureFont(settings.readingFont).catch(() => {});
+    if (settings.loaded && !problem) ensureFont(settings.readingFont).catch(() => {});
   });
 
   // ---------- the side bar: full, or icons only ----------
@@ -76,6 +86,9 @@
   ];
 </script>
 
+{#if problem}
+  <main class="alone"><Recovery kind={problem.kind} reason={problem.reason} message={problem.message} /></main>
+{:else}
 <div class="shell" class:compact>
   <nav class="sidebar">
     <div class="brand" title={compact ? t("app.name") : undefined}>
@@ -151,6 +164,7 @@
     {/if}
   </main>
 </div>
+{/if}
 
 {#if toast.message}
   {#key toast.id}
@@ -295,6 +309,9 @@
   main {
     overflow-y: auto;
     min-width: 0;
+  }
+  main.alone {
+    height: 100vh;
   }
   .keep.hidden {
     display: none;

@@ -155,7 +155,8 @@ voices now work on this PC, and macOS ships Mandarin voices.
      - Beam search (5) was tried and dropped: slower, no gain on these clips.
      - "Automatic" now prefers Whisper when a model is downloaded: the Windows recognizer must
        pick from a list that includes wrong-tone look-alikes, which looked like "different words".
-     - The last recording is kept as `last-recording.wav` in the app's data folder for checking.
+     - In debug mode (Settings › About) the last recording is kept as `last-recording.wav` in the
+       app's data folder for checking; otherwise recordings aren't written to disk.
      - Whisper small (2026-11-09) beats base everywhere: drill answers 33/40 vs 29/40 (clean),
        29/40 vs 22/40 (noisy); tutor sentences 9/10. It is the model in use on this PC.
    - CPU speed (2026-11-09, Ryzen 9 5900X, Whisper small):

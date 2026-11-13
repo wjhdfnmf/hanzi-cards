@@ -73,45 +73,87 @@ pub fn download(app_data: &Path, name: &str, mut progress: impl FnMut(u64, u64))
     let dir = model_dir(app_data, name)?;
     std::fs::create_dir_all(&dir)?;
     let repo = MODELS.iter().find(|(n, _, _)| *n == name).map(|(_, r, _)| *r).unwrap_or_default();
-    // Sizes first, for an overall progress figure.
-    let mut sizes = Vec::new();
+    // What each file should be (its size, and for the model itself its SHA-256), which also
+    // gives an overall progress figure.
+    let mut remote = Vec::new();
     for f in FILES {
         let url = format!("https://huggingface.co/{repo}/resolve/main/{f}");
-        let resp = ureq::head(&url).call().map_err(|e| AppError::msg(format!("Download failed: {e}")))?;
-        sizes.push(resp.header("content-length").and_then(|v| v.parse::<u64>().ok()).unwrap_or(0));
+        remote.push(remote_file(&url).map_err(|e| AppError::msg(format!("Download failed: {e}")))?);
     }
-    let total: u64 = sizes.iter().sum();
+    let total: u64 = remote.iter().map(|r| r.size).sum();
     let mut done = 0u64;
-    for f in FILES {
+    for (f, expect) in FILES.iter().zip(&remote) {
         let target = dir.join(f);
         let url = format!("https://huggingface.co/{repo}/resolve/main/{f}");
-        let resp = ureq::get(&url).call().map_err(|e| AppError::msg(format!("Download failed: {e}")))?;
         let part = dir.join(format!("{f}.part"));
-        let mut out = std::fs::File::create(&part)?;
-        let mut reader = resp.into_reader();
-        let mut buf = vec![0u8; 1 << 16];
-        loop {
-            let n = reader.read(&mut buf)?;
-            if n == 0 {
-                break;
+        let fetched = (|| -> AppResult<(u64, String)> {
+            let resp = crate::net::get(&url).call().map_err(|e| AppError::msg(format!("Download failed: {e}")))?;
+            let mut out = std::fs::File::create(&part)?;
+            let mut reader = resp.into_reader();
+            let mut hasher = <sha2::Sha256 as sha2::Digest>::new();
+            let mut buf = vec![0u8; 1 << 16];
+            let mut size = 0u64;
+            loop {
+                let n = reader.read(&mut buf)?;
+                if n == 0 {
+                    break;
+                }
+                if expect.sha256.is_some() {
+                    sha2::Digest::update(&mut hasher, &buf[..n]);
+                }
+                out.write_all(&buf[..n])?;
+                size += n as u64;
+                done += n as u64;
+                progress(done, total.max(done));
             }
-            out.write_all(&buf[..n])?;
-            done += n as u64;
-            progress(done, total.max(done));
+            out.flush()?;
+            Ok((size, sha2::Digest::finalize(hasher).iter().map(|b| format!("{b:02x}")).collect()))
+        })();
+        // a file that is cut short or doesn't match never becomes the model
+        let sound = match &fetched {
+            Ok((size, sha)) => (expect.size == 0 || *size == expect.size) && expect.sha256.as_ref().is_none_or(|want| want == sha),
+            Err(_) => false,
+        };
+        if !sound {
+            let _ = std::fs::remove_file(&part);
+            fetched?;
+            return Err(AppError::msg(format!("The download of {f} was incomplete or damaged. Please try again.")));
         }
-        out.flush()?;
-        drop(out);
         std::fs::rename(&part, &target)?;
     }
     for f in OPTIONAL_FILES {
         let url = format!("https://huggingface.co/{repo}/resolve/main/{f}");
-        if let Ok(resp) = ureq::get(&url).call() {
+        if let Ok(resp) = crate::net::get(&url).call() {
             if let Ok(text) = resp.into_string() {
                 std::fs::write(dir.join(f), text)?;
             }
         }
     }
     Ok(())
+}
+
+/// What Hugging Face says a file is, before it is downloaded.
+struct RemoteFile {
+    /// Bytes (0 = not told).
+    size: u64,
+    /// For files kept in large-file storage (the model weights): their SHA-256.
+    sha256: Option<String>,
+}
+
+fn remote_file(url: &str) -> Result<RemoteFile, ureq::Error> {
+    let resp = crate::net::head_first(url)?;
+    let size = ["x-linked-size", "content-length"]
+        .iter()
+        .find_map(|h| resp.header(h).and_then(|v| v.parse::<u64>().ok()))
+        .filter(|_| resp.header("x-linked-size").is_some() || resp.status() < 300)
+        .unwrap_or(0);
+    Ok(RemoteFile { size, sha256: resp.header("x-linked-etag").and_then(sha256_of_etag) })
+}
+
+/// A SHA-256 from an ETag header: `"<64 hex digits>"` (other files carry a shorter git hash).
+fn sha256_of_etag(etag: &str) -> Option<String> {
+    let hex = etag.trim().trim_start_matches("W/").trim_matches('"').to_ascii_lowercase();
+    (hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit())).then_some(hex)
 }
 
 pub fn delete(app_data: &Path, name: &str) -> AppResult<()> {
@@ -187,7 +229,8 @@ impl Tokenizer {
         };
         if let Some(json_vocab) = json["model"]["vocab"].as_object() {
             for (tok, id) in json_vocab {
-                let id = id.as_u64().unwrap_or(0) as usize;
+                // (Whisper's vocabulary is about 52,000 tokens; a file claiming millions is not one)
+                let Some(id) = id.as_u64().filter(|id| *id < 1_000_000).map(|id| id as usize) else { continue };
                 vocab.insert(tok.clone(), id as u32);
                 put(id, tok.chars().filter_map(|c| decoder.get(&c).copied()).collect());
             }
@@ -355,6 +398,10 @@ struct Engine {
     /// `suppress` plus every token with Latin letters or digits (for Chinese-only answers).
     suppress_latin: Tensor,
     device: Device,
+    /// The encoder's output for the last recording, by a fingerprint of its samples and the
+    /// window encoded. Checking tones scores a recording again right after transcribing it
+    /// (`score`): the encoder is most of the work, and its answer is the same.
+    encoded: Option<((u64, usize), Tensor)>,
     /// F16 on the GPU, F32 on the CPU.
     dtype: DType,
     /// "gpu" or "cpu": where the model was loaded.
@@ -381,21 +428,90 @@ fn wanted_kind() -> &'static str {
     if pref != "cpu" && gpu_problem().is_none() { "gpu" } else { "cpu" }
 }
 
-fn gpu_name() -> Option<String> {
-    static NAME: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
-    NAME.get_or_init(|| {
+/// The graphics card's name and memory in MB, as its driver reports them (asked once).
+fn gpu_card() -> Option<(String, Option<u64>)> {
+    static CARD: std::sync::OnceLock<Option<(String, Option<u64>)>> = std::sync::OnceLock::new();
+    CARD.get_or_init(|| {
         let mut cmd = std::process::Command::new("nvidia-smi");
-        cmd.args(["--query-gpu=name", "--format=csv,noheader"]);
+        cmd.args(["--query-gpu=name,memory.total", "--format=csv,noheader,nounits"]);
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
             cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         }
         let out = cmd.output().ok()?;
-        let name = String::from_utf8_lossy(&out.stdout).lines().next()?.trim().to_string();
-        (!name.is_empty()).then_some(name)
+        let text = String::from_utf8_lossy(&out.stdout);
+        let line = text.lines().next()?.trim();
+        // "NVIDIA GeForce RTX 4070, 12282" (the name has no comma, the number comes last)
+        let (name, memory) = match line.rsplit_once(',') {
+            Some((name, mb)) => (name.trim(), mb.trim().parse::<u64>().ok()),
+            None => (line, None),
+        };
+        (!name.is_empty()).then(|| (name.to_string(), memory))
     })
     .clone()
+}
+
+fn gpu_name() -> Option<String> {
+    gpu_card().map(|(name, _)| name)
+}
+
+// ---------- which model suits this computer ----------
+
+/// The computer's memory in MB, when it can be told.
+fn ram_mb() -> Option<u64> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+        let mut status = MEMORYSTATUSEX { dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32, ..Default::default() };
+        // SAFETY: a plain Win32 call filling the struct it is given, whose size is set above.
+        unsafe { GlobalMemoryStatusEx(&mut status) }.ok()?;
+        Some(status.ullTotalPhys / 1_048_576)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let text = std::fs::read_to_string("/proc/meminfo").ok()?;
+        let kb: u64 = text.lines().find_map(|l| l.strip_prefix("MemTotal:"))?.split_whitespace().next()?.parse().ok()?;
+        Some(kb / 1024)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let out = std::process::Command::new("sysctl").args(["-n", "hw.memsize"]).output().ok()?;
+        Some(String::from_utf8_lossy(&out.stdout).trim().parse::<u64>().ok()? / 1_048_576)
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    None
+}
+
+/// The model to suggest and why, from what the computer has.
+///
+/// - `gpu`: Whisper runs on a graphics card now; its memory in MB when known.
+/// - `cores`: logical processors; `ram`: memory in MB when known.
+///
+/// On a graphics card the turbo model answers in a fraction of a second, but in half
+/// precision it needs about 2 GB of the card's memory to itself; a small card gets `small`
+/// (well under 1 GB). On the processor the time per answer grows with the model and shrinks
+/// with the cores (measured: `small` about 1 s on 8 or more cores, several seconds on 4;
+/// `base` about a third of that), and each model needs roughly three times its file size in
+/// memory while it runs. `tiny` is only for computers that can't manage `base`: it hears
+/// Mandarin tones and short words noticeably worse.
+pub fn pick_model(gpu: Option<Option<u64>>, cores: usize, ram: Option<u64>) -> (&'static str, &'static str) {
+    const TURBO_VRAM: u64 = 3_000;
+    const SMALL_VRAM: u64 = 1_500;
+    match gpu {
+        Some(Some(vram)) if vram < SMALL_VRAM => {} // too small a card to help: as without one
+        Some(Some(vram)) if vram < TURBO_VRAM => return ("small", "gpu_small"),
+        Some(_) => return ("large-v3-turbo", "gpu"),
+        None => {}
+    }
+    let ram = ram.unwrap_or(8_192); // unknown: assume an ordinary computer
+    if cores <= 2 || ram < 4_000 {
+        ("tiny", "cpu_weak")
+    } else if cores >= 8 && ram >= 7_500 {
+        ("small", "cpu")
+    } else {
+        ("base", "cpu_modest")
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -409,8 +525,16 @@ pub struct DeviceInfo {
     pub gpu_problem: Option<String>,
     /// Where Whisper runs with the current setting: "gpu" or "cpu".
     pub using: String,
-    /// The model to suggest for this computer.
+    /// The model to suggest for this computer (see `pick_model`).
     pub recommended: String,
+    /// Why that one: "gpu", "gpu_small" (a card with little memory), "cpu", "cpu_modest"
+    /// (few cores or little memory) or "cpu_weak".
+    pub recommended_reason: String,
+    /// Logical processors and memory (MB, when known) the suggestion is based on.
+    pub cores: usize,
+    pub ram_mb: Option<u64>,
+    /// The graphics card's memory in MB, when known.
+    pub gpu_memory_mb: Option<u64>,
     /// NVIDIA's libraries: found a card, installed, downloaded, download size.
     pub libs: Option<crate::gpu::GpuLibs>,
 }
@@ -435,13 +559,20 @@ pub fn device_info(app_data: &Path) -> DeviceInfo {
     let problem = gpu_problem();
     let libs = crate::gpu::status(app_data);
     let using = wanted_kind();
+    let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    let ram = ram_mb();
+    let vram = gpu_card().and_then(|(_, memory)| memory);
+    let (recommended, reason) = pick_model((using == "gpu").then_some(vram), cores, ram);
     DeviceInfo {
         gpu_build: crate::gpu::built_with_gpu(),
         gpu: if problem.is_none() || libs.nvidia { gpu_name().or(Some("NVIDIA GPU".into())) } else { None },
         gpu_problem: problem,
         using: using.to_string(),
-        // Turbo when it runs on the graphics card (~0.3 s an answer), else small (~1 s on a CPU)
-        recommended: if using == "gpu" { "large-v3-turbo" } else { "small" }.to_string(),
+        recommended: recommended.to_string(),
+        recommended_reason: reason.to_string(),
+        cores,
+        ram_mb: ram,
+        gpu_memory_mb: vram,
         libs: crate::gpu::built_with_gpu().then_some(libs),
     }
 }
@@ -522,7 +653,7 @@ fn load(app_data: &Path, name: &str, kind: &'static str) -> AppResult<Engine> {
     let suppress = Tensor::new(suppress.as_slice(), &device).map_err(err)?;
     let suppress_latin = Tensor::new(latin.as_slice(), &device).map_err(err)?;
     let filters = mel_filters(m::SAMPLE_RATE, m::N_FFT, config.num_mel_bins);
-    Ok(Engine { name: name.to_string(), encoder, decoder, config, tokenizer, filters, suppress, suppress_latin, device, dtype, kind })
+    Ok(Engine { name: name.to_string(), encoder, decoder, config, tokenizer, filters, suppress, suppress_latin, device, encoded: None, dtype, kind })
 }
 
 /// Load the model and run it once on silence, so the first real answer is quick.
@@ -627,6 +758,11 @@ fn score_run(e: &mut Engine, pcm: &[f32], opts: &Options, candidates: &[String])
     Ok(out)
 }
 
+/// A fingerprint of a recording (FNV-1a over its samples), to recognise the same one again.
+fn fingerprint(pcm: &[f32]) -> u64 {
+    pcm.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, v| (h ^ v.to_bits() as u64).wrapping_mul(0x0000_0100_0000_01b3))
+}
+
 /// How sure Whisper must be that a recording is English (rather than Chinese) to write it in
 /// English, when English is allowed.
 const ENGLISH_THRESHOLD: f32 = 0.8;
@@ -645,9 +781,17 @@ fn prepare(e: &mut Engine, pcm: &[f32], language: &str, opts: &Options) -> candl
         }
         None => m::N_FRAMES,
     };
-    let mel = Tensor::from_vec(mel, (1, n_mels, frames), &e.device)?
-        .narrow(2, 0, keep.min(frames).min(m::N_FRAMES))?
-        .to_dtype(e.dtype)?;
+    let window = keep.min(frames).min(m::N_FRAMES);
+    let key = (fingerprint(pcm), window);
+    let features = match &e.encoded {
+        Some((k, features)) if *k == key => features.clone(),
+        _ => {
+            let mel = Tensor::from_vec(mel, (1, n_mels, frames), &e.device)?.narrow(2, 0, window)?.to_dtype(e.dtype)?;
+            let features = e.encoder.forward(&mel)?;
+            e.encoded = Some((key, features.clone()));
+            features
+        }
+    };
     let tok = |s: &str| e.tokenizer.special.get(s).copied();
     let (Some(sot), Some(eot), Some(transcribe), Some(no_ts)) =
         (tok(m::SOT_TOKEN), tok(m::EOT_TOKEN), tok(m::TRANSCRIBE_TOKEN), tok(m::NO_TIMESTAMPS_TOKEN))
@@ -655,7 +799,6 @@ fn prepare(e: &mut Engine, pcm: &[f32], language: &str, opts: &Options) -> candl
         return Err(candle_core::Error::Msg("tokenizer is missing Whisper's special tokens".into()));
     };
     let mut lang = tok(&format!("<|{language}|>")).ok_or_else(|| candle_core::Error::Msg(format!("unknown language {language}")))?;
-    let features = e.encoder.forward(&mel)?;
     // A learner may answer in English. When English is allowed and Whisper is fairly sure the
     // recording is mostly English, transcribe it as English instead of translating it.
     if language == "zh" && !opts.chinese_only {
@@ -723,6 +866,10 @@ fn run(e: &mut Engine, pcm: &[f32], language: &str, opts: &Options) -> candle_co
                 .map(|(t, lp)| (*lp, t as u32))
                 .filter(|(lp, _)| lp.is_finite())
                 .collect();
+            if best.is_empty() {
+                // nothing to choose from (the model gave no usable numbers): this row ends
+                continue;
+            }
             // Look a little further down the list when favouring card words.
             let pool = if bias.is_some() { 40 } else { beams + 1 }.min(best.len());
             best.select_nth_unstable_by(pool.saturating_sub(1), |a, b| b.0.total_cmp(&a.0));
@@ -857,6 +1004,55 @@ mod tests {
     }
 
     #[test]
+    fn recognises_checksums_and_recordings() {
+        let sha = "7ebd0e69e78190ffe1438491fa05cc1f5c1aa3a4c4db3bc1723adbb551ea2395";
+        assert_eq!(sha256_of_etag(&format!("\"{sha}\"")).as_deref(), Some(sha));
+        assert_eq!(sha256_of_etag(&format!("W/\"{}\"", sha.to_uppercase())).as_deref(), Some(sha));
+        assert_eq!(sha256_of_etag("\"417aa9de49a132dd3eb6a56d3be2718b15f08917\""), None, "a git hash, not a SHA-256");
+        assert_eq!(sha256_of_etag(""), None);
+        let a = vec![0.25f32; 1600];
+        let mut b = a.clone();
+        b[800] = 0.2500001;
+        assert_eq!(fingerprint(&a), fingerprint(&a.clone()));
+        assert_ne!(fingerprint(&a), fingerprint(&b));
+        assert_ne!(fingerprint(&a), fingerprint(&a[..1599]));
+    }
+
+    /// What Hugging Face reports for a model's files (needs the network):
+    /// cargo test --lib remote_files -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn remote_files() {
+        for f in FILES {
+            let r = remote_file(&format!("https://huggingface.co/openai/whisper-tiny/resolve/main/{f}")).unwrap();
+            println!("{f}: {} bytes, sha256 {:?}", r.size, r.sha256);
+            assert!(r.size > 0);
+        }
+    }
+
+    #[test]
+    fn suggests_a_model_the_computer_can_run() {
+        // a graphics card with room: the turbo model; a small card: small; a tiny one doesn't count
+        assert_eq!(pick_model(Some(Some(12_282)), 16, Some(32_000)), ("large-v3-turbo", "gpu"));
+        assert_eq!(pick_model(Some(None), 8, None), ("large-v3-turbo", "gpu"), "memory unknown: assume a usual card");
+        assert_eq!(pick_model(Some(Some(2_048)), 8, Some(16_000)), ("small", "gpu_small"));
+        assert_eq!(pick_model(Some(Some(1_024)), 8, Some(16_000)), ("small", "cpu"));
+        // on the processor: by cores and memory
+        assert_eq!(pick_model(None, 16, Some(32_000)), ("small", "cpu"));
+        assert_eq!(pick_model(None, 8, Some(7_900)), ("small", "cpu"), "an 8 GB computer reports a little less");
+        assert_eq!(pick_model(None, 4, Some(16_000)), ("base", "cpu_modest"));
+        assert_eq!(pick_model(None, 12, Some(6_000)), ("base", "cpu_modest"));
+        assert_eq!(pick_model(None, 8, None), ("small", "cpu"));
+        assert_eq!(pick_model(None, 2, Some(8_000)), ("tiny", "cpu_weak"));
+        assert_eq!(pick_model(None, 4, Some(3_500)), ("tiny", "cpu_weak"));
+        // every suggestion is a model the app offers
+        for (model, _) in [pick_model(None, 1, None), pick_model(None, 6, None), pick_model(Some(None), 1, None)] {
+            assert!(MODELS.iter().any(|(name, _, _)| *name == model));
+        }
+        assert!(ram_mb().is_none_or(|mb| mb > 256), "a plausible amount of memory");
+    }
+
+    #[test]
     fn pretokenizes_like_gpt2() {
         assert_eq!(pretokenize("Hello world's 123!!  ok"), ["Hello", " world", "'s", " 123", "!!", " ", " ok"]);
         assert_eq!(pretokenize("我想喝咖啡，你呢？"), ["我想喝咖啡", "，", "你呢", "？"]);
@@ -897,7 +1093,7 @@ mod tests {
     #[ignore]
     fn whisper_tone_bench() {
         let (Ok(dir), Ok(tones)) = (std::env::var("WHISPER_DIR"), std::env::var("TONES_DIR")) else { return };
-        let conn = rusqlite::Connection::open(Path::new(&dir).join("hanzi-cards.db")).unwrap();
+        let conn = crate::db::open_copy(Path::new(&dir)); // a private copy, never the real file
         let name = std::env::var("WHISPER_MODEL").unwrap_or_else(|_| "small".into());
         let tones = Path::new(&tones);
         let list: Vec<String> = std::fs::read_to_string(tones.join("list.tsv")).unwrap().lines().map(|l| l.split('\t').next().unwrap().to_string()).collect();
@@ -947,7 +1143,7 @@ mod tests {
     #[ignore]
     fn mixed_language_demo() {
         let (Ok(dir), Ok(mixed)) = (std::env::var("WHISPER_DIR"), std::env::var("MIXED_DIR")) else { return };
-        let conn = rusqlite::Connection::open(Path::new(&dir).join("hanzi-cards.db")).unwrap();
+        let conn = crate::db::open_copy(Path::new(&dir)); // a private copy, never the real file
         let cards: Vec<String> = {
             let mut st = conn.prepare("SELECT DISTINCT hanzi FROM cards").unwrap();
             let v: Vec<String> = st.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect();
@@ -978,7 +1174,7 @@ mod tests {
     #[ignore]
     fn tts_roundtrip() {
         let (Ok(dir), Ok(bench)) = (std::env::var("WHISPER_DIR"), std::env::var("TTS_BENCH")) else { return };
-        let conn = rusqlite::Connection::open(Path::new(&dir).join("hanzi-cards.db")).unwrap();
+        let conn = crate::db::open_copy(Path::new(&dir)); // a private copy, never the real file
         let name = std::env::var("WHISPER_MODEL").unwrap_or_else(|_| "large-v3-turbo".into());
         let bench = Path::new(&bench);
         let list: Vec<Vec<String>> = std::fs::read_to_string(bench.join("list.tsv"))
@@ -1038,7 +1234,7 @@ mod tests {
     #[ignore]
     fn whisper_bench() {
         let (Ok(dir), Ok(bench)) = (std::env::var("WHISPER_DIR"), std::env::var("WHISPER_BENCH")) else { return };
-        let conn = rusqlite::Connection::open(Path::new(&dir).join("hanzi-cards.db")).unwrap();
+        let conn = crate::db::open_copy(Path::new(&dir)); // a private copy, never the real file
         let name = std::env::var("WHISPER_MODEL").unwrap_or_else(|_| "base".into());
         let bench = Path::new(&bench);
 

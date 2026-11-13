@@ -250,6 +250,24 @@ fn merge_duplicates(items: Vec<StudyItem>) -> Vec<StudyItem> {
         .collect()
 }
 
+/// Copies of one word (the same characters in several decks) share their progress: an answer
+/// updates every copy (`answer_at`), and a copy made later takes up what the others have, so
+/// it isn't a "new" word in its deck. `card` = just that card (a new one); `None` = every
+/// card (fills in for copies made before this was done).
+pub fn share_progress(conn: &Connection, card: Option<i64>) -> AppResult<usize> {
+    Ok(conn.execute(
+        "INSERT OR IGNORE INTO progress (card_id, direction, state, stability, difficulty, due, last_review, reps, lapses, step)
+         SELECT c.id, p.direction, p.state, p.stability, p.difficulty, p.due, p.last_review, p.reps, p.lapses, p.step
+         FROM cards c
+         JOIN cards other ON other.hanzi = c.hanzi AND other.id <> c.id
+         JOIN progress p ON p.card_id = other.id
+         WHERE (?1 IS NULL OR c.id = ?1)
+           AND NOT EXISTS (SELECT 1 FROM progress mine WHERE mine.card_id = c.id AND mine.direction = p.direction)
+         ORDER BY p.last_review DESC",
+        [card],
+    )?)
+}
+
 fn load_memory(conn: &Connection, card_id: i64, direction: &str) -> AppResult<Option<Memory>> {
     Ok(conn
         .query_row(
@@ -688,5 +706,38 @@ mod tests {
 
         f.deck_ids = vec![lesson];
         assert_eq!(build_session(&conn, &f).unwrap().items.len(), 1);
+
+        // a copy added later takes up the word's progress: it isn't new in its deck
+        let extra = crate::decks::create_deck(&conn, "Extra", "", None).unwrap();
+        let input = crate::models::CardInput {
+            deck_id: extra,
+            hanzi: "会".into(),
+            pinyin: "huì".into(),
+            meaning: "to be able to".into(),
+            notes: String::new(),
+            tags: vec![],
+        };
+        let c = crate::cards::create_card(&conn, &input).unwrap();
+        let reps: i64 = conn.query_row("SELECT reps FROM progress WHERE card_id = ?1 AND direction = 'recognition'", [c.id], |r| r.get(0)).unwrap();
+        assert_eq!(reps, 1);
+        f.deck_ids = vec![extra];
+        f.mode = "new".into();
+        assert!(build_session(&conn, &f).unwrap().items.is_empty(), "not a new word there");
+
+        // counted once: the word is in three decks, due in one direction
+        conn.execute("UPDATE progress SET due = 0", []).unwrap();
+        let decks = crate::decks::list_decks(&conn).unwrap();
+        let of = |id: i64| decks.iter().find(|d| d.id == id).unwrap();
+        assert_eq!((of(class).due_count, of(class).total_due, of(class).total_cards), (1, 1, 2), "Class and Class 9 hold the same word");
+        assert_eq!((of(lesson).due_count, of(extra).due_count), (1, 1));
+        assert_eq!(of(extra).new_count, 0);
+        let stats = crate::stats::get_stats(&conn, 30).unwrap();
+        assert_eq!(stats.due_now, 1, "one word in one direction, whatever its number of copies");
+        assert_eq!(stats.forecast[0], 1);
+        // a second direction of the same word is a second thing to study
+        answer(&mut conn, b, "recall", 1, 1000).unwrap();
+        conn.execute("UPDATE progress SET due = 0", []).unwrap();
+        assert_eq!(crate::stats::get_stats(&conn, 30).unwrap().due_now, 2);
+        assert_eq!(crate::decks::list_decks(&conn).unwrap().iter().find(|d| d.id == class).unwrap().total_due, 2);
     }
 }

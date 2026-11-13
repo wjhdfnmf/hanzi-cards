@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { open, ask } from "@tauri-apps/plugin-dialog";
+  import { open, ask, save } from "@tauri-apps/plugin-dialog";
   import { api, errorText, type Segment, type Story, type StoryFolder, type StoryInfo } from "../lib/api";
   import { t } from "../lib/i18n.svelte";
   import { settings, saveSetting } from "../lib/settings.svelte";
@@ -142,7 +142,8 @@
   let collapsed = $state<number[]>(
     (() => {
       try {
-        return JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]");
+        const saved = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]");
+        return Array.isArray(saved) ? saved.filter((x) => typeof x === "number") : [];
       } catch {
         return [];
       }
@@ -308,6 +309,34 @@
 
   let importMenu = $state(false);
 
+  // ---------- export: files to keep or to share (the same files the import reads) ----------
+
+  /** The open story as a text file. */
+  async function exportStory() {
+    if (!story) return;
+    const name = story.title.replace(/[\\/:*?"<>|]/g, "_").trim() || "story";
+    const path = await save({ defaultPath: `${name}.txt`, filters: [{ name: t("reading.importFiles"), extensions: ["txt"] }] });
+    if (!path) return;
+    try {
+      await api.exportStory(story.id, path);
+      showToast(t("reading.exportedStory", { path }));
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+  }
+
+  /** The collection shown (or every story) as a new folder inside one the learner picks. */
+  async function exportCollection() {
+    const into = await open({ directory: true, multiple: false, title: t("reading.exportInto") });
+    if (!into) return;
+    try {
+      const r = await api.exportStoryFolder(selected, into as string);
+      showToast(t("reading.exported", { s: r.stories, path: r.path }));
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+  }
+
   /** A folder: it becomes a collection here, its subfolders collections inside it. */
   async function importFolder() {
     importMenu = false;
@@ -456,6 +485,9 @@
           >
             <Icon name="edit" />
           </button>
+          <button class="btn ghost icon" title={t("reading.exportStory")} aria-label={t("reading.exportStory")} onclick={exportStory}>
+            <Icon name="download" />
+          </button>
           <button class="btn ghost icon" title={t("reading.deleteStory")} aria-label={t("reading.deleteStory")} onclick={removeStory}>
             <Icon name="trash" />
           </button>
@@ -544,6 +576,9 @@
               </div>
             {/if}
           </div>
+          <button class="btn" disabled={!stories.length && !folder?.totalStories} title={t("reading.exportHint")} onclick={exportCollection}>
+            <Icon name="download" size={16} />{t("reading.export")}
+          </button>
           <button class="btn primary" onclick={() => (storyForm = { id: null, title: "", body: "", folderId: selected })}>
             <Icon name="plus" size={16} />{t("reading.addStory")}
           </button>

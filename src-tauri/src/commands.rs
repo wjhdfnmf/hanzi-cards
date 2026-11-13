@@ -29,6 +29,79 @@ async fn blocking<T: Send + 'static>(
     .map_err(|e| AppError::msg(e.to_string()))?
 }
 
+// ---------- startup ----------
+
+/// Why the app couldn't open one of its databases at startup, if it couldn't (the page then
+/// shows this and the backups instead of the usual pages).
+#[tauri::command]
+pub fn startup_problem(state: State<AppState>) -> Option<crate::StartupProblem> {
+    state.startup_problem.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+/// Try again to open the database that couldn't be opened at startup (another program had
+/// it, say). True when it's open now; the page then loads the app as usual.
+#[tauri::command]
+pub fn startup_retry(app: AppHandle, state: State<AppState>) -> AppResult<bool> {
+    let Some(problem) = startup_problem(state.clone()) else { return Ok(true) };
+    let kind = data::Kind::parse(Some(&problem.kind))?;
+    let dir = app_data(&app)?;
+    let opened = match kind {
+        data::Kind::Cards => data::open_for_version(&dir, env!("CARGO_PKG_VERSION")),
+        data::Kind::Reading => data::open_reading(&dir),
+    };
+    match opened {
+        Ok(conn) => {
+            with_db(&state, kind, |c| {
+                *c = conn;
+                Ok(())
+            })?;
+            clear_startup_problem(&app, &state, kind);
+            if state.startup_problem.lock().unwrap_or_else(|e| e.into_inner()).is_some() {
+                return Ok(false); // the other database's turn
+            }
+            if kind == data::Kind::Cards {
+                whisper::set_device_preference(&db::get_setting(&lock(&state), "whisper_device")?.unwrap_or_else(|| "auto".into()));
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = import_bundled_dictionary(app).await {
+                        eprintln!("dictionary import: {e}");
+                    }
+                });
+            }
+            Ok(true)
+        }
+        Err(e) => {
+            *state.startup_problem.lock().unwrap_or_else(|e| e.into_inner()) = Some(crate::StartupProblem::new(&problem.kind, &e));
+            Ok(false)
+        }
+    }
+}
+
+/// Whether the database of `kind` is the one that couldn't be opened at startup.
+fn has_startup_problem(state: &AppState, kind: data::Kind) -> bool {
+    let problem = state.startup_problem.lock().unwrap_or_else(|e| e.into_inner());
+    problem.as_ref().is_some_and(|p| data::Kind::parse(Some(&p.kind)).ok() == Some(kind))
+}
+
+/// The database of `kind` is in use again (a backup was put in place, or a new one started).
+fn clear_startup_problem(app: &AppHandle, state: &AppState, kind: data::Kind) {
+    if !has_startup_problem(state, kind) {
+        return;
+    }
+    *state.startup_problem.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    // Only the first problem is shown. If the reading database couldn't be opened either, it
+    // is still a stand-in: open it now, or show its problem next.
+    let Ok(dir) = app_data(app) else { return };
+    let mut stories = state.stories.lock().unwrap_or_else(|e| e.into_inner());
+    if stories.path().is_none_or(str::is_empty) {
+        match data::open_reading(&dir) {
+            Ok(conn) => *stories = conn,
+            Err(e) => {
+                *state.startup_problem.lock().unwrap_or_else(|e| e.into_inner()) = Some(crate::StartupProblem::new("reading", &e));
+            }
+        }
+    }
+}
+
 // ---------- settings ----------
 
 #[tauri::command]
@@ -64,6 +137,7 @@ pub fn get_settings(state: State<AppState>) -> AppResult<HashMap<String, String>
 
 #[tauri::command]
 pub fn set_setting(state: State<AppState>, key: String, value: String) -> AppResult<()> {
+    crate::input::check_setting(&key, &value)?;
     if key == "whisper_device" {
         whisper::set_device_preference(&value);
     }
@@ -92,8 +166,15 @@ pub fn data_info(app: AppHandle, state: State<AppState>, kind: Option<String>) -
 pub fn data_backup(app: AppHandle, state: State<AppState>, kind: Option<String>) -> AppResult<String> {
     let kind = data::Kind::parse(kind.as_deref())?;
     let dir = app_data(&app)?;
-    let path = with_db(&state, kind, |c| data::backup(c, &dir, kind, ""))?;
+    let path = with_db(&state, kind, |c| data::backup(c, &dir, kind, data::Made::ByHand))?;
     Ok(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
+}
+
+/// Delete one backup file the learner chose in Settings.
+#[tauri::command]
+pub fn data_delete_backup(app: AppHandle, kind: Option<String>, path: String) -> AppResult<()> {
+    let kind = data::Kind::parse(kind.as_deref())?;
+    data::delete_backup(&app_data(&app)?, kind, std::path::Path::new(&path))
 }
 
 /// Save a copy of a database to a file the user chose.
@@ -116,11 +197,45 @@ pub fn data_inspect(kind: Option<String>, path: String) -> AppResult<data::FileI
 pub fn data_use_file(app: AppHandle, state: State<AppState>, kind: Option<String>, path: String) -> AppResult<String> {
     let kind = data::Kind::parse(kind.as_deref())?;
     let dir = app_data(&app)?;
+    let _no_import = if kind == data::Kind::Cards { Some(dictionary_idle()?) } else { None };
+    let recovering = has_startup_problem(&state, kind);
     let saved = with_db(&state, kind, |c| data::use_file(c, &dir, kind, std::path::Path::new(&path)))?;
+    clear_startup_problem(&app, &state, kind);
+    if kind == data::Kind::Cards && recovering {
+        // the dictionary import was skipped at startup; an old backup may not have one
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = import_bundled_dictionary(handle).await {
+                eprintln!("dictionary import: {e}");
+            }
+        });
+    }
     if kind == data::Kind::Cards {
         whisper::set_device_preference(&db::get_setting(&lock(&state), "whisper_device")?.unwrap_or_else(|| "auto".into()));
     }
     Ok(saved.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
+}
+
+/// Only when a database couldn't be opened at startup: set its damaged files aside (in a
+/// "damaged-<time>" folder, untouched) and start a new, empty one. Returns that folder's name.
+#[tauri::command]
+pub fn data_start_fresh(app: AppHandle, state: State<AppState>, kind: Option<String>) -> AppResult<String> {
+    let kind = data::Kind::parse(kind.as_deref())?;
+    let dir = app_data(&app)?;
+    if !has_startup_problem(&state, kind) {
+        return Err(AppError::msg("That database is in use; there's nothing to replace."));
+    }
+    let aside = with_db(&state, kind, |c| data::start_fresh(c, &dir, kind))?;
+    clear_startup_problem(&app, &state, kind);
+    if kind == data::Kind::Cards {
+        // the new database has no dictionary yet
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = import_bundled_dictionary(app).await {
+                eprintln!("dictionary import: {e}");
+            }
+        });
+    }
+    Ok(aside.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
 }
 
 /// Open the app-data folder, where both databases and their backups are.
@@ -165,9 +280,23 @@ pub fn delete_deck(state: State<AppState>, id: i64) -> AppResult<()> {
 // ---------- cards ----------
 
 #[tauri::command]
-pub async fn list_cards(app: AppHandle, deck_id: Option<i64>, search: Option<String>) -> AppResult<Vec<CardRow>> {
+pub async fn list_cards(
+    app: AppHandle,
+    deck_id: Option<i64>,
+    search: Option<String>,
+    merge: Option<bool>,
+) -> AppResult<Vec<CardRow>> {
     // off the main thread: a big deck takes a moment to load, and the window shouldn't freeze meanwhile
-    blocking(app, move |conn| cards::list_cards(conn, deck_id, search.as_deref().unwrap_or(""))).await
+    blocking(app, move |conn| {
+        let search = search.as_deref().unwrap_or("");
+        // `merge`: one row for a word that several decks hold with the same pinyin and meaning
+        if merge.unwrap_or(false) {
+            cards::list_words(conn, deck_id, search)
+        } else {
+            cards::list_cards(conn, deck_id, search)
+        }
+    })
+    .await
 }
 
 #[tauri::command]
@@ -176,8 +305,9 @@ pub fn create_card(state: State<AppState>, input: CardInput) -> AppResult<Card> 
 }
 
 #[tauri::command]
-pub fn update_card(state: State<AppState>, id: i64, input: CardInput) -> AppResult<Card> {
-    cards::update_card(&lock(&state), id, &input)
+pub fn update_card(state: State<AppState>, id: i64, input: CardInput, copies: Option<Vec<i64>>) -> AppResult<Card> {
+    // `copies`: the cards a folded row stood for; they get the same characters, pinyin and meaning
+    cards::update_card_and_copies(&mut lock(&state), id, &input, copies.as_deref().unwrap_or(&[]))
 }
 
 #[tauri::command]
@@ -287,8 +417,29 @@ pub async fn export_cards(app: AppHandle, deck_id: Option<i64>, path: String) ->
 // ---------- study ----------
 
 #[tauri::command]
-pub fn build_session(state: State<AppState>, filter: StudyFilter) -> AppResult<SessionInfo> {
-    study::build_session(&lock(&state), &filter)
+pub async fn build_session(app: AppHandle, filter: StudyFilter) -> AppResult<SessionInfo> {
+    // off the main thread: it reads every card of the chosen decks
+    blocking(app, move |conn| study::build_session(conn, &filter)).await
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionCounts {
+    /// Cards a session with this selection would have.
+    pub matching: usize,
+    pub due_count: i64,
+    pub new_remaining_today: i64,
+}
+
+/// What `build_session` would give, as numbers only: the Study page recounts on every change
+/// of the selection, and a big selection is thousands of cards it has no use for.
+#[tauri::command]
+pub async fn session_counts(app: AppHandle, filter: StudyFilter) -> AppResult<SessionCounts> {
+    blocking(app, move |conn| {
+        let info = study::build_session(conn, &filter)?;
+        Ok(SessionCounts { matching: info.items.len(), due_count: info.due_count, new_remaining_today: info.new_remaining_today })
+    })
+    .await
 }
 
 #[tauri::command]
@@ -308,8 +459,8 @@ pub fn answer_card(
 }
 
 #[tauri::command]
-pub fn get_stats(state: State<AppState>, days: i64) -> AppResult<Stats> {
-    stats::get_stats(&lock(&state), days)
+pub async fn get_stats(app: AppHandle, days: i64) -> AppResult<Stats> {
+    blocking(app, move |conn| stats::get_stats(conn, days)).await
 }
 
 // ---------- speaking ----------
@@ -333,6 +484,7 @@ pub async fn speech_check_audio(
     others: Vec<String>,
     pcm: Vec<f32>,
 ) -> AppResult<speech::SpokenAnswer> {
+    crate::input::check_pcm(&pcm)?;
     let dir = app_data(&app)?;
     let (plan, status, pitch) = blocking(app.clone(), {
         let dir = dir.clone();
@@ -437,6 +589,7 @@ pub async fn pitch_profile_info(app: AppHandle) -> AppResult<calibration::Profil
 /// earlier recordings. Nothing is saved.
 #[tauri::command]
 pub async fn pitch_analyze(app: AppHandle, pcm: Vec<f32>, tone: Option<u8>, earlier: Vec<calibration::Earlier>) -> AppResult<calibration::Analysis> {
+    crate::input::check_pcm(&pcm)?;
     let saved_typical = blocking(app, |conn| Ok(saved_profile(conn)?.typical_length())).await?;
     tauri::async_runtime::spawn_blocking(move || calibration::analyze(&pcm, tone, &earlier, saved_typical))
         .await
@@ -470,6 +623,7 @@ fn debug_mode(conn: &Connection) -> AppResult<bool> {
 /// nothing is written and it returns None: a learner's voice isn't kept unless they ask.
 #[tauri::command]
 pub async fn pitch_save_recording(app: AppHandle, pcm: Vec<f32>, label: String) -> AppResult<Option<String>> {
+    crate::input::check_pcm(&pcm)?;
     if !blocking(app.clone(), |conn| debug_mode(conn)).await? {
         return Ok(None);
     }
@@ -528,15 +682,18 @@ fn card_words(conn: &Connection) -> AppResult<Vec<String>> {
 /// Judge a recorded English answer ("say the meaning") with Whisper.
 #[tauri::command]
 pub async fn speech_check_english(app: AppHandle, card_id: i64, pcm: Vec<f32>) -> AppResult<speech::SpokenAnswer> {
+    crate::input::check_pcm(&pcm)?;
     let dir = app_data(&app)?;
-    let (card, status) = blocking(app.clone(), {
+    let (card, status, keep_recording) = blocking(app.clone(), {
         let dir = dir.clone();
-        move |conn| Ok((cards::get_card(conn, card_id)?, speech::engine_status(conn, &dir)))
+        move |conn| Ok((cards::get_card(conn, card_id)?, speech::engine_status(conn, &dir), debug_mode(conn)?))
     })
     .await?;
     let model = status.whisper_model.ok_or_else(|| AppError::msg("No Whisper model is downloaded."))?;
     let text = tauri::async_runtime::spawn_blocking(move || {
-        let _ = speech::write_wav(&dir.join("last-recording.wav"), &pcm);
+        if keep_recording {
+            let _ = speech::write_wav(&dir.join(LAST_RECORDING), &pcm);
+        }
         let opts = whisper::Options {
             trim: if whisper::using_gpu() { None } else { Some(SPEECH_WINDOW) },
             ..Default::default()
@@ -548,9 +705,12 @@ pub async fn speech_check_english(app: AppHandle, card_id: i64, pcm: Vec<f32>) -
     Ok(speech::judge_meaning(&card.meaning, &text))
 }
 
+/// In debug mode the last recording is kept in the app's data folder (overwritten each time),
+/// so recognition problems can be checked. Otherwise a learner's voice isn't written to disk.
+const LAST_RECORDING: &str = "last-recording.wav";
+
 /// Transcribe a learner speaking Mandarin with Whisper (raw text), favouring their card
-/// words. Keeps the last recording in the app's data folder (`last-recording.wav`,
-/// overwritten each time) so recognition problems can be checked.
+/// words.
 /// `chinese_only`: block Latin letters and digits (drill answers); otherwise English is kept,
 /// and a recording that's clearly English is written in English (the tutor).
 async fn run_whisper(
@@ -561,11 +721,13 @@ async fn run_whisper(
     prompt: String,
     chinese_only: bool,
 ) -> AppResult<String> {
-    let bias_words = blocking(app.clone(), |conn| card_words(conn)).await?;
+    let (bias_words, keep_recording) = blocking(app.clone(), |conn| Ok((card_words(conn)?, debug_mode(conn)?))).await?;
     // English only with a model that handles it; smaller models garble it into Chinese
     let chinese_only = chinese_only || !whisper::keeps_english(&model);
     tauri::async_runtime::spawn_blocking(move || {
-        let _ = speech::write_wav(&dir.join("last-recording.wav"), &pcm);
+        if keep_recording {
+            let _ = speech::write_wav(&dir.join(LAST_RECORDING), &pcm);
+        }
         let opts = whisper::Options {
             prompt,
             bias_words,
@@ -586,6 +748,7 @@ async fn run_whisper(
 /// Transcribe recorded Mandarin (16 kHz mono samples) with Whisper.
 #[tauri::command]
 pub async fn speech_transcribe(app: AppHandle, pcm: Vec<f32>, prompt: Option<String>) -> AppResult<String> {
+    crate::input::check_pcm(&pcm)?;
     let dir = app_data(&app)?;
     let status = blocking(app.clone(), {
         let dir = dir.clone();
@@ -712,9 +875,43 @@ pub async fn import_bundled_dictionary(app: AppHandle) -> AppResult<()> {
     let text = tauri::async_runtime::spawn_blocking(move || dictionary::read_file(&path))
         .await
         .map_err(|e| AppError::msg(e.to_string()))??;
-    let n = blocking(app.clone(), move |conn| dictionary::import(conn, &text)).await?;
+    let n = import_dictionary(&app, text).await?;
     let _ = app.emit("dictionary-ready", n);
     Ok(())
+}
+
+/// Held while a dictionary import writes: one import at a time, and the cards database
+/// isn't switched for another underneath it.
+static DICTIONARY_IMPORT: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Fails while a dictionary import is running; otherwise holds imports off until dropped.
+fn dictionary_idle() -> AppResult<MutexGuard<'static, ()>> {
+    match DICTIONARY_IMPORT.try_lock() {
+        Ok(guard) => Ok(guard),
+        Err(std::sync::TryLockError::Poisoned(e)) => Ok(e.into_inner()),
+        Err(std::sync::TryLockError::WouldBlock) => {
+            Err(AppError::msg("The dictionary is being updated. Try again when it has finished."))
+        }
+    }
+}
+
+/// Replace the dictionary (its own file, dictionary.db), through a connection of its own. The
+/// import is one write that takes a few seconds; on the app's connection every other
+/// command, and with them the window, would wait for it (most noticeably at the very first
+/// start). This way reading goes on meanwhile (the previous dictionary shows until the new
+/// one is complete), and the cards database isn't touched at all.
+async fn import_dictionary(app: &AppHandle, text: String) -> AppResult<i64> {
+    let path = app_data(app)?.join(dictionary::DB_FILE);
+    tauri::async_runtime::spawn_blocking(move || {
+        let _one = DICTIONARY_IMPORT.lock().unwrap_or_else(|e| e.into_inner());
+        let mut conn = dictionary::open(&path)?;
+        let n = dictionary::import(&mut conn, &text)?;
+        // into the file itself now, rather than whenever the log next fills up
+        let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)");
+        Ok(n)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
 }
 
 #[tauri::command]
@@ -722,24 +919,27 @@ pub fn dict_status(state: State<AppState>) -> AppResult<DictStatus> {
     dictionary::status(&lock(&state))
 }
 
+// Dictionary lookups run off the main thread: a search reads the whole dictionary, and they
+// are made as the learner types. (The page ignores an answer that arrives after a newer one.)
+
 #[tauri::command]
-pub fn dict_search(state: State<AppState>, query: String, limit: Option<i64>) -> AppResult<Vec<DictEntry>> {
-    dictionary::search(&lock(&state), &query, limit.unwrap_or(60))
+pub async fn dict_search(app: AppHandle, query: String, limit: Option<i64>) -> AppResult<Vec<DictEntry>> {
+    blocking(app, move |conn| dictionary::search(conn, &query, limit.unwrap_or(60))).await
 }
 
 #[tauri::command]
-pub fn dict_lookup(state: State<AppState>, hanzi: String) -> AppResult<Vec<DictEntry>> {
-    dictionary::lookup(&lock(&state), &hanzi)
+pub async fn dict_lookup(app: AppHandle, hanzi: String) -> AppResult<Vec<DictEntry>> {
+    blocking(app, move |conn| dictionary::lookup(conn, &hanzi)).await
 }
 
 #[tauri::command]
-pub fn dict_candidates(state: State<AppState>, query: String, limit: Option<usize>) -> AppResult<Vec<Candidate>> {
-    dictionary::candidates(&lock(&state), &query, limit.unwrap_or(9))
+pub async fn dict_candidates(app: AppHandle, query: String, limit: Option<usize>) -> AppResult<Vec<Candidate>> {
+    blocking(app, move |conn| dictionary::candidates(conn, &query, limit.unwrap_or(9))).await
 }
 
 #[tauri::command]
-pub fn dict_segment(state: State<AppState>, text: String, prefer: Option<Vec<i64>>) -> AppResult<Vec<Segment>> {
-    dictionary::segment(&lock(&state), &text, &prefer.unwrap_or_default())
+pub async fn dict_segment(app: AppHandle, text: String, prefer: Option<Vec<i64>>) -> AppResult<Vec<Segment>> {
+    blocking(app, move |conn| dictionary::segment(conn, &text, &prefer.unwrap_or_default())).await
 }
 
 #[tauri::command]
@@ -748,7 +948,7 @@ pub async fn dict_import_file(app: AppHandle, path: String) -> AppResult<i64> {
     let text = tauri::async_runtime::spawn_blocking(move || dictionary::read_file(&PathBuf::from(path)))
         .await
         .map_err(|e| AppError::msg(e.to_string()))??;
-    blocking(app, move |conn| dictionary::import(conn, &text)).await
+    import_dictionary(&app, text).await
 }
 
 #[tauri::command]
@@ -756,7 +956,7 @@ pub async fn dict_download(app: AppHandle) -> AppResult<i64> {
     let text = tauri::async_runtime::spawn_blocking(dictionary::download)
         .await
         .map_err(|e| AppError::msg(e.to_string()))??;
-    blocking(app, move |conn| dictionary::import(conn, &text)).await
+    import_dictionary(&app, text).await
 }
 
 // ---------- AI tutor ----------
@@ -812,6 +1012,7 @@ pub async fn tutor_start(
 ) -> AppResult<tutor::Started> {
     blocking(app, move |conn| {
         let model = tutor_model(conn);
+        let scenario = crate::input::clip(&crate::input::clean(&scenario, false), crate::input::MAX_MESSAGE);
         tutor::start(conn, &model, &deck_ids, &scenario, &options.unwrap_or_default())
     })
     .await
@@ -828,6 +1029,10 @@ struct TutorEventPayload {
 #[tauri::command]
 pub async fn tutor_send(app: AppHandle, session_id: u64, text: Option<String>) -> AppResult<tutor::TurnResult> {
     let billing_app = app.clone();
+    if let Some(t) = &text {
+        crate::input::fits("That message", t, crate::input::MAX_MESSAGE)?;
+    }
+    let text = text.map(|t| crate::input::clean(&t, true));
     let result = tauri::async_runtime::spawn_blocking(move || {
         let known = |hanzi: &str| {
             let state = app.state::<AppState>();
@@ -871,6 +1076,7 @@ pub fn tutor_end(session_id: u64) -> AppResult<tutor::Summary> {
 
 #[tauri::command]
 pub async fn tutor_translate(app: AppHandle, text: String, session_id: Option<u64>) -> AppResult<String> {
+    crate::input::fits("That text", &text, crate::input::MAX_STORY)?;
     let model = blocking(app.clone(), |conn| Ok(tutor_model(conn))).await?;
     let (english, model, usage) = tauri::async_runtime::spawn_blocking(move || tutor::translate(&model, &text))
         .await
@@ -1000,6 +1206,18 @@ pub async fn import_story_folder(app: AppHandle, folder_id: Option<i64>, path: S
         .await
         .map_err(|e| AppError::msg(e.to_string()))??;
     blocking_stories(app, move |conn| stories::import_folder(conn, folder_id, &tree)).await
+}
+
+/// Write one story to a text file the learner chose (the format the import reads).
+#[tauri::command]
+pub async fn export_story(app: AppHandle, id: i64, path: String) -> AppResult<stories::ExportSummary> {
+    blocking_stories(app, move |conn| stories::export_story(conn, id, &PathBuf::from(path))).await
+}
+
+/// Write a collection (none = every story) as a new folder of story files inside `path`.
+#[tauri::command]
+pub async fn export_story_folder(app: AppHandle, folder_id: Option<i64>, path: String) -> AppResult<stories::ExportSummary> {
+    blocking_stories(app, move |conn| stories::export_folder(conn, folder_id, &PathBuf::from(path))).await
 }
 
 /// The story's text split into dictionary words (the dictionary is in the cards database).

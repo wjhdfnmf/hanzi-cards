@@ -62,6 +62,16 @@ pub struct CardRow {
     pub next_due: Option<i64>,
     pub reps: i64,
     pub lapses: i64,
+    /// Other cards this row stands for as well (only when a list folds copies together).
+    pub copies: Vec<CardCopy>,
+}
+
+/// A card that is a copy of the one a list shows: the same characters, pinyin and meaning.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CardCopy {
+    pub id: i64,
+    pub deck_id: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]

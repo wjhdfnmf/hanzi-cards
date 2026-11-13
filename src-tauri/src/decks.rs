@@ -7,7 +7,7 @@ use crate::error::{AppError, AppResult};
 use crate::models::Deck;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Separator used when showing a deck's path.
 pub const PATH_LABEL_SEP: &str = " › ";
@@ -51,19 +51,20 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
 
 /// All decks in tree order (parents before children, siblings in natural order), with
 /// their path, depth, own counts and totals including subdecks.
+///
+/// Cards are counted as cards. Due and new are counted as a study session would show them:
+/// by word, so a word that is in several decks (it is studied once, its progress shared)
+/// counts once in a deck that holds it twice, and once in a parent whose subdecks both
+/// hold it. A due word counts once for each direction it is due in.
 pub fn list_decks(conn: &Connection) -> AppResult<Vec<Deck>> {
     let t = now();
     let mut stmt = conn.prepare(
         "SELECT d.id, d.parent_id, d.name, d.description, d.created_at,
-            (SELECT COUNT(*) FROM cards c WHERE c.deck_id = d.id),
-            (SELECT COUNT(*) FROM progress p JOIN cards c ON c.id = p.card_id
-              WHERE c.deck_id = d.id AND p.due <= ?1),
-            (SELECT COUNT(*) FROM cards c WHERE c.deck_id = d.id
-              AND NOT EXISTS (SELECT 1 FROM progress p WHERE p.card_id = c.id))
+            (SELECT COUNT(*) FROM cards c WHERE c.deck_id = d.id)
          FROM decks d",
     )?;
     let all: Vec<Deck> = stmt
-        .query_map([t], |r| {
+        .query_map([], |r| {
             Ok(Deck {
                 id: r.get(0)?,
                 parent_id: r.get(1)?,
@@ -71,8 +72,8 @@ pub fn list_decks(conn: &Connection) -> AppResult<Vec<Deck>> {
                 description: r.get(3)?,
                 created_at: r.get(4)?,
                 card_count: r.get(5)?,
-                due_count: r.get(6)?,
-                new_count: r.get(7)?,
+                due_count: 0,
+                new_count: 0,
                 path: String::new(),
                 depth: 0,
                 child_count: 0,
@@ -83,7 +84,34 @@ pub fn list_decks(conn: &Connection) -> AppResult<Vec<Deck>> {
         })?
         .collect::<Result<_, _>>()?;
 
-    let ids: std::collections::HashSet<i64> = all.iter().map(|d| d.id).collect();
+    // each deck's due (word, direction) pairs and new words, as small numbers
+    let mut keys: HashMap<String, u32> = HashMap::new();
+    let mut key = |text: String| -> u32 {
+        let next = keys.len() as u32;
+        *keys.entry(text).or_insert(next)
+    };
+    let mut due: HashMap<i64, HashSet<u32>> = HashMap::new();
+    let mut new: HashMap<i64, HashSet<u32>> = HashMap::new();
+    {
+        let mut stmt = conn.prepare(
+            "SELECT c.deck_id, c.hanzi, p.direction FROM progress p JOIN cards c ON c.id = p.card_id WHERE p.due <= ?1",
+        )?;
+        let rows = stmt.query_map([t], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?)))?;
+        for row in rows {
+            let (deck, hanzi, direction) = row?;
+            due.entry(deck).or_default().insert(key(format!("{}\u{1f}{direction}", hanzi.trim())));
+        }
+        let mut stmt = conn.prepare(
+            "SELECT c.deck_id, c.hanzi FROM cards c WHERE NOT EXISTS (SELECT 1 FROM progress p WHERE p.card_id = c.id)",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?;
+        for row in rows {
+            let (deck, hanzi) = row?;
+            new.entry(deck).or_default().insert(key(hanzi.trim().to_string()));
+        }
+    }
+
+    let ids: HashSet<i64> = all.iter().map(|d| d.id).collect();
     let mut children: HashMap<Option<i64>, Vec<usize>> = HashMap::new();
     for (i, d) in all.iter().enumerate() {
         // a parent that no longer exists makes this a top-level deck
@@ -94,38 +122,43 @@ pub fn list_decks(conn: &Connection) -> AppResult<Vec<Deck>> {
         list.sort_by(|a, b| natural_cmp(&all[*a].name, &all[*b].name));
     }
 
-    fn visit(
-        i: usize,
-        depth: i64,
-        prefix: &str,
-        all: &[Deck],
-        children: &HashMap<Option<i64>, Vec<usize>>,
-        out: &mut Vec<Deck>,
-    ) -> (i64, i64, i64) {
-        let mut d = all[i].clone();
+    struct Tree<'a> {
+        all: &'a [Deck],
+        children: &'a HashMap<Option<i64>, Vec<usize>>,
+        due: &'a mut HashMap<i64, HashSet<u32>>,
+        new: &'a mut HashMap<i64, HashSet<u32>>,
+    }
+    /// Adds deck `i` and its subdecks to `out`; returns the subtree's (cards, due, new).
+    fn visit(i: usize, depth: i64, prefix: &str, tree: &mut Tree, out: &mut Vec<Deck>) -> (i64, HashSet<u32>, HashSet<u32>) {
+        let mut d = tree.all[i].clone();
         d.depth = depth;
         d.path = if prefix.is_empty() { d.name.clone() } else { format!("{prefix}{PATH_LABEL_SEP}{}", d.name) };
-        let kids = children.get(&Some(d.id)).cloned().unwrap_or_default();
+        let kids = tree.children.get(&Some(d.id)).cloned().unwrap_or_default();
         d.child_count = kids.len() as i64;
+        let mut due = tree.due.remove(&d.id).unwrap_or_default();
+        let mut new = tree.new.remove(&d.id).unwrap_or_default();
+        d.due_count = due.len() as i64;
+        d.new_count = new.len() as i64;
+        let mut cards = d.card_count;
         let at = out.len();
         let path = d.path.clone();
         out.push(d);
-        let (mut cards, mut due, mut new) = (all[i].card_count, all[i].due_count, all[i].new_count);
         for k in kids {
-            let (c, du, n) = visit(k, depth + 1, &path, all, children, out);
+            let (c, du, n) = visit(k, depth + 1, &path, tree, out);
             cards += c;
-            due += du;
-            new += n;
+            due.extend(du);
+            new.extend(n);
         }
         out[at].total_cards = cards;
-        out[at].total_due = due;
-        out[at].total_new = new;
+        out[at].total_due = due.len() as i64;
+        out[at].total_new = new.len() as i64;
         (cards, due, new)
     }
 
     let mut out = Vec::with_capacity(all.len());
+    let mut tree = Tree { all: &all, children: &children, due: &mut due, new: &mut new };
     for root in children.get(&None).cloned().unwrap_or_default() {
-        visit(root, 0, "", &all, &children, &mut out);
+        visit(root, 0, "", &mut tree, &mut out);
     }
     Ok(out)
 }
@@ -166,11 +199,18 @@ pub fn subtree_ids(conn: &Connection, id: i64) -> AppResult<Vec<i64>> {
 }
 
 fn clean_name(name: &str) -> AppResult<String> {
-    let name = name.trim();
+    let name = crate::input::clean(name, false).trim().to_string();
     if name.is_empty() {
         return Err(AppError::msg("Deck name cannot be empty"));
     }
-    Ok(name.to_string())
+    crate::input::fits("The deck's name", &name, crate::input::MAX_NAME)?;
+    Ok(name)
+}
+
+fn clean_description(description: &str) -> AppResult<String> {
+    let d = crate::input::clean(description, true).trim().to_string();
+    crate::input::fits("The description", &d, crate::input::MAX_DESCRIPTION)?;
+    Ok(d)
 }
 
 fn check_parent(conn: &Connection, parent: Option<i64>) -> AppResult<()> {
@@ -187,7 +227,7 @@ pub fn create_deck(conn: &Connection, name: &str, description: &str, parent: Opt
     check_parent(conn, parent)?;
     conn.execute(
         "INSERT INTO decks (name, description, created_at, parent_id) VALUES (?1, ?2, ?3, ?4)",
-        params![clean_name(name)?, description.trim(), now(), parent],
+        params![clean_name(name)?, clean_description(description)?, now(), parent],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -201,7 +241,7 @@ pub fn update_deck(conn: &Connection, id: i64, name: &str, description: &str, pa
     }
     conn.execute(
         "UPDATE decks SET name = ?2, description = ?3, parent_id = ?4 WHERE id = ?1",
-        params![id, clean_name(name)?, description.trim(), parent],
+        params![id, clean_name(name)?, clean_description(description)?, parent],
     )?;
     Ok(())
 }

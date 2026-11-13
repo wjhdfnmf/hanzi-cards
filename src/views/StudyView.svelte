@@ -256,8 +256,10 @@
         return;
       }
       try {
-        const info = await api.buildSession({ ...filter });
-        matching = info.items.length;
+        const info = await api.sessionCounts({ ...filter });
+        // a slower answer for an earlier selection doesn't replace a newer one
+        if (JSON.stringify($state.snapshot(sel)) !== JSON.stringify(filter)) return;
+        matching = info.matching;
         dueCount = info.dueCount;
         newRemaining = info.newRemainingToday;
       } catch (e) {
@@ -635,7 +637,7 @@
         {t("study.end")}
       </button>
       <div class="bar" aria-hidden="true"><div style="width:{total ? (done / total) * 100 : 0}%"></div></div>
-      <span class="small muted">{t("study.progress", { done, total })}</span>
+      <span class="count small">{t("study.progress", { done, total })}</span>
     </div>
 
     <div class="stage">
@@ -999,6 +1001,16 @@
     background: var(--accent);
     border-radius: 6px;
     transition: width 0.25s ease;
+  }
+  /* the count has a label of its own, so whatever a theme draws in that corner stays behind it */
+  .count {
+    padding: 2px 11px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   .stage {
     flex: 1;

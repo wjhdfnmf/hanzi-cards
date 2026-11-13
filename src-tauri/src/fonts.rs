@@ -59,7 +59,7 @@ pub fn download(app_data: &Path, key: &str, mut progress: impl FnMut(u64, u64)) 
     let (_, file, path, size) = *entry(key)?;
     let d = dir(app_data);
     std::fs::create_dir_all(&d)?;
-    let resp = ureq::get(&url(path)).call().map_err(|e| AppError::msg(format!("Download failed: {e}")))?;
+    let resp = crate::net::get(&url(path)).call().map_err(|e| AppError::msg(format!("Download failed: {e}")))?;
     let total = resp.header("content-length").and_then(|v| v.parse::<u64>().ok()).unwrap_or(size);
     let part = d.join(format!("{file}.part"));
     let result = (|| -> AppResult<()> {

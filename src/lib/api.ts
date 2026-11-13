@@ -51,6 +51,13 @@ export interface CardRow extends Card {
   nextDue: number | null;
   reps: number;
   lapses: number;
+  /** Other cards this row stands for: the same characters, pinyin and meaning (a folded list only). */
+  copies: CardCopy[];
+}
+
+export interface CardCopy {
+  id: number;
+  deckId: number;
 }
 
 export interface Progress {
@@ -251,6 +258,12 @@ export interface WhisperDeviceInfo {
   using: string;
   /** The Whisper model to suggest for this computer. */
   recommended: string;
+  /** Why: "gpu" | "gpu_small" | "cpu" | "cpu_modest" | "cpu_weak". */
+  recommendedReason: string;
+  /** What the suggestion is based on (memory in MB, when known). */
+  cores: number;
+  ramMb: number | null;
+  gpuMemoryMb: number | null;
   /** NVIDIA's libraries (GPU builds only). */
   libs: { nvidia: boolean; installed: boolean; downloaded: boolean; downloadMb: number } | null;
 }
@@ -416,6 +429,8 @@ export interface DataFile {
   modified: number;
   /** null when the file isn't a readable Hanzi Cards database. */
   contents: DataContents | null;
+  /** For a backup the app made by itself: daily, before an update, or the database replaced by a switch. */
+  auto: "daily" | "version" | "switch" | null;
 }
 
 export interface DataInfo {
@@ -423,8 +438,13 @@ export interface DataInfo {
   folder: string;
   /** This database's backups folder (backups/decks or backups/reading). */
   backupFolder: string;
-  /** Newest first. */
+  /** The learner's own backups, newest first. The app never deletes these. */
   backups: DataFile[];
+  /** The app's own (in "auto" inside the backups folder), newest first; it cleans these up. */
+  autoBackups: DataFile[];
+  autoFolder: string;
+  /** How many automatic backups of each sort are kept. */
+  keep: { daily: number; weekly: number; version: number; switch: number };
 }
 
 export interface ImportResult {
@@ -477,6 +497,13 @@ export interface Story {
 }
 
 /** What importing a folder of stories added. */
+export interface StoryExport {
+  stories: number;
+  collections: number;
+  /** The file or folder that was written. */
+  path: string;
+}
+
 export interface StoryImport {
   collections: number;
   stories: number;
@@ -490,7 +517,26 @@ export interface FontFile {
   downloaded: boolean;
 }
 
+/** A database that couldn't be opened when the app started (it's damaged). */
+export interface StartupProblem {
+  kind: DbKind;
+  /** "damaged" (backups are offered), "in_use" (another program has it) or "error". */
+  reason: "damaged" | "in_use" | "error";
+  message: string;
+}
+
+/** What a study session with a selection would hold, as numbers only. */
+export interface SessionCounts {
+  matching: number;
+  dueCount: number;
+  newRemainingToday: number;
+}
+
 export const api = {
+  /** Set when a database couldn't be opened at startup; the app then shows the recovery page. */
+  startupProblem: () => invoke<StartupProblem | null>("startup_problem"),
+  /** Try to open that database again; true when it is open now. */
+  startupRetry: () => invoke<boolean>("startup_retry"),
   getSettings: () => invoke<Record<string, string>>("get_settings"),
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
 
@@ -501,9 +547,13 @@ export const api = {
     invoke<void>("update_deck", { id, name, description, parentId }),
   deleteDeck: (id: number) => invoke<void>("delete_deck", { id }),
 
-  listCards: (deckId: number | null, search = "") => invoke<CardRow[]>("list_cards", { deckId, search }),
+  /** `merge`: a word that several decks hold with the same pinyin and meaning is one row. */
+  listCards: (deckId: number | null, search = "", merge = false) =>
+    invoke<CardRow[]>("list_cards", { deckId, search, merge }),
   createCard: (input: CardInput) => invoke<Card>("create_card", { input }),
-  updateCard: (id: number, input: CardInput) => invoke<Card>("update_card", { id, input }),
+  /** `copies`: cards that were the same word; they get the new characters, pinyin and meaning too. */
+  updateCard: (id: number, input: CardInput, copies: number[] = []) =>
+    invoke<Card>("update_card", { id, input, copies }),
   deleteCards: (ids: number[]) => invoke<void>("delete_cards", { ids }),
   moveCards: (ids: number[], deckId: number) => invoke<void>("move_cards", { ids, deckId }),
   listTags: () => invoke<string[]>("list_tags"),
@@ -572,6 +622,8 @@ export const api = {
   exportPleco: (deckId: number | null, path: string) => invoke<number>("export_pleco", { deckId, path }),
 
   buildSession: (filter: StudyFilter) => invoke<SessionInfo>("build_session", { filter }),
+  /** Like buildSession, without the cards (for the count on the Study page). */
+  sessionCounts: (filter: StudyFilter) => invoke<SessionCounts>("session_counts", { filter }),
   previewIntervals: (cardId: number, direction: Direction) =>
     invoke<IntervalPreview[]>("preview_intervals", { cardId, direction }),
   answerCard: (cardId: number, direction: Direction, rating: number, durationMs: number) =>
@@ -582,9 +634,14 @@ export const api = {
   /** Returns the backup's file name. */
   dataBackup: (kind: DbKind) => invoke<string>("data_backup", { kind }),
   dataSaveCopy: (kind: DbKind, path: string) => invoke<void>("data_save_copy", { kind, path }),
+  /** Delete one backup file (the learner's own or an automatic one). */
+  dataDeleteBackup: (kind: DbKind, path: string) => invoke<void>("data_delete_backup", { kind, path }),
   dataInspect: (kind: DbKind, path: string) => invoke<DataFile>("data_inspect", { kind, path }),
   /** Switch to another database file; returns the name of the backup of the replaced one. */
   dataUseFile: (kind: DbKind, path: string) => invoke<string>("data_use_file", { kind, path }),
+  /** Recovery only: set a damaged database's files aside and start an empty one; returns the
+   * name of the folder they were moved to. */
+  dataStartFresh: (kind: DbKind) => invoke<string>("data_start_fresh", { kind }),
   /** Open the app-data folder (both databases and their backups). */
   dataShowInFolder: () => invoke<void>("data_show_in_folder"),
 
@@ -618,6 +675,11 @@ export const api = {
   /** A folder of story files as a collection; subfolders become subcollections. */
   importStoryFolder: (folderId: number | null, path: string) =>
     invoke<StoryImport>("import_story_folder", { folderId, path }),
+  /** Write one story as a text file (the format the import reads). */
+  exportStory: (id: number, path: string) => invoke<StoryExport>("export_story", { id, path }),
+  /** Write a collection (null = every story) as a new folder of story files inside `path`. */
+  exportStoryFolder: (folderId: number | null, path: string) =>
+    invoke<StoryExport>("export_story_folder", { folderId, path }),
   fontsList: () => invoke<FontFile[]>("fonts_list"),
   /** Progress: "font-download" events. */
   fontDownload: (key: string) => invoke<void>("font_download", { key }),

@@ -11,23 +11,31 @@ export interface ThemeInfo {
   surface: string;
   accent: string;
   accentSoft: string;
+  /** Which row of the picker it sits in. */
+  group: ThemeGroup;
 }
 
+/** The picker's rows, in order. */
+export const THEME_GROUPS = ["soft", "bold", "calm"] as const;
+export type ThemeGroup = (typeof THEME_GROUPS)[number];
+
 export const CUSTOM_THEMES: ThemeInfo[] = [
-  { key: "sakura", name: "Sakura", zh: "樱花", emblem: "flower", dark: false, bg: "#fdf2f5", surface: "#ffffff", accent: "#b02f62", accentSoft: "#fde3ec" },
-  { key: "ink", name: "Ink & paper", zh: "水墨", emblem: "墨", dark: false, bg: "#f3f0e8", surface: "#fbfaf5", accent: "#a82127", accentSoft: "#f2e0dd" },
-  { key: "jade", name: "Celadon", zh: "青瓷", emblem: "玉", dark: false, bg: "#edf4f1", surface: "#fbfdfc", accent: "#24705f", accentSoft: "#d9eee7" },
-  { key: "matcha", name: "Matcha", zh: "抹茶", emblem: "茶", dark: false, bg: "#f3f1e3", surface: "#fffef7", accent: "#4f6b1f", accentSoft: "#e3ebcd" },
-  { key: "lavender", name: "Lavender", zh: "薰衣草", emblem: "香", dark: false, bg: "#f4f2fa", surface: "#ffffff", accent: "#5f45ad", accentSoft: "#ebe5fb" },
-  { key: "imperial", name: "Imperial", zh: "紫禁城", emblem: "金", dark: true, bg: "#1a0e10", surface: "#251517", accent: "#e4b44f", accentSoft: "#3d2c13" },
-  { key: "indigo", name: "Indigo", zh: "蓝染", emblem: "藍", dark: true, bg: "#0d1322", surface: "#141c2f", accent: "#79a8ff", accentSoft: "#1c2b4b" },
-  { key: "lantern", name: "Lantern", zh: "灯笼", emblem: "灯", dark: true, bg: "#16110d", surface: "#201913", accent: "#ff8f45", accentSoft: "#3b2416" },
-  { key: "maple", name: "Maple", zh: "红叶", emblem: "枫", dark: false, bg: "#fbf2e9", surface: "#fffdf9", accent: "#ad431b", accentSoft: "#fbe2d2" },
-  { key: "plum", name: "Plum & Snow", zh: "梅雪", emblem: "梅", dark: false, bg: "#f2f4f7", surface: "#ffffff", accent: "#981d43", accentSoft: "#f6e0e7" },
-  { key: "dunhuang", name: "Dunhuang", zh: "敦煌", emblem: "敦", dark: false, bg: "#f3e8d5", surface: "#fdf8ee", accent: "#1d578b", accentSoft: "#dde7f2" },
-  { key: "moon", name: "Moon Night", zh: "月夜", emblem: "月", dark: true, bg: "#0f0e1a", surface: "#171627", accent: "#c6adff", accentSoft: "#2a2148" },
-  { key: "pine", name: "Pine Forest", zh: "松林", emblem: "松", dark: true, bg: "#0e1612", surface: "#15201a", accent: "#82d6a3", accentSoft: "#1d3a2a" },
-  { key: "contrast", name: "High Contrast", zh: "高对比", emblem: "Aa", dark: true, bg: "#000000", surface: "#0b0b0b", accent: "#ffd60a", accentSoft: "#332b00" },
+  { key: "sakura", name: "Sakura", zh: "樱花", emblem: "flower", dark: false, bg: "#fdf4f2", surface: "#fffdfc", accent: "#b92d65", accentSoft: "#fde4ec", group: "soft" },
+  { key: "lavender", name: "Lavender", zh: "薰衣草", emblem: "香", dark: false, bg: "#f4f2fa", surface: "#ffffff", accent: "#5f45ad", accentSoft: "#ebe5fb", group: "soft" },
+  { key: "plum", name: "Plum & Snow", zh: "梅雪", emblem: "梅", dark: false, bg: "#f2f4f7", surface: "#ffffff", accent: "#981d43", accentSoft: "#f6e0e7", group: "soft" },
+  { key: "rouge", name: "Rouge", zh: "胭脂", emblem: "胭", dark: true, bg: "#1a0d13", surface: "#25131b", accent: "#ff8fb3", accentSoft: "#45182a", group: "soft" },
+  { key: "slate", name: "Slate", zh: "青石", emblem: "石", dark: false, bg: "#eef1f5", surface: "#ffffff", accent: "#1f5fae", accentSoft: "#dde9f8", group: "bold" },
+  { key: "indigo", name: "Indigo", zh: "蓝染", emblem: "藍", dark: true, bg: "#0d1322", surface: "#141c2f", accent: "#79a8ff", accentSoft: "#1c2b4b", group: "bold" },
+  { key: "pine", name: "Pine Forest", zh: "松林", emblem: "松", dark: true, bg: "#0e1612", surface: "#15201a", accent: "#82d6a3", accentSoft: "#1d3a2a", group: "bold" },
+  { key: "imperial", name: "Imperial", zh: "紫禁城", emblem: "金", dark: true, bg: "#1a0e10", surface: "#251517", accent: "#e4b44f", accentSoft: "#3d2c13", group: "bold" },
+  { key: "lantern", name: "Lantern", zh: "灯笼", emblem: "灯", dark: true, bg: "#16110d", surface: "#201913", accent: "#ff8f45", accentSoft: "#3b2416", group: "bold" },
+  { key: "ink", name: "Ink & paper", zh: "水墨", emblem: "墨", dark: false, bg: "#f3f0e8", surface: "#fbfaf5", accent: "#a82127", accentSoft: "#f2e0dd", group: "calm" },
+  { key: "jade", name: "Celadon", zh: "青瓷", emblem: "玉", dark: false, bg: "#edf4f1", surface: "#fbfdfc", accent: "#24705f", accentSoft: "#d9eee7", group: "calm" },
+  { key: "matcha", name: "Matcha", zh: "抹茶", emblem: "茶", dark: false, bg: "#f3f1e3", surface: "#fffef7", accent: "#4f6b1f", accentSoft: "#e3ebcd", group: "calm" },
+  { key: "maple", name: "Maple", zh: "红叶", emblem: "枫", dark: false, bg: "#fbf2e9", surface: "#fffdf9", accent: "#ad431b", accentSoft: "#fbe2d2", group: "calm" },
+  { key: "dunhuang", name: "Dunhuang", zh: "敦煌", emblem: "敦", dark: false, bg: "#f3e8d5", surface: "#fdf8ee", accent: "#1d578b", accentSoft: "#dde7f2", group: "calm" },
+  { key: "moon", name: "Moon Night", zh: "月夜", emblem: "月", dark: true, bg: "#0f0e1a", surface: "#171627", accent: "#c6adff", accentSoft: "#2a2148", group: "calm" },
+  { key: "contrast", name: "High Contrast", zh: "高对比", emblem: "Aa", dark: true, bg: "#000000", surface: "#0b0b0b", accent: "#ffd60a", accentSoft: "#332b00", group: "calm" },
 ];
 
 export const isCustomTheme = (t: string) => CUSTOM_THEMES.some((x) => x.key === t);

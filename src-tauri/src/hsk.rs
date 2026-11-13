@@ -105,15 +105,28 @@ pub fn tag_all(conn: &Connection) -> AppResult<usize> {
         let v = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<Result<_, _>>()?;
         v
     };
-    let mut n = 0;
-    for (id, hanzi, tags) in rows {
-        let new = with_tag(&tags, &hanzi);
-        if new != tags {
-            conn.execute("UPDATE cards SET tags = ?2 WHERE id = ?1", params![id, new])?;
-            n += 1;
-        }
+    // all or nothing (and one write to disk, not one per card)
+    let nested = !conn.is_autocommit();
+    if !nested {
+        conn.execute_batch("BEGIN")?;
     }
-    Ok(n)
+    let tag = || -> AppResult<usize> {
+        let mut n = 0;
+        let mut update = conn.prepare("UPDATE cards SET tags = ?2 WHERE id = ?1")?;
+        for (id, hanzi, tags) in &rows {
+            let new = with_tag(tags, hanzi);
+            if new != *tags {
+                update.execute(params![id, new])?;
+                n += 1;
+            }
+        }
+        Ok(n)
+    };
+    let result = tag();
+    if !nested {
+        conn.execute_batch(if result.is_ok() { "COMMIT" } else { "ROLLBACK" })?;
+    }
+    result
 }
 
 #[cfg(test)]

@@ -6,6 +6,7 @@
     errorText,
     type Candidate,
     type Card,
+    type CardCopy,
     type Deck,
     type DictEntry,
     type Segment,
@@ -19,6 +20,7 @@
 
   let {
     card = null,
+    copies = [],
     decks,
     deckId,
     prefill = null,
@@ -26,6 +28,8 @@
     onsaved,
   }: {
     card?: Card | null;
+    /** Cards that are the same word as `card` in other places; they are kept the same. */
+    copies?: CardCopy[];
     decks: Deck[];
     deckId: number | null;
     prefill?: { hanzi: string; pinyin: string; meaning: string } | null;
@@ -49,7 +53,13 @@
   // Other cards with the same characters: { deck id, deck path }.
   let duplicates = $state<{ deckId: number; deck: string }[]>([]);
   const dupInThisDeck = $derived(duplicates.some((d) => d.deckId === form.deck));
-  const dupOtherDecks = $derived([...new Set(duplicates.filter((d) => d.deckId !== form.deck).map((d) => d.deck))]);
+  // svelte-ignore state_referenced_locally
+  const copyIds = new Set(copies.map((c) => c.id));
+  // svelte-ignore state_referenced_locally
+  const copyDecks = [...new Set(copies.map((c) => decks.find((d) => d.id === c.deckId)?.path ?? ""))].filter(Boolean);
+  const dupOtherDecks = $derived([
+    ...new Set(duplicates.filter((d) => d.deckId !== form.deck && !copyDecks.includes(d.deck)).map((d) => d.deck)),
+  ]);
   let allTags = $state<string[]>([]);
   let dictReady = $state(false);
   let saving = $state(false);
@@ -272,7 +282,7 @@
         notes: form.notes,
         tags: form.tags.split(",").map((s) => s.trim()).filter(Boolean),
       };
-      const saved = card ? await api.updateCard(card.id, input) : await api.createCard(input);
+      const saved = card ? await api.updateCard(card.id, input, [...copyIds]) : await api.createCard(input);
       onsaved(saved);
       if (addAnother) {
         showToast(t("editor.saved"));
@@ -411,6 +421,9 @@
 
     {#if dupInThisDeck}
       <div class="notice err small" role="alert">{t("editor.dupSameDeck", { hanzi: form.hanzi.trim() })}</div>
+    {/if}
+    {#if copyDecks.length}
+      <div class="notice small">{t("editor.copiesToo", { decks: copyDecks.join(", ") })}</div>
     {/if}
     {#if dupOtherDecks.length}
       <div class="notice small">{t("editor.dupOtherDecks", { decks: dupOtherDecks.join(", ") })}</div>
