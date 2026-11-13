@@ -1,6 +1,6 @@
 # Building Hanzi Cards for macOS
 
-Written 2026-11-12, against version 0.4.0 of the code. Nothing here has been built or run on a
+Written 2026-11-12, against version 0.3.1 of the code. Nothing here has been built or run on a
 Mac yet: it is a plan made from the code, Tauri's documentation and GitHub's. Each place that
 needs a real Mac to confirm says so.
 
@@ -104,7 +104,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to build and upload to (for example v0.4.0)"
+        description: "Release tag to build and upload to (for example v0.3.1)"
         required: true
 
 permissions:
