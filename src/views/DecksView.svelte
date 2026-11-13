@@ -67,9 +67,12 @@
     deck: 120,
     tags: 100,
     status: 85,
-    next: 90,
+    next: 120, // "Next review" and its sort arrow
   };
   const COL_MIN = 50;
+  /** Columns whose title needs more than COL_MIN (a saved narrower width is raised). */
+  const COL_TITLE_MIN: Partial<Record<Col, number>> = { next: 120, status: 80 };
+  const colMin = (k: Col) => Math.max(COL_MIN, COL_TITLE_MIN[k] ?? 0);
   function loadJson<T>(key: string, fallback: T): T {
     try {
       return { ...fallback, ...JSON.parse(localStorage.getItem(key) ?? "null") };
@@ -78,7 +81,13 @@
     }
   }
   let sideWidth = $state(loadJson(SIDE_KEY, { w: SIDE_DEFAULT }).w);
-  let colW = $state<Record<Col, number>>(loadJson(COLS_KEY, COL_DEFAULT));
+  let colW = $state<Record<Col, number>>(
+    (() => {
+      const w = loadJson(COLS_KEY, COL_DEFAULT);
+      for (const k of Object.keys(w) as Col[]) w[k] = Math.max(colMin(k), w[k]);
+      return w;
+    })(),
+  );
   const tableMin = $derived(
     36 + (Object.keys(colW) as Col[]).reduce((s, k) => (k === "deck" && !showDeckColumn ? s : s + colW[k]), 0),
   );
@@ -118,7 +127,7 @@
   function dragCol(e: PointerEvent, key: Col) {
     // start from the width on screen: the meaning column is often wider than its least width
     const th = (e.currentTarget as HTMLElement).closest("th")!;
-    drag(e, th.getBoundingClientRect().width, (w) => (colW[key] = Math.round(Math.max(COL_MIN, w))));
+    drag(e, th.getBoundingClientRect().width, (w) => (colW[key] = Math.round(Math.max(colMin(key), w))));
   }
   function resetSide() {
     sideWidth = SIDE_DEFAULT;

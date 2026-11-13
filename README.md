@@ -11,7 +11,7 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   (`nihao` → 你好, `woaini` → 我爱你; add a tone number to narrow: `ni3`). Pinyin and meaning fill in from the
   dictionary and update as you add characters. In the pinyin field, a digit after a syllable sets its tone
   (`ni3` → `nǐ`, `5` = neutral)
-- **Study** with FSRS-5 spaced repetition. Pick decks, tags, mode (due & new / new only / cram / difficult), session size, and directions:
+- **Study** with FSRS-6 spaced repetition. Pick decks, tags, mode (due & new / new only / cram / difficult), session size, and directions:
   characters → meaning, meaning → characters, listening, and **speaking**: say the answer and it is checked
   by speech recognition, either Windows' built-in Mandarin recognizer or OpenAI Whisper run locally
   (downloaded in Settings). Audio never leaves the computer. Optionally, the pitch of your voice decides
@@ -41,7 +41,7 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
 | Layer | Tech |
 |---|---|
 | Shell | [Tauri 2](https://v2.tauri.app) (system webview: WebView2 / WKWebView / WebKitGTK) |
-| Core | Rust: `rusqlite` (bundled SQLite), FSRS-5 scheduler, CC-CEDICT parser/search |
+| Core | Rust: `rusqlite` (bundled SQLite), FSRS-6 scheduler, CC-CEDICT parser/search |
 | UI | Svelte 5 + TypeScript + Vite |
 
 Data lives in a single SQLite file in the OS app-data folder (`com.hanzicards.app/hanzi-cards.db`).
@@ -118,7 +118,7 @@ src-tauri/src/
   decks.rs            nested decks: tree, paths, CRUD
   cards.rs            cards, duplicate checks, CSV import/export
   study.rs            session building, answering
-  scheduler.rs        FSRS-5
+  scheduler.rs        FSRS-6
   stats.rs            statistics
   dictionary.rs       CC-CEDICT import/download/search
   pinyin.rs           tone marks, syllables, search keys, tone sandhi

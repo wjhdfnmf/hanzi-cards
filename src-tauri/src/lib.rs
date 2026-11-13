@@ -8,6 +8,7 @@ mod db;
 mod decks;
 mod dictionary;
 mod error;
+mod fonts;
 mod gpu;
 mod hsk;
 mod models;
@@ -16,6 +17,7 @@ mod pleco;
 mod scheduler;
 mod speech;
 mod stats;
+mod stories;
 mod study;
 mod tone_check;
 mod tones;
@@ -27,9 +29,11 @@ mod whisper_net;
 use std::sync::Mutex;
 use tauri::Manager;
 
-/// Shared application state: one SQLite connection guarded by a mutex.
+/// Shared application state: SQLite connections guarded by mutexes. Stories (Reading) are in
+/// a database of their own, separate from the cards.
 pub struct AppState {
     pub db: Mutex<rusqlite::Connection>,
+    pub stories: Mutex<rusqlite::Connection>,
 }
 
 /// Linux's webview (WebKitGTK) turns the microphone off and refuses every request for it
@@ -67,8 +71,10 @@ pub fn run() {
             whisper::set_device_preference(
                 &db::get_setting(&conn, "whisper_device").ok().flatten().unwrap_or_else(|| "auto".into()),
             );
+            let stories = data::open_reading(&dir)?;
             app.manage(AppState {
                 db: Mutex::new(conn),
+                stories: Mutex::new(stories),
             });
             // the dictionary ships with the app: import it on first start, in the background
             let handle = app.handle().clone();
@@ -100,6 +106,7 @@ pub fn run() {
             commands::delete_cards,
             commands::move_cards,
             commands::list_tags,
+            commands::remove_tags,
             commands::hsk_tag_all,
             commands::cards_by_hanzi,
             commands::import_preview,
@@ -150,6 +157,23 @@ pub fn run() {
             commands::dict_segment,
             commands::dict_import_file,
             commands::dict_download,
+            commands::list_story_folders,
+            commands::create_story_folder,
+            commands::update_story_folder,
+            commands::delete_story_folder,
+            commands::list_stories,
+            commands::get_story,
+            commands::create_story,
+            commands::update_story,
+            commands::delete_story,
+            commands::import_stories,
+            commands::import_story_folder,
+            commands::story_segments,
+            commands::story_total,
+            commands::fonts_list,
+            commands::font_download,
+            commands::font_delete,
+            commands::font_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Hanzi Cards");

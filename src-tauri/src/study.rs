@@ -107,17 +107,19 @@ pub fn build_session(conn: &Connection, f: &StudyFilter) -> AppResult<SessionInf
     // the session gets a random sample of it rather than the first cards in some order.
     let mut picked: Vec<StudyItem> = match f.mode.as_str() {
         "due" => {
-            // due reviews first (so new cards never crowd them out), then today's new cards
+            // due reviews first (so new cards never crowd them out), the ones you're most likely
+            // to be forgetting first when they don't all fit; then today's new cards
             let mut due: Vec<StudyItem> = items.iter().filter(|i| is_due(i)).cloned().collect();
             shuffle(&mut due);
+            due.sort_by(|a, b| recall_chance(a, t).total_cmp(&recall_chance(b, t)));
             let mut new: Vec<StudyItem> = items.iter().filter(|i| i.progress.is_none()).cloned().collect();
-            shuffle(&mut new);
+            order_new(&mut new, &new_order(conn));
             new.truncate(new_remaining_today as usize);
             due.into_iter().chain(new).collect()
         }
         "new" => {
             let mut new: Vec<StudyItem> = items.into_iter().filter(|i| i.progress.is_none()).collect();
-            shuffle(&mut new);
+            order_new(&mut new, &new_order(conn));
             new
         }
         "difficult" => {
@@ -156,6 +158,45 @@ pub fn build_session(conn: &Connection, f: &StudyFilter) -> AppResult<SessionInf
 /// The same word in several decks is studied once: keep one card per set of characters
 /// (the one furthest along, else the oldest) and show the meanings of all copies.
 /// Fisher-Yates shuffle with a small xorshift generator seeded from the clock (no extra crate).
+/// FSRS's estimate of the chance of recalling a card now (1.0 for one never studied).
+fn recall_chance(i: &StudyItem, now: i64) -> f64 {
+    i.progress.as_ref().map_or(1.0, |p| {
+        let elapsed = (now - p.last_review).max(0) as f64 / db::DAY as f64;
+        scheduler::retrievability(elapsed, p.stability.max(0.01))
+    })
+}
+
+/// How new words are introduced (Settings › Studying › Advanced): "hsk" (default: HSK1
+/// first, then HSK2 …, words without a level last, each in deck order), "deck" or "random".
+fn new_order(conn: &Connection) -> String {
+    db::get_setting(conn, "new_order").ok().flatten().unwrap_or_else(|| "hsk".into())
+}
+
+/// 1 for HSK1 … 7 for HSK7-9; 8 for no level.
+fn hsk_rank(card: &crate::models::Card) -> u8 {
+    card.tags
+        .iter()
+        .filter_map(|t| {
+            let t = t.trim().to_ascii_uppercase();
+            match t.strip_prefix("HSK")? {
+                "7-9" => Some(7),
+                n => n.parse::<u8>().ok().filter(|n| (1..=6).contains(n)),
+            }
+        })
+        .min()
+        .unwrap_or(8)
+}
+
+/// Put new cards in the order they should be introduced. Items arrive in deck order
+/// (creation order).
+fn order_new(new: &mut [StudyItem], order: &str) {
+    match order {
+        "random" => shuffle(new),
+        "deck" => {}
+        _ => new.sort_by_key(|i| hsk_rank(&i.card)), // stable: deck order within a level
+    }
+}
+
 fn shuffle<T>(items: &mut [T]) {
     use std::sync::atomic::{AtomicU64, Ordering};
     static SALT: AtomicU64 = AtomicU64::new(0x9E37_79B9_7F4A_7C15);
@@ -212,7 +253,7 @@ fn merge_duplicates(items: Vec<StudyItem>) -> Vec<StudyItem> {
 fn load_memory(conn: &Connection, card_id: i64, direction: &str) -> AppResult<Option<Memory>> {
     Ok(conn
         .query_row(
-            "SELECT state, stability, difficulty, due, last_review, reps, lapses
+            "SELECT state, stability, difficulty, due, last_review, reps, lapses, step
              FROM progress WHERE card_id = ?1 AND direction = ?2",
             params![card_id, direction],
             |r| {
@@ -224,11 +265,57 @@ fn load_memory(conn: &Connection, card_id: i64, direction: &str) -> AppResult<Op
                     last_review: r.get(4)?,
                     reps: r.get(5)?,
                     lapses: r.get(6)?,
+                    step: r.get(7)?,
                 })
             },
         )
         .optional()?)
 }
+
+/// Picks a card's interval fuzz: the same for the preview and the answer, different per card
+/// and per review.
+fn fuzz_seed(card_id: i64, direction: &str, mem: Option<&Memory>) -> u64 {
+    let dir = direction.bytes().fold(0u64, |h, b| h.wrapping_mul(31).wrapping_add(b as u64));
+    (card_id as u64).wrapping_mul(1_000_003) ^ dir.wrapping_mul(7919) ^ (mem.map(|m| m.reps).unwrap_or(0) as u64).wrapping_mul(104_729)
+}
+
+/// A word forgotten this many times is a "leech": tagged so it can be rewritten or given a
+/// memory aid (and again every 4 lapses after, if it stays one). Settings can change it
+/// ("leech_lapses", 0 = off).
+pub const LEECH_LAPSES: i64 = 8;
+
+/// The scheduling setup from Settings › Studying (defaults for anything not set).
+pub fn config(conn: &Connection) -> scheduler::Config {
+    let d = scheduler::Config::default();
+    let minutes = |key: &str, default_secs: i64| db::setting_f64(conn, key, default_secs as f64 / 60.0).clamp(0.5, 1440.0);
+    let gaps: Vec<i64> = db::get_setting(conn, "learn_gaps")
+        .ok()
+        .flatten()
+        .map(|v| {
+            v.split([' ', ',', ';'])
+                .filter_map(|x| x.trim().parse::<f64>().ok())
+                .filter(|m| *m > 0.0)
+                .map(|m| (m.min(1440.0) * 60.0).round() as i64)
+                .collect()
+        })
+        .filter(|g: &Vec<i64>| !g.is_empty())
+        .unwrap_or(d.gaps_secs.clone());
+    scheduler::Config {
+        retention: db::desired_retention(conn),
+        new_recalls: db::setting_i64(conn, "new_recalls", d.new_recalls).clamp(1, 6),
+        relearn_recalls: db::setting_i64(conn, "relearn_recalls", d.relearn_recalls).clamp(1, 4),
+        again_secs: (minutes("again_minutes", d.again_secs) * 60.0).round() as i64,
+        gaps_secs: gaps,
+        relearn_secs: (minutes("relearn_minutes", d.relearn_secs) * 60.0).round() as i64,
+        fuzz: db::get_setting(conn, "fuzz").ok().flatten().map(|v| v != "false").unwrap_or(d.fuzz),
+        max_days: db::setting_i64(conn, "max_interval_days", d.max_days).clamp(1, d.max_days),
+    }
+}
+
+fn leech_lapses(conn: &Connection) -> i64 {
+    db::setting_i64(conn, "leech_lapses", LEECH_LAPSES).max(0)
+}
+pub const LEECH_TAG: &str = "leech";
 
 pub fn preview(conn: &Connection, card_id: i64, direction: &str) -> AppResult<Vec<IntervalPreview>> {
     check_direction(direction)?;
@@ -238,7 +325,8 @@ pub fn preview(conn: &Connection, card_id: i64, direction: &str) -> AppResult<Ve
         mem.as_ref(),
         t,
         day_start(t, local_offset()),
-        db::desired_retention(conn),
+        &config(conn),
+        fuzz_seed(card_id, direction, mem.as_ref()),
     );
     Ok(outcomes
         .into_iter()
@@ -271,32 +359,40 @@ pub fn answer_at(
     if !(1..=4).contains(&rating) {
         return Err(AppError::msg("Rating must be 1-4"));
     }
-    let retention = db::desired_retention(conn);
+    let cfg = config(conn);
+    let leech_at = leech_lapses(conn);
     let tx = conn.transaction()?;
     let mem = load_memory(&tx, card_id, direction)?;
-    let outcome = scheduler::schedule_all(mem.as_ref(), t, day_start(t, local_offset()), retention)
+    let seed = fuzz_seed(card_id, direction, mem.as_ref());
+    let outcome = scheduler::schedule_all(mem.as_ref(), t, day_start(t, local_offset()), &cfg, seed)
         .swap_remove((rating - 1) as usize);
     let m = &outcome.mem;
     tx.execute(
-        "INSERT INTO progress (card_id, direction, state, stability, difficulty, due, last_review, reps, lapses)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        "INSERT INTO progress (card_id, direction, state, stability, difficulty, due, last_review, reps, lapses, step)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
          ON CONFLICT(card_id, direction) DO UPDATE SET
             state = excluded.state, stability = excluded.stability, difficulty = excluded.difficulty,
             due = excluded.due, last_review = excluded.last_review, reps = excluded.reps,
-            lapses = excluded.lapses",
-        params![card_id, direction, m.state, m.stability, m.difficulty, m.due, m.last_review, m.reps, m.lapses],
+            lapses = excluded.lapses, step = excluded.step",
+        params![card_id, direction, m.state, m.stability, m.difficulty, m.due, m.last_review, m.reps, m.lapses, m.step],
     )?;
     // copies of the same word in other decks share this progress
     tx.execute(
-        "INSERT INTO progress (card_id, direction, state, stability, difficulty, due, last_review, reps, lapses)
-         SELECT c.id, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9 FROM cards c
+        "INSERT INTO progress (card_id, direction, state, stability, difficulty, due, last_review, reps, lapses, step)
+         SELECT c.id, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10 FROM cards c
          WHERE c.hanzi = (SELECT hanzi FROM cards WHERE id = ?1) AND c.id <> ?1
          ON CONFLICT(card_id, direction) DO UPDATE SET
             state = excluded.state, stability = excluded.stability, difficulty = excluded.difficulty,
             due = excluded.due, last_review = excluded.last_review, reps = excluded.reps,
-            lapses = excluded.lapses",
-        params![card_id, direction, m.state, m.stability, m.difficulty, m.due, m.last_review, m.reps, m.lapses],
+            lapses = excluded.lapses, step = excluded.step",
+        params![card_id, direction, m.state, m.stability, m.difficulty, m.due, m.last_review, m.reps, m.lapses, m.step],
     )?;
+    // a lapse that makes the word a leech: tag it (and its copies) "leech"
+    let lapsed = mem.as_ref().is_some_and(|old| m.lapses > old.lapses);
+    let leech = leech_at > 0 && lapsed && m.lapses >= leech_at && (m.lapses - leech_at) % 4 == 0;
+    if leech {
+        set_leech_tag(&tx, card_id, true)?;
+    }
     tx.execute(
         "INSERT INTO review_log (card_id, direction, rating, state_before, reviewed_at, duration_ms, scheduled_secs)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -310,13 +406,60 @@ pub fn answer_at(
             m.due - t
         ],
     )?;
+    // a leech that's been remembered at review several times in a row has been learned:
+    // the tag comes off
+    let passed_review = rating > 1 && mem.as_ref().is_some_and(|old| old.state == scheduler::REVIEW);
+    let unleeched = passed_review && !leech && recent_review_passes(&tx, card_id, direction)? >= LEECH_CURE_PASSES
+        && set_leech_tag(&tx, card_id, false)?;
     tx.commit()?;
     Ok(AnswerResult {
         due: m.due,
         state: m.state,
         interval_secs: m.due - t,
         days: outcome.days,
+        leech,
+        unleeched,
     })
+}
+
+/// Passes at review in a row that take the leech tag off again.
+pub const LEECH_CURE_PASSES: i64 = 3;
+
+/// How many of the latest reviews of this card and direction (in review state) were passes,
+/// counting back to the last miss.
+fn recent_review_passes(conn: &Connection, card_id: i64, direction: &str) -> AppResult<i64> {
+    let mut stmt = conn.prepare(
+        "SELECT rating FROM review_log WHERE card_id = ?1 AND direction = ?2 AND state_before = ?3
+         ORDER BY reviewed_at DESC, id DESC LIMIT 20",
+    )?;
+    let ratings: Vec<i64> =
+        stmt.query_map(params![card_id, direction, scheduler::REVIEW], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    Ok(ratings.iter().take_while(|r| **r > 1).count() as i64)
+}
+
+/// Add or remove the "leech" tag on a word and its copies in other decks; true if any changed.
+fn set_leech_tag(conn: &Connection, card_id: i64, on: bool) -> AppResult<bool> {
+    let rows: Vec<(i64, String)> = {
+        let mut stmt = conn.prepare("SELECT id, tags FROM cards WHERE hanzi = (SELECT hanzi FROM cards WHERE id = ?1)")?;
+        let v = stmt.query_map([card_id], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<_, _>>()?;
+        v
+    };
+    let mut changed = false;
+    for (id, tags) in rows {
+        let mut list = crate::cards::split_tags(&tags);
+        let has = list.iter().any(|x| x.eq_ignore_ascii_case(LEECH_TAG));
+        if on && !has {
+            list.push(LEECH_TAG.to_string());
+            list.sort();
+        } else if !on && has {
+            list.retain(|x| !x.eq_ignore_ascii_case(LEECH_TAG));
+        } else {
+            continue;
+        }
+        conn.execute("UPDATE cards SET tags = ?2 WHERE id = ?1", params![id, list.join(",")])?;
+        changed = true;
+    }
+    Ok(changed)
 }
 
 #[cfg(test)]
@@ -331,6 +474,73 @@ mod tests {
             mode: mode.into(),
             limit: 0,
         }
+    }
+
+    #[test]
+    fn new_words_easiest_first_and_reviews_most_at_risk_first() {
+        let mut conn = crate::db::open_in_memory().unwrap();
+        let deck: i64 = conn.query_row("SELECT id FROM decks LIMIT 1", [], |r| r.get(0)).unwrap();
+        conn.execute("DELETE FROM cards", []).unwrap();
+        for (h, tag) in [("难", "HSK5"), ("没", ""), ("好", "HSK1"), ("用", "HSK3"), ("人", "HSK1")] {
+            conn.execute(
+                "INSERT INTO cards (deck_id, hanzi, tags, created_at, updated_at) VALUES (?1, ?2, ?3, 0, 0)",
+                params![deck, h, tag],
+            )
+            .unwrap();
+        }
+        let mut f = filter("new");
+        f.limit = 0;
+        let order = |conn: &Connection, f: &StudyFilter| -> Vec<String> {
+            build_session(conn, f).unwrap().items.into_iter().map(|i| i.card.hanzi).collect()
+        };
+        assert_eq!(order(&conn, &f), ["好", "人", "用", "难", "没"], "HSK1 first, deck order within a level");
+        crate::db::set_setting(&conn, "new_order", "deck").unwrap();
+        assert_eq!(order(&conn, &f), ["难", "没", "好", "用", "人"]);
+        crate::db::set_setting(&conn, "new_order", "hsk").unwrap();
+
+        // reviews: when they don't all fit, the one most likely forgotten comes first
+        let ids: Vec<i64> = conn.prepare("SELECT id FROM cards ORDER BY id").unwrap()
+            .query_map([], |r| r.get(0)).unwrap().map(|x| x.unwrap()).collect();
+        let t = now();
+        answer_at(&mut conn, ids[0], "recognition", 4, 1000, t - 40 * db::DAY).unwrap(); // long overdue
+        answer_at(&mut conn, ids[1], "recognition", 4, 1000, t - 12 * db::DAY).unwrap(); // just due
+        let mut f = filter("due");
+        f.limit = 1;
+        assert_eq!(order(&conn, &f), ["难"]);
+    }
+
+    #[test]
+    fn leeches_are_tagged() {
+        let mut conn = crate::db::open_in_memory().unwrap();
+        let s = build_session(&conn, &filter("new")).unwrap();
+        let card = s.items[0].card.id;
+        let mut t = 1_800_000_000;
+        answer_at(&mut conn, card, "recognition", 4, 1000, t).unwrap(); // straight to review
+        let mut flagged = Vec::new();
+        for _ in 0..LEECH_LAPSES {
+            t += 30 * crate::db::DAY;
+            let r = answer_at(&mut conn, card, "recognition", 1, 1000, t).unwrap(); // a lapse
+            flagged.push(r.leech);
+            t += 600;
+            answer_at(&mut conn, card, "recognition", 3, 1000, t).unwrap(); // relearned
+        }
+        assert_eq!(flagged.iter().filter(|x| **x).count(), 1, "{flagged:?}");
+        assert!(*flagged.last().unwrap(), "the 8th lapse makes it a leech");
+        let tags: String = conn.query_row("SELECT tags FROM cards WHERE id = ?1", [card], |r| r.get(0)).unwrap();
+        assert!(tags.split(',').any(|x| x == LEECH_TAG), "{tags}");
+        // learned again: three passes at review in a row remove the tag
+        let mut cured = Vec::new();
+        for _ in 0..LEECH_CURE_PASSES {
+            t += 60 * crate::db::DAY;
+            cured.push(answer_at(&mut conn, card, "recognition", 3, 1000, t).unwrap().unleeched);
+        }
+        assert_eq!(cured, [false, false, true]);
+        let tags: String = conn.query_row("SELECT tags FROM cards WHERE id = ?1", [card], |r| r.get(0)).unwrap();
+        assert!(!tags.split(',').any(|x| x == LEECH_TAG), "{tags}");
+        let step: i64 = conn
+            .query_row("SELECT step FROM progress WHERE card_id = ?1 AND direction = 'recognition'", [card], |r| r.get(0))
+            .unwrap();
+        assert_eq!(step, 0, "in review");
     }
 
     #[test]
@@ -399,7 +609,7 @@ mod tests {
     }
 
     #[test]
-    fn other_modes_sample_randomly_within_their_group() {
+    fn due_cards_sample_randomly_new_cards_in_order() {
         let mut conn = db::open_in_memory().unwrap();
         db::set_setting(&conn, "new_per_day", "100").unwrap();
         let deck: i64 = conn
@@ -438,14 +648,12 @@ mod tests {
             seen.insert(p);
         }
         assert!(seen.len() > 1, "a random sample of the due cards");
-        // new-only mode: random new cards, not the first-added ones every time
-        let mut seen = std::collections::HashSet::new();
-        for _ in 0..10 {
-            let p = pick(&conn, "new");
-            assert!(p.iter().all(|id| ids[10..].contains(id)));
-            seen.insert(p);
-        }
-        assert!(seen.len() > 1);
+        // new-only mode: new words are introduced in order (HSK level, then deck order; these
+        // have no level), not at random
+        assert_eq!(pick(&conn, "new"), ids[10..14].to_vec());
+        db::set_setting(&conn, "new_order", "random").unwrap();
+        let seen: std::collections::HashSet<Vec<i64>> = (0..10).map(|_| pick(&conn, "new")).collect();
+        assert!(seen.len() > 1, "random order when chosen");
     }
 
     #[test]

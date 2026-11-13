@@ -1,12 +1,38 @@
 import { api } from "./api";
 import { setLang } from "./i18n.svelte";
+import { isCustomTheme } from "./themes";
 
 export const settings = $state({
   loaded: false,
   language: "en",
-  theme: "system",
+  theme: "light",
   desiredRetention: 0.9,
   newPerDay: 20,
+  /** "2" (default): Wrong / Right (Again / Good); "4": Again / Hard / Good / Easy. */
+  answerButtons: "2",
+  /** Once one direction of a word is answered, leave its other directions for the next session. */
+  oneDirectionPerSession: true,
+  // Settings › Studying › Advanced (the scheduler reads the same keys)
+  /** Correct recalls a new word needs on its first day. */
+  newRecalls: 3,
+  /** Correct recalls a forgotten word needs before it's back on the normal spacing. */
+  relearnRecalls: 1,
+  /** Minutes before a word missed while learning comes back. */
+  againMinutes: 1,
+  /** Minutes before the next recall after the 1st, 2nd … correct one ("5 15"; the last repeats). */
+  learnGaps: "5 15",
+  /** Minutes before a forgotten review word first comes back. */
+  relearnMinutes: 10,
+  /** In a session, a missed word comes back at least this many cards later. */
+  minGapCards: 5,
+  /** Spread review dates a little. */
+  fuzz: true,
+  /** Longest review interval in days. */
+  maxIntervalDays: 36500,
+  /** Lapses that make a word a leech (0 = off). */
+  leechLapses: 8,
+  /** Order new words are introduced: "hsk" (HSK1 first, then deck order), "deck", "random". */
+  newOrder: "hsk",
   toneColors: true,
   /** Tag new cards with their HSK level (2026 syllabus). */
   hskAutotag: true,
@@ -29,6 +55,13 @@ export const settings = $state({
   tutorModel: "claude-opus-5-5",
   /** Keep calibration recordings for checking the tone detector (always on in dev builds). */
   debugMode: false,
+  /** Reading page: the story's typeface (a key of READING_FONTS) and text size in px. */
+  readingFont: "sans",
+  readingSize: 24,
+  /** Space between lines, as a multiple of the text size. */
+  readingLineHeight: 1.9,
+  /** Colour the story's characters by tone (when tone colours are on). */
+  readingToneColors: false,
 });
 
 const KEYS: Record<string, keyof typeof settings> = {
@@ -36,6 +69,18 @@ const KEYS: Record<string, keyof typeof settings> = {
   theme: "theme",
   desired_retention: "desiredRetention",
   new_per_day: "newPerDay",
+  answer_buttons: "answerButtons",
+  one_direction_per_session: "oneDirectionPerSession",
+  new_recalls: "newRecalls",
+  relearn_recalls: "relearnRecalls",
+  again_minutes: "againMinutes",
+  learn_gaps: "learnGaps",
+  relearn_minutes: "relearnMinutes",
+  min_gap_cards: "minGapCards",
+  fuzz: "fuzz",
+  max_interval_days: "maxIntervalDays",
+  leech_lapses: "leechLapses",
+  new_order: "newOrder",
   tone_colors: "toneColors",
   hsk_autotag: "hskAutotag",
   speech_rate: "speechRate",
@@ -50,6 +95,10 @@ const KEYS: Record<string, keyof typeof settings> = {
   replay_answers: "replayAnswers",
   tutor_model: "tutorModel",
   debug_mode: "debugMode",
+  reading_font: "readingFont",
+  reading_size: "readingSize",
+  reading_line_height: "readingLineHeight",
+  reading_tone_colors: "readingToneColors",
 };
 
 function parse(field: keyof typeof settings, raw: string): unknown {
@@ -62,9 +111,12 @@ function parse(field: keyof typeof settings, raw: string): unknown {
   return raw;
 }
 
+/** "system" follows the OS (no data-theme); "light", "dark" or a custom theme's key is set on
+ * <html data-theme>, where app.css defines its colours. An unknown value falls back to system. */
 export function applyTheme() {
   const root = document.documentElement;
-  if (settings.theme === "light" || settings.theme === "dark") root.dataset.theme = settings.theme;
+  const t = settings.theme;
+  if (t === "light" || t === "dark" || isCustomTheme(t)) root.dataset.theme = t;
   else delete root.dataset.theme;
 }
 

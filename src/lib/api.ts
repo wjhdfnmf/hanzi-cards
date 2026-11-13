@@ -94,6 +94,10 @@ export interface AnswerResult {
   state: number;
   intervalSecs: number;
   days: number | null;
+  /** This answer made the word a leech (forgotten many times); it was tagged "leech". */
+  leech: boolean;
+  /** A leech remembered at review several times in a row: the "leech" tag came off. */
+  unleeched: boolean;
 }
 
 export interface DayStat {
@@ -283,7 +287,7 @@ export interface KeyStatus {
 /** How the tutor behaves in one conversation. */
 export interface TutorOptions {
   level: "hsk1" | "hsk2" | "hsk3";
-  length: "short" | "normal" | "long";
+  length: "tiny" | "short" | "normal" | "long";
   corrections: "off" | "gentle" | "every";
   english: "never" | "asked" | "hints";
   newWords: number;
@@ -396,7 +400,13 @@ export interface DataContents {
   reviews: number;
   /** Unix seconds. */
   lastReview: number | null;
+  /** Reading database. */
+  stories: number;
+  collections: number;
 }
+
+/** Which database: cards & decks, or reading (stories). */
+export type DbKind = "cards" | "reading";
 
 export interface DataFile {
   name: string;
@@ -411,6 +421,8 @@ export interface DataFile {
 export interface DataInfo {
   current: DataFile;
   folder: string;
+  /** This database's backups folder (backups/decks or backups/reading). */
+  backupFolder: string;
   /** Newest first. */
   backups: DataFile[];
 }
@@ -421,6 +433,61 @@ export interface ImportResult {
   skipped: number;
   /** Words already in other decks that weren't imported again. */
   skippedOther: number;
+}
+
+/** A collection of stories; collections nest like decks. */
+export interface StoryFolder {
+  id: number;
+  parentId: number | null;
+  name: string;
+  /** Names from the top, e.g. "Graded readers › Level 1". */
+  path: string;
+  depth: number;
+  childCount: number;
+  description: string;
+  createdAt: number;
+  /** Stories directly in this collection. */
+  storyCount: number;
+  /** Including all subcollections. */
+  totalStories: number;
+}
+
+/** A story without its text, for lists. */
+export interface StoryInfo {
+  id: number;
+  folderId: number | null;
+  title: string;
+  /** Chinese characters in the text. */
+  chars: number;
+  preview: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Story {
+  id: number;
+  folderId: number | null;
+  title: string;
+  body: string;
+  /** Key vocabulary, one "word – pinyin – meaning" per line ("" for none). */
+  vocab: string;
+  position: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** What importing a folder of stories added. */
+export interface StoryImport {
+  collections: number;
+  stories: number;
+  skipped: number;
+}
+
+/** A free font the app can download for the Reading page. */
+export interface FontFile {
+  key: string;
+  sizeBytes: number;
+  downloaded: boolean;
 }
 
 export const api = {
@@ -440,6 +507,8 @@ export const api = {
   deleteCards: (ids: number[]) => invoke<void>("delete_cards", { ids }),
   moveCards: (ids: number[], deckId: number) => invoke<void>("move_cards", { ids, deckId }),
   listTags: () => invoke<string[]>("list_tags"),
+  /** Remove these tags from every card; returns how many cards changed. */
+  removeTags: (tags: string[]) => invoke<number>("remove_tags", { tags }),
   /** Add HSK level tags to all cards that lack one; returns how many changed. */
   hskTagAll: () => invoke<number>("hsk_tag_all"),
   cardsByHanzi: (hanzi: string) => invoke<{ card: Card; deckName: string }[]>("cards_by_hanzi", { hanzi }),
@@ -509,13 +578,14 @@ export const api = {
     invoke<AnswerResult>("answer_card", { cardId, direction, rating, durationMs }),
   getStats: (days: number) => invoke<Stats>("get_stats", { days }),
 
-  dataInfo: () => invoke<DataInfo>("data_info"),
+  dataInfo: (kind: DbKind) => invoke<DataInfo>("data_info", { kind }),
   /** Returns the backup's file name. */
-  dataBackup: () => invoke<string>("data_backup"),
-  dataSaveCopy: (path: string) => invoke<void>("data_save_copy", { path }),
-  dataInspect: (path: string) => invoke<DataFile>("data_inspect", { path }),
+  dataBackup: (kind: DbKind) => invoke<string>("data_backup", { kind }),
+  dataSaveCopy: (kind: DbKind, path: string) => invoke<void>("data_save_copy", { kind, path }),
+  dataInspect: (kind: DbKind, path: string) => invoke<DataFile>("data_inspect", { kind, path }),
   /** Switch to another database file; returns the name of the backup of the replaced one. */
-  dataUseFile: (path: string) => invoke<string>("data_use_file", { path }),
+  dataUseFile: (kind: DbKind, path: string) => invoke<string>("data_use_file", { kind, path }),
+  /** Open the app-data folder (both databases and their backups). */
   dataShowInFolder: () => invoke<void>("data_show_in_folder"),
 
   dictStatus: () => invoke<DictStatus>("dict_status"),
@@ -525,6 +595,35 @@ export const api = {
   dictSegment: (text: string, prefer: number[] = []) => invoke<Segment[]>("dict_segment", { text, prefer }),
   dictImportFile: (path: string) => invoke<number>("dict_import_file", { path }),
   dictDownload: () => invoke<number>("dict_download"),
+
+  listStoryFolders: () => invoke<StoryFolder[]>("list_story_folders"),
+  createStoryFolder: (name: string, description = "", parentId: number | null = null) =>
+    invoke<number>("create_story_folder", { name, description, parentId }),
+  updateStoryFolder: (id: number, name: string, description: string, parentId: number | null) =>
+    invoke<void>("update_story_folder", { id, name, description, parentId }),
+  deleteStoryFolder: (id: number) => invoke<void>("delete_story_folder", { id }),
+  /** null = every story; a collection includes its subcollections. */
+  listStories: (folderId: number | null) => invoke<StoryInfo[]>("list_stories", { folderId }),
+  getStory: (id: number) => invoke<Story>("get_story", { id }),
+  createStory: (folderId: number | null, title: string, body: string) =>
+    invoke<number>("create_story", { folderId, title, body }),
+  updateStory: (id: number, folderId: number | null, title: string, body: string) =>
+    invoke<void>("update_story", { id, folderId, title, body }),
+  deleteStory: (id: number) => invoke<void>("delete_story", { id }),
+  /** Text files, each one story titled by its file name; returns how many were added. */
+  importStories: (folderId: number | null, paths: string[]) => invoke<number>("import_stories", { folderId, paths }),
+  /** The story's text split into dictionary words. */
+  storySegments: (id: number) => invoke<Segment[]>("story_segments", { id }),
+  storyTotal: () => invoke<number>("story_total"),
+  /** A folder of story files as a collection; subfolders become subcollections. */
+  importStoryFolder: (folderId: number | null, path: string) =>
+    invoke<StoryImport>("import_story_folder", { folderId, path }),
+  fontsList: () => invoke<FontFile[]>("fonts_list"),
+  /** Progress: "font-download" events. */
+  fontDownload: (key: string) => invoke<void>("font_download", { key }),
+  fontDelete: (key: string) => invoke<void>("font_delete", { key }),
+  /** A downloaded font file's bytes. */
+  fontData: (key: string) => invoke<ArrayBuffer>("font_data", { key }),
 };
 
 export function errorText(e: unknown): string {

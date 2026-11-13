@@ -154,6 +154,32 @@
   }
 
   /** Why a direction can't be studied on this computer ("" = it can). */
+  // ---------- the recommended setup (decks are left as chosen) ----------
+  // Due & new every day; reading (recognition), writing (recall: production is the stronger
+  // practice) and listening (tones and homophones); short shuffled sessions; any tag.
+  const RECOMMENDED_DIRS: Direction[] = ["recognition", "recall", "listening"];
+  const recommended = () => ({
+    mode: "due" as StudyMode,
+    directions: RECOMMENDED_DIRS.filter((d) => dirOff(d) === ""),
+    limit: 20,
+    shuffle: true,
+    tags: [] as string[],
+  });
+  const usingRecommended = $derived.by(() => {
+    const r = recommended();
+    return (
+      sel.mode === r.mode &&
+      sel.limit === r.limit &&
+      sel.shuffle === r.shuffle &&
+      sel.tags.length === 0 &&
+      sel.directions.length === r.directions.length &&
+      r.directions.every((d) => sel.directions.includes(d))
+    );
+  });
+  function useRecommended() {
+    sel = { ...sel, ...recommended() }; // sel.deckIds stays
+  }
+
   function dirOff(d: Direction): string {
     if (d === "speaking" || d === "read_aloud") return speech.available ? "" : (speech.reason ?? t("speech.unavailable"));
     if (d === "say_meaning") return speech.whisperModels.length ? "" : t("speech.needWhisper");
@@ -254,14 +280,18 @@
   }
 
   /** Keep the same word (in another direction) from coming up twice in a row. */
+  /** Keep the same word's directions apart: each next card is the first one whose word wasn't
+   * among the last few shown (when the session has enough other words). */
+  const SAME_WORD_GAP = 6;
   function spreadSameWords(items: StudyItem[]): StudyItem[] {
-    const arr = [...items];
-    for (let i = 1; i < arr.length; i++) {
-      if (arr[i].card.hanzi !== arr[i - 1].card.hanzi) continue;
-      const j = arr.findIndex((x, k) => k > i && x.card.hanzi !== arr[i - 1].card.hanzi);
-      if (j > 0) [arr[i], arr[j]] = [arr[j], arr[i]];
+    const rest = [...items];
+    const out: StudyItem[] = [];
+    while (rest.length) {
+      const recent = new Set(out.slice(-SAME_WORD_GAP).map((x) => x.card.hanzi));
+      const i = rest.findIndex((x) => !recent.has(x.card.hanzi));
+      out.push(rest.splice(Math.max(0, i), 1)[0]);
     }
-    return arr;
+    return out;
   }
 
   async function start() {
@@ -309,8 +339,15 @@
     if (settings.autoplayAudio && current.direction !== "listening") speak(current.card.hanzi);
   }
 
+  /** A missed card comes back at least this many cards later (Settings › Studying › Advanced). */
+  const MIN_GAP = $derived(Math.max(1, Math.round(settings.minGapCards || 5)));
+  const twoButtons = $derived(settings.answerButtons === "2");
+  /** The suggestion on the buttons shown: with Wrong / Right, any pass is Right (Good). */
+  const shownSuggested = $derived(suggested === null ? null : twoButtons ? (suggested >= 2 ? 3 : 1) : suggested);
+
   async function rate(rating: number) {
     if (!current || !revealed || busy) return;
+    if (twoButtons) rating = rating >= 2 ? 3 : 1;
     busy = true;
     const item = current;
     const ms = Date.now() - shownAt;
@@ -319,10 +356,17 @@
       result.reviewed++;
       result.ms += Math.min(ms, 10 * 60 * 1000);
       if (rating > 1) result.correct++;
-      const rest = queue.slice(1);
-      // Short learning steps come back later in this session (in cram, only a missed card).
+      if (res.leech) showToast(t("study.leech", { word: item.card.hanzi }), "err");
+      if (res.unleeched) showToast(t("study.unleeched", { word: item.card.hanzi }));
+      let rest = queue.slice(1);
+      // This word's other directions wait for the next session (they stay due).
+      if (settings.oneDirectionPerSession) rest = rest.filter((x) => x.card.hanzi !== item.card.hanzi);
+      // Short learning steps come back later in this session (in cram, only a missed card),
+      // about as many cards later as fit in the step at this session's pace: a longer gap makes
+      // the next recall harder and the memory stronger, and never fewer than a few cards.
       if (res.days === null && res.intervalSecs < 30 * 60 && (sessionMode !== "all" || rating === 1)) {
-        const pos = Math.min(rest.length, 3 + Math.floor(Math.random() * 3));
+        const pace = Math.max(4, result.ms / result.reviewed / 1000); // seconds per card
+        const pos = Math.min(rest.length, Math.max(MIN_GAP, Math.round(res.intervalSecs / pace)));
         rest.splice(pos, 0, item);
       } else {
         done++;
@@ -435,20 +479,26 @@
       if (!revealed) {
         stopListening();
         reveal();
-      } else rate(suggested ?? 3);
+      } else rate(shownSuggested ?? 3);
     } else if (revealed && ["1", "2", "3", "4"].includes(e.key)) {
-      rate(Number(e.key));
+      // Wrong / Right: 1 is Wrong, 2 (or 3, 4) is Right
+      rate(twoButtons ? (e.key === "1" ? 1 : 3) : Number(e.key));
     } else if (e.key.toLowerCase() === "r" && current) {
       speak(current.card.hanzi);
     }
   }
 
-  const RATINGS = [
-    { n: 1, key: "study.again", cls: "again" },
-    { n: 2, key: "study.hard", cls: "hard" },
-    { n: 3, key: "study.good", cls: "good" },
-    { n: 4, key: "study.easy", cls: "easy" },
+  const RATINGS_4 = [
+    { n: 1, key: "study.again", cls: "again", k: "1" },
+    { n: 2, key: "study.hard", cls: "hard", k: "2" },
+    { n: 3, key: "study.good", cls: "good", k: "3" },
+    { n: 4, key: "study.easy", cls: "easy", k: "4" },
   ] as const;
+  const RATINGS_2 = [
+    { n: 1, key: "study.wrong", cls: "again", k: "1" },
+    { n: 3, key: "study.right", cls: "good", k: "2" },
+  ] as const;
+  const RATINGS = $derived(twoButtons ? RATINGS_2 : RATINGS_4);
 </script>
 
 <svelte:window {onkeydown} />
@@ -460,6 +510,16 @@
         <h1>{t("study.title")}</h1>
         <p class="muted">{t("study.subtitle")}</p>
       </div>
+      <button
+        class="btn recommend"
+        class:on={usingRecommended}
+        disabled={usingRecommended}
+        title={t("study.recommendedHint")}
+        onclick={useRecommended}
+      >
+        <Icon name={usingRecommended ? "check" : "flame"} size={15} />
+        {usingRecommended ? t("study.usingRecommended") : t("study.recommended")}
+      </button>
     </div>
 
     {#if suggestModel}
@@ -471,7 +531,7 @@
             <span class="small">{t("settings.downloading", { p: modelProgress })}</span>
           {:else}
             <button class="btn primary small" onclick={installSuggested}>{t("speech.offerInstall")}</button>
-            <button class="btn ghost small" onclick={() => goto("settings")}>{t("speech.offerChoose")}</button>
+            <button class="btn ghost small" onclick={() => goto("settings", "speech")}>{t("speech.offerChoose")}</button>
             <button class="btn ghost small" onclick={dismissModelOffer}>{t("speech.offerLater")}</button>
           {/if}
         </span>
@@ -691,17 +751,20 @@
         {#if !revealed}
           <button class="btn primary lg reveal" onclick={reveal}>{t("study.showAnswer")}</button>
         {:else}
-          <div class="ratings">
+          <div class="ratings" class:two={twoButtons}>
             {#each RATINGS as r (r.n)}
-              <button class="rate {r.cls}" class:suggested={suggested === r.n} onclick={() => rate(r.n)}>
-                <span class="ivl small">{previews[r.n - 1] ? intervalLabel(previews[r.n - 1].secs, previews[r.n - 1].days) : ""}</span>
+              <button class="rate {r.cls}" class:suggested={shownSuggested === r.n} onclick={() => rate(r.n)}>
+                {#if !twoButtons}
+                  <span class="ivl small">{previews[r.n - 1] ? intervalLabel(previews[r.n - 1].secs, previews[r.n - 1].days) : ""}</span>
+                {/if}
+                {#if twoButtons}<span class="mark"><Icon name={r.n === 1 ? "close" : "check"} size={34} /></span>{/if}
                 <strong>{t(r.key)}</strong>
-                <span class="key faint">{r.n}</span>
+                <span class="key faint">{r.k}</span>
               </button>
             {/each}
           </div>
         {/if}
-        <p class="faint small keys">{isSpoken(dir) && !revealed ? t("speech.keys") : t("study.keys")}</p>
+        <p class="faint small keys">{isSpoken(dir) && !revealed ? t("speech.keys") : t(twoButtons ? "study.keys2" : "study.keys")}</p>
         {#if error}<div class="notice err small">{error}</div>{/if}
       </div>
     </div>
@@ -750,7 +813,7 @@
   }
   .mic.live {
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-text);
     animation: pulse 1.2s ease-in-out infinite;
     transform: scale(calc(1 + var(--level, 0) * 0.25));
     transition: transform 0.08s;
@@ -865,6 +928,20 @@
     border-radius: var(--radius);
     border: 1px solid var(--border);
     background: var(--surface);
+  }
+  .recommend {
+    flex-shrink: 0;
+    align-self: center;
+  }
+  .recommend:not(.on) {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .recommend.on {
+    opacity: 1;
+    color: var(--ok);
+    border-color: transparent;
+    background: var(--ok-soft);
   }
   .mode:hover {
     border-color: var(--text-3);
@@ -1016,6 +1093,49 @@
     grid-template-columns: repeat(4, 120px);
     gap: 10px;
   }
+  /* Wrong / Right: two big square tiles */
+  .ratings.two {
+    grid-template-columns: repeat(2, 136px);
+    gap: 16px;
+  }
+  .ratings.two .rate {
+    aspect-ratio: 1;
+    justify-content: center;
+    gap: 8px;
+    border-radius: var(--radius-lg);
+    border-bottom-width: 4px;
+    font-size: 17px;
+  }
+  .ratings.two .rate.again {
+    background: color-mix(in srgb, var(--tone-1) 7%, var(--surface));
+  }
+  .ratings.two .rate.good {
+    background: color-mix(in srgb, var(--ok) 7%, var(--surface));
+  }
+  .ratings.two .rate.again:hover {
+    background: color-mix(in srgb, var(--tone-1) 14%, var(--surface));
+  }
+  .ratings.two .rate.good:hover {
+    background: color-mix(in srgb, var(--ok) 14%, var(--surface));
+  }
+  .ratings.two .rate.suggested {
+    outline-offset: 3px;
+  }
+  .mark {
+    display: grid;
+    place-items: center;
+  }
+  .rate.again .mark {
+    color: var(--tone-1);
+  }
+  .rate.good .mark {
+    color: var(--ok);
+  }
+  .ratings.two .key {
+    top: 8px;
+    right: 10px;
+    font-size: 12px;
+  }
   .rate {
     position: relative;
     display: flex;
@@ -1071,7 +1191,7 @@
     height: 64px;
     border-radius: 14px;
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-text);
     font-size: 36px;
     display: grid;
     place-items: center;

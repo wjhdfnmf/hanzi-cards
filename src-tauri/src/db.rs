@@ -168,6 +168,15 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         tx.execute_batch("PRAGMA user_version = 8")?;
         tx.commit()?;
     }
+    if version < 9 {
+        // v9: correct recalls so far while (re)learning (a new word needs 3 before it graduates).
+        conn.execute_batch(
+            "BEGIN;
+             ALTER TABLE progress ADD COLUMN step INTEGER NOT NULL DEFAULT 0;
+             PRAGMA user_version = 9;
+             COMMIT;",
+        )?;
+    }
     Ok(())
 }
 

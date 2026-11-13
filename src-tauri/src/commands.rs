@@ -3,7 +3,7 @@
 use crate::error::{AppError, AppResult};
 use crate::models::*;
 use crate::stats::Stats;
-use crate::{ai, billing, calibration, cards, data, db, decks, dictionary, pinyin, pleco, speech, stats, study, tone_check, tones, tutor, whisper, AppState};
+use crate::{ai, billing, fonts, calibration, cards, data, db, decks, dictionary, pinyin, pleco, speech, stats, stories, study, tone_check, tones, tutor, whisper, AppState};
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -36,7 +36,7 @@ pub fn get_settings(state: State<AppState>) -> AppResult<HashMap<String, String>
     let conn = lock(&state);
     let mut map: HashMap<String, String> = [
         ("language", "en".to_string()),
-        ("theme", "system".to_string()),
+        ("theme", "light".to_string()), // fresh installs start light
         ("desired_retention", db::DEFAULT_RETENTION.to_string()),
         ("new_per_day", db::DEFAULT_NEW_PER_DAY.to_string()),
         ("tone_colors", "true".to_string()),
@@ -70,46 +70,63 @@ pub fn set_setting(state: State<AppState>, key: String, value: String) -> AppRes
     Ok(db::set_setting(&lock(&state), &key, &value)?)
 }
 
-// ---------- your data (the database file) ----------
+// ---------- your data (the two database files: cards & decks, and reading) ----------
 
-#[tauri::command]
-pub fn data_info(app: AppHandle, state: State<AppState>) -> AppResult<data::DataInfo> {
-    data::info(&lock(&state), &app_data(&app)?)
+/// Runs `f` with the connection of the database `kind` names ("cards" or "reading").
+fn with_db<T>(state: &State<AppState>, kind: data::Kind, f: impl FnOnce(&mut Connection) -> AppResult<T>) -> AppResult<T> {
+    match kind {
+        data::Kind::Cards => f(&mut lock(state)),
+        data::Kind::Reading => f(&mut lock_stories(state)),
+    }
 }
 
-/// Back up the database now; returns the backup's file name.
 #[tauri::command]
-pub fn data_backup(app: AppHandle, state: State<AppState>) -> AppResult<String> {
-    let path = data::backup(&lock(&state), &app_data(&app)?, "")?;
+pub fn data_info(app: AppHandle, state: State<AppState>, kind: Option<String>) -> AppResult<data::DataInfo> {
+    let kind = data::Kind::parse(kind.as_deref())?;
+    let dir = app_data(&app)?;
+    with_db(&state, kind, |c| data::info(c, &dir, kind))
+}
+
+/// Back up a database now; returns the backup's file name.
+#[tauri::command]
+pub fn data_backup(app: AppHandle, state: State<AppState>, kind: Option<String>) -> AppResult<String> {
+    let kind = data::Kind::parse(kind.as_deref())?;
+    let dir = app_data(&app)?;
+    let path = with_db(&state, kind, |c| data::backup(c, &dir, kind, ""))?;
     Ok(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
 }
 
-/// Save a copy of the database to a file the user chose.
+/// Save a copy of a database to a file the user chose.
 #[tauri::command]
-pub fn data_save_copy(app: AppHandle, state: State<AppState>, path: String) -> AppResult<()> {
-    data::save_copy(&lock(&state), &app_data(&app)?, std::path::Path::new(&path))
+pub fn data_save_copy(app: AppHandle, state: State<AppState>, kind: Option<String>, path: String) -> AppResult<()> {
+    let kind = data::Kind::parse(kind.as_deref())?;
+    let dir = app_data(&app)?;
+    with_db(&state, kind, |c| data::save_copy(c, &dir, kind, std::path::Path::new(&path)))
 }
 
 /// What a database file holds, before switching to it.
 #[tauri::command]
-pub fn data_inspect(path: String) -> AppResult<data::FileInfo> {
-    data::inspect(std::path::Path::new(&path))
+pub fn data_inspect(kind: Option<String>, path: String) -> AppResult<data::FileInfo> {
+    data::inspect(std::path::Path::new(&path), data::Kind::parse(kind.as_deref())?)
 }
 
 /// Switch to another database file (a backup, or one from another computer). The current
 /// one is backed up first; returns that backup's file name.
 #[tauri::command]
-pub fn data_use_file(app: AppHandle, state: State<AppState>, path: String) -> AppResult<String> {
+pub fn data_use_file(app: AppHandle, state: State<AppState>, kind: Option<String>, path: String) -> AppResult<String> {
+    let kind = data::Kind::parse(kind.as_deref())?;
     let dir = app_data(&app)?;
-    let mut conn = lock(&state);
-    let saved = data::use_file(&mut conn, &dir, std::path::Path::new(&path))?;
-    whisper::set_device_preference(&db::get_setting(&conn, "whisper_device")?.unwrap_or_else(|| "auto".into()));
+    let saved = with_db(&state, kind, |c| data::use_file(c, &dir, kind, std::path::Path::new(&path)))?;
+    if kind == data::Kind::Cards {
+        whisper::set_device_preference(&db::get_setting(&lock(&state), "whisper_device")?.unwrap_or_else(|| "auto".into()));
+    }
     Ok(saved.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
 }
 
+/// Open the app-data folder, where both databases and their backups are.
 #[tauri::command]
 pub fn data_show_in_folder(app: AppHandle) -> AppResult<()> {
-    data::show_in_folder(&data::db_path(&app_data(&app)?))
+    data::open_folder(&app_data(&app)?)
 }
 
 // ---------- decks ----------
@@ -182,6 +199,12 @@ pub async fn hsk_tag_all(app: AppHandle) -> AppResult<usize> {
 #[tauri::command]
 pub fn list_tags(state: State<AppState>) -> AppResult<Vec<String>> {
     cards::list_tags(&lock(&state))
+}
+
+/// Remove these tags from every card; returns how many cards changed.
+#[tauri::command]
+pub fn remove_tags(state: State<AppState>, tags: Vec<String>) -> AppResult<usize> {
+    cards::remove_tags(&mut lock(&state), &tags)
 }
 
 #[derive(serde::Serialize)]
@@ -869,4 +892,159 @@ pub async fn ai_spending_export(app: AppHandle, path: String) -> AppResult<()> {
     let csv = blocking(app, |conn| billing::export_csv(conn)).await?;
     std::fs::write(path, csv)?;
     Ok(())
+}
+
+// ---------- reading (stories.db, separate from the cards database) ----------
+
+fn lock_stories<'a>(state: &'a State<AppState>) -> MutexGuard<'a, Connection> {
+    state.stories.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Like `blocking`, with the stories database.
+async fn blocking_stories<T: Send + 'static>(
+    app: AppHandle,
+    f: impl FnOnce(&mut Connection) -> AppResult<T> + Send + 'static,
+) -> AppResult<T> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let mut conn = state.stories.lock().unwrap_or_else(|e| e.into_inner());
+        f(&mut conn)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+#[tauri::command]
+pub fn list_story_folders(state: State<AppState>) -> AppResult<Vec<stories::StoryFolder>> {
+    stories::list_folders(&lock_stories(&state))
+}
+
+#[tauri::command]
+pub fn create_story_folder(
+    state: State<AppState>,
+    name: String,
+    description: String,
+    parent_id: Option<i64>,
+) -> AppResult<i64> {
+    stories::create_folder(&lock_stories(&state), &name, &description, parent_id)
+}
+
+#[tauri::command]
+pub fn update_story_folder(
+    state: State<AppState>,
+    id: i64,
+    name: String,
+    description: String,
+    parent_id: Option<i64>,
+) -> AppResult<()> {
+    stories::update_folder(&lock_stories(&state), id, &name, &description, parent_id)
+}
+
+#[tauri::command]
+pub fn delete_story_folder(state: State<AppState>, id: i64) -> AppResult<()> {
+    stories::delete_folder(&mut lock_stories(&state), id)
+}
+
+#[tauri::command]
+pub fn list_stories(state: State<AppState>, folder_id: Option<i64>) -> AppResult<Vec<stories::StoryInfo>> {
+    stories::list_stories(&lock_stories(&state), folder_id)
+}
+
+#[tauri::command]
+pub fn story_total(state: State<AppState>) -> AppResult<i64> {
+    stories::total(&lock_stories(&state))
+}
+
+#[tauri::command]
+pub fn get_story(state: State<AppState>, id: i64) -> AppResult<stories::Story> {
+    stories::get_story(&lock_stories(&state), id)
+}
+
+#[tauri::command]
+pub fn create_story(state: State<AppState>, folder_id: Option<i64>, title: String, body: String) -> AppResult<i64> {
+    stories::create_story(&lock_stories(&state), folder_id, &title, &body)
+}
+
+#[tauri::command]
+pub fn update_story(
+    state: State<AppState>,
+    id: i64,
+    folder_id: Option<i64>,
+    title: String,
+    body: String,
+) -> AppResult<()> {
+    stories::update_story(&lock_stories(&state), id, folder_id, &title, &body)
+}
+
+#[tauri::command]
+pub fn delete_story(state: State<AppState>, id: i64) -> AppResult<()> {
+    stories::delete_story(&lock_stories(&state), id)
+}
+
+#[tauri::command]
+pub async fn import_stories(app: AppHandle, folder_id: Option<i64>, paths: Vec<String>) -> AppResult<usize> {
+    // read the files before taking the database lock
+    let files = tauri::async_runtime::spawn_blocking(move || {
+        paths.iter().map(|p| stories::read_file(&PathBuf::from(p))).collect::<AppResult<Vec<_>>>()
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))??;
+    blocking_stories(app, move |conn| stories::import_files(conn, folder_id, &files)).await
+}
+
+/// Import a folder of story files as a collection (subfolders become subcollections).
+#[tauri::command]
+pub async fn import_story_folder(app: AppHandle, folder_id: Option<i64>, path: String) -> AppResult<stories::ImportSummary> {
+    // read the files before taking the database lock
+    let tree = tauri::async_runtime::spawn_blocking(move || stories::read_folder(&PathBuf::from(path)))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))??;
+    blocking_stories(app, move |conn| stories::import_folder(conn, folder_id, &tree)).await
+}
+
+/// The story's text split into dictionary words (the dictionary is in the cards database).
+#[tauri::command]
+pub async fn story_segments(app: AppHandle, id: i64) -> AppResult<Vec<Segment>> {
+    let body = blocking_stories(app.clone(), move |conn| Ok(stories::get_story(conn, id)?.body)).await?;
+    // off the main thread: a long story is many dictionary lookups
+    blocking(app, move |conn| dictionary::segment(conn, &body, &[])).await
+}
+
+// ---------- Reading fonts (downloaded into app data) ----------
+
+#[tauri::command]
+pub fn fonts_list(app: AppHandle) -> AppResult<Vec<fonts::FontFile>> {
+    Ok(fonts::list(&app_data(&app)?))
+}
+
+/// Download a font, emitting "font-download" progress events.
+#[tauri::command]
+pub async fn font_download(app: AppHandle, key: String) -> AppResult<()> {
+    let dir = app_data(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut last = std::time::Instant::now();
+        fonts::download(&dir, &key, |received, total| {
+            if last.elapsed().as_millis() >= 150 || received == total {
+                last = std::time::Instant::now();
+                let _ = app.emit("font-download", DownloadProgress { name: key.clone(), received, total });
+            }
+        })
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+#[tauri::command]
+pub fn font_delete(app: AppHandle, key: String) -> AppResult<()> {
+    fonts::delete(&app_data(&app)?, &key)
+}
+
+/// A downloaded font's bytes, for the page to load with FontFace.
+#[tauri::command]
+pub async fn font_data(app: AppHandle, key: String) -> AppResult<tauri::ipc::Response> {
+    let dir = app_data(&app)?;
+    let bytes = tauri::async_runtime::spawn_blocking(move || fonts::read(&dir, &key))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))??;
+    Ok(tauri::ipc::Response::new(bytes))
 }

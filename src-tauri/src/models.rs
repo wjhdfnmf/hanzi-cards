@@ -126,6 +126,10 @@ pub struct AnswerResult {
     pub state: i64,
     pub interval_secs: i64,
     pub days: Option<i64>,
+    /// This answer made the word a leech (forgotten many times): it was tagged "leech".
+    pub leech: bool,
+    /// A leech remembered at review several times in a row: its "leech" tag was removed.
+    pub unleeched: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -159,6 +159,32 @@ pub fn list_cards(conn: &Connection, deck_id: Option<i64>, search: &str) -> AppR
         .collect())
 }
 
+/// Remove these tags (any case) from every card; returns how many cards changed.
+pub fn remove_tags(conn: &mut Connection, tags: &[String]) -> AppResult<usize> {
+    let drop: BTreeSet<String> = tags.iter().map(|t| t.trim().to_lowercase()).filter(|t| !t.is_empty()).collect();
+    if drop.is_empty() {
+        return Ok(0);
+    }
+    let rows: Vec<(i64, String)> = {
+        let mut stmt = conn.prepare("SELECT id, tags FROM cards WHERE tags <> ''")?;
+        let v = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<_, _>>()?;
+        v
+    };
+    let tx = conn.transaction()?;
+    let t = now();
+    let mut n = 0;
+    for (id, tags) in rows {
+        let before = split_tags(&tags);
+        let kept: Vec<String> = before.iter().filter(|x| !drop.contains(&x.to_lowercase())).cloned().collect();
+        if kept.len() != before.len() {
+            tx.execute("UPDATE cards SET tags = ?2, updated_at = ?3 WHERE id = ?1", params![id, kept.join(","), t])?;
+            n += 1;
+        }
+    }
+    tx.commit()?;
+    Ok(n)
+}
+
 pub fn list_tags(conn: &Connection) -> AppResult<Vec<String>> {
     let mut stmt = conn.prepare("SELECT DISTINCT tags FROM cards WHERE tags <> ''")?;
     let mut set = BTreeSet::new();
@@ -443,6 +469,22 @@ pub fn export_file(conn: &Connection, deck_id: Option<i64>, path: &Path) -> AppR
 mod tests {
     use super::*;
     use crate::db;
+
+    #[test]
+    fn removes_tags() {
+        let mut conn = db::open_in_memory().unwrap();
+        let deck: i64 = conn.query_row("SELECT id FROM decks LIMIT 1", [], |r| r.get(0)).unwrap();
+        conn.execute(
+            "INSERT INTO cards (deck_id, hanzi, tags, created_at, updated_at) VALUES (?1, '旅', 'HSK2,Travel,travel', 0, 0), (?1, '菜', 'Menu', 0, 0)",
+            [deck],
+        )
+        .unwrap();
+        assert_eq!(remove_tags(&mut conn, &["TRAVEL".into(), "Menu".into()]).unwrap(), 2);
+        let tags: Vec<String> = list_tags(&conn).unwrap();
+        assert!(!tags.iter().any(|t| t.eq_ignore_ascii_case("travel") || t == "Menu"), "{tags:?}");
+        let lv: String = conn.query_row("SELECT tags FROM cards WHERE hanzi = '旅'", [], |r| r.get(0)).unwrap();
+        assert_eq!(lv, "HSK2");
+    }
 
     #[test]
     fn crud_and_import() {

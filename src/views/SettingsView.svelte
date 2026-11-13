@@ -3,14 +3,68 @@
   import { listen } from "@tauri-apps/api/event";
   import { ask, open, save } from "@tauri-apps/plugin-dialog";
   import { getVersion } from "@tauri-apps/api/app";
-  import { api, errorText, type AiSpending, type DataContents, type DataFile, type DataInfo, type DictStatus, type KeyStatus, type SpeechStatus, type WhisperDeviceInfo, type WhisperModel } from "../lib/api";
+  import { api, errorText, type AiSpending, type DataContents, type DataFile, type DataInfo, type DbKind, type DictStatus, type KeyStatus, type SpeechStatus, type WhisperDeviceInfo, type WhisperModel } from "../lib/api";
   import { recordUtterance } from "../lib/mic";
   import PitchCalibration from "../components/PitchCalibration.svelte";
   import { showToast } from "../lib/toast.svelte";
   import { t } from "../lib/i18n.svelte";
   import { fmtNum } from "../lib/format";
-  import { goto } from "../lib/nav.svelte";
+  import { goto, nav } from "../lib/nav.svelte";
   import { settings, saveSetting } from "../lib/settings.svelte";
+  import { SIZE_MIN, SIZE_MAX, LINE_MIN, LINE_MAX, readingFont, clampSize } from "../lib/reading";
+  import FontSelect from "../components/FontSelect.svelte";
+  import { CUSTOM_THEMES, isCustomTheme } from "../lib/themes";
+  import Modal from "../components/Modal.svelte";
+  import licenceText from "../../LICENSE?raw";
+  import { fontFiles, downloadFont, removeFont } from "../lib/fonts.svelte";
+  import { installedFonts } from "../lib/reading";
+
+  // Downloadable fonts: a picture of each (shipped with the app) to see before downloading.
+  const fontSamples = import.meta.glob<string>("../assets/font-samples/*.png", {
+    eager: true,
+    query: "?url",
+    import: "default",
+  });
+  const sampleOf = (key: string) => fontSamples[`../assets/font-samples/${key}.png`];
+  const systemFonts = installedFonts();
+
+  // The font list folds away (closed at first); whether it's open is remembered.
+  const FONTS_OPEN_KEY = "settings.fontsOpen";
+  let fontsOpen = $state(
+    (() => {
+      try {
+        return localStorage.getItem(FONTS_OPEN_KEY) === "true";
+      } catch {
+        return false;
+      }
+    })(),
+  );
+  function setFontsOpen(open: boolean) {
+    fontsOpen = open;
+    try {
+      localStorage.setItem(FONTS_OPEN_KEY, String(open));
+    } catch {
+      /* not essential */
+    }
+  }
+
+  async function getFont(key: string) {
+    try {
+      await downloadFont(key);
+      await saveSetting("readingFont", key);
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+  }
+
+  async function dropFont(key: string) {
+    try {
+      if (settings.readingFont === key) await saveSetting("readingFont", "sans");
+      await removeFont(key);
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+  }
   import { outputDevices, routingReady, speak, voicesReady } from "../lib/speech";
 
   let voices = $state<SpeechSynthesisVoice[]>([]);
@@ -193,30 +247,38 @@
   let showSpending = $state(false);
   const usd = (c: number) => `$${c.toFixed(c > 0 && c < 0.1 ? 3 : 2)}`;
   const when = (s: number) => new Date(s * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-  // ---------- your data (the cards database file) ----------
+  // ---------- your data (two database files: cards & decks, and reading) ----------
 
-  let data = $state<DataInfo | null>(null);
+  const DB_KINDS: DbKind[] = ["cards", "reading"];
+  let data = $state<Record<DbKind, DataInfo | null>>({ cards: null, reading: null });
   let dataBusy = $state(false);
-  let showBackups = $state(false);
+  let showBackups = $state<Record<DbKind, boolean>>({ cards: false, reading: false });
 
   async function refreshData() {
-    data = await api.dataInfo().catch((e) => {
-      showToast(errorText(e), "err");
-      return null;
-    });
+    const [cards, reading] = await Promise.all(
+      DB_KINDS.map((k) =>
+        api.dataInfo(k).catch((e) => {
+          showToast(errorText(e), "err");
+          return null;
+        }),
+      ),
+    );
+    data = { cards, reading };
   }
   onMount(refreshData);
 
   const mb = (bytes: number) => (bytes / 1048576).toFixed(1);
-  const summary = (c: DataContents | null) =>
-    c
-      ? t(c.decks === 1 ? "settings.dataSummaryOne" : "settings.dataSummary", { cards: fmtNum(c.cards), decks: fmtNum(c.decks), reviews: fmtNum(c.reviews) })
-      : t("settings.dataUnreadable");
+  const summary = (c: DataContents | null, kind: DbKind) =>
+    !c
+      ? t(kind === "cards" ? "settings.dataUnreadable" : "settings.dataUnreadableReading")
+      : kind === "reading"
+        ? t("settings.dataSummaryReading", { stories: fmtNum(c.stories), collections: fmtNum(c.collections) })
+        : t(c.decks === 1 ? "settings.dataSummaryOne" : "settings.dataSummary", { cards: fmtNum(c.cards), decks: fmtNum(c.decks), reviews: fmtNum(c.reviews) });
 
-  async function backupNow() {
+  async function backupNow(kind: DbKind) {
     dataBusy = true;
     try {
-      showToast(t("settings.dataBackedUp", { name: await api.dataBackup() }));
+      showToast(t("settings.dataBackedUp", { name: await api.dataBackup(kind) }));
       await refreshData();
     } catch (e) {
       showToast(errorText(e), "err");
@@ -226,13 +288,14 @@
   }
 
   /** Save a copy somewhere the user picks, e.g. to load into a fresh install. */
-  async function saveCopy() {
+  async function saveCopy(kind: DbKind) {
     const stamp = new Date().toISOString().slice(0, 10);
-    const path = await save({ defaultPath: `hanzi-cards-${stamp}.db`, filters: [{ name: t("settings.dataFiles"), extensions: ["db"] }] });
+    const name = kind === "cards" ? `hanzi-cards-${stamp}.db` : `hanzi-reading-${stamp}.db`;
+    const path = await save({ defaultPath: name, filters: [{ name: t("settings.dataFiles"), extensions: ["db"] }] });
     if (!path) return;
     dataBusy = true;
     try {
-      await api.dataSaveCopy(path);
+      await api.dataSaveCopy(kind, path);
       showToast(t("settings.dataSavedCopy", { path }));
     } catch (e) {
       showToast(errorText(e), "err");
@@ -242,25 +305,25 @@
   }
 
   /** Switch to another database file, after showing what it holds. */
-  async function useFile(path: string) {
+  async function useFile(kind: DbKind, path: string) {
     let file: DataFile;
     try {
-      file = await api.dataInspect(path);
+      file = await api.dataInspect(kind, path);
     } catch (e) {
       showToast(errorText(e), "err");
       return;
     }
     const message = t("settings.dataUseConfirm", {
-      what: summary(file.contents),
+      what: summary(file.contents, kind),
       when: when(file.modified),
-      current: summary(data?.current.contents ?? null),
+      current: summary(data[kind]?.current.contents ?? null, kind),
     });
     if (!(await ask(message, { kind: "warning", okLabel: t("settings.dataUse") }))) return;
     dataBusy = true;
     try {
-      const saved = await api.dataUseFile(path);
+      const saved = await api.dataUseFile(kind, path);
       showToast(t("settings.dataSwitched", { name: saved }));
-      // every page shows the old database's cards: start over
+      // every page shows the old database's contents: start over
       setTimeout(() => location.reload(), 1200);
     } catch (e) {
       showToast(errorText(e), "err");
@@ -270,9 +333,164 @@
     }
   }
 
-  async function pickFile() {
-    const path = await open({ multiple: false, directory: false, defaultPath: data?.folder });
-    if (path) await useFile(path as string);
+  async function pickFile(kind: DbKind) {
+    const path = await open({ multiple: false, directory: false, defaultPath: data[kind]?.backupFolder ?? data[kind]?.folder });
+    if (path) await useFile(kind, path as string);
+  }
+
+  // ---------- themes ----------
+  const LAST_CUSTOM_KEY = "settings.lastCustomTheme";
+  const themeMode = $derived(isCustomTheme(settings.theme) ? "custom" : settings.theme);
+  function chooseThemeMode(mode: string) {
+    if (mode !== "custom") return saveSetting("theme", mode);
+    // Custom: the theme chosen last time, else the first
+    let last = "";
+    try {
+      last = localStorage.getItem(LAST_CUSTOM_KEY) ?? "";
+    } catch {
+      /* the first one */
+    }
+    return saveSetting("theme", isCustomTheme(last) ? last : CUSTOM_THEMES[0].key);
+  }
+  function chooseCustom(key: string) {
+    try {
+      localStorage.setItem(LAST_CUSTOM_KEY, key);
+    } catch {
+      /* not essential */
+    }
+    return saveSetting("theme", key);
+  }
+
+  // ---------- studying: advanced ----------
+  const ADV_KEY = "settings.studyAdvanced";
+  let advOpen = $state(
+    (() => {
+      try {
+        return localStorage.getItem(ADV_KEY) === "true";
+      } catch {
+        return false;
+      }
+    })(),
+  );
+  function setAdvOpen(v: boolean) {
+    advOpen = v;
+    try {
+      localStorage.setItem(ADV_KEY, String(v));
+    } catch {
+      /* not essential */
+    }
+  }
+  /** The research-based setup (successive relearning, FSRS-6 with fuzz). */
+  const STUDY_DEFAULTS = {
+    newRecalls: 3,
+    relearnRecalls: 1,
+    againMinutes: 1,
+    learnGaps: "5 15",
+    relearnMinutes: 10,
+    minGapCards: 5,
+    fuzz: true,
+    maxIntervalDays: 36500,
+    leechLapses: 8,
+    newOrder: "hsk",
+  } as const;
+  const isDefaultStudy = $derived(
+    (Object.keys(STUDY_DEFAULTS) as (keyof typeof STUDY_DEFAULTS)[]).every((k) => settings[k] === STUDY_DEFAULTS[k]),
+  );
+  async function restoreStudyDefaults() {
+    for (const k of Object.keys(STUDY_DEFAULTS) as (keyof typeof STUDY_DEFAULTS)[]) {
+      if (settings[k] !== STUDY_DEFAULTS[k]) await saveSetting(k, STUDY_DEFAULTS[k] as never);
+    }
+    showToast(t("settings.adv.restored"));
+  }
+  /** A whole number in [lo, hi] from a number box (the default for nonsense). */
+  const int = (v: string, lo: number, hi: number, fallback: number) => {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
+  };
+  /** "5, 15" → "5 15": minutes between 0.5 and 1440, at most 6 of them. */
+  function cleanGaps(v: string): string {
+    const list = v
+      .split(/[\s,;]+/)
+      .map(Number)
+      .filter((m) => Number.isFinite(m) && m > 0)
+      .map((m) => Math.min(1440, Math.max(0.5, m)))
+      .slice(0, 6);
+    return list.length ? list.join(" ") : STUDY_DEFAULTS.learnGaps;
+  }
+
+  // ---------- dictionary ----------
+  let dictBusy = $state(false);
+  /** Download the latest CC-CEDICT, or import a file of it. */
+  async function installDict(fromFile: boolean) {
+    let path: string | null = null;
+    if (fromFile) {
+      const picked = await open({ multiple: false, filters: [{ name: "CC-CEDICT", extensions: ["u8", "txt", "gz"] }] });
+      if (!picked) return;
+      path = picked as string;
+    }
+    dictBusy = true;
+    try {
+      const n = path ? await api.dictImportFile(path) : await api.dictDownload();
+      dict = await api.dictStatus();
+      showToast(t("dict.installed", { n: fmtNum(n) }));
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      dictBusy = false;
+    }
+  }
+
+  // ---------- about ----------
+  let showLicence = $state(false);
+  /** What the app is built on and the data it uses, with each one's licence. */
+  const CREDITS: { name: string; what: Parameters<typeof t>[0]; licence: string }[] = [
+    { name: "CC-CEDICT © MDBG", what: "settings.about.cedict", licence: "CC BY-SA 4.0" },
+    { name: "FSRS-6 · open-spaced-repetition", what: "settings.about.fsrs", licence: "MIT" },
+    { name: "complete-hsk-vocabulary © Yanis Zafirópulos", what: "settings.about.hsk", licence: "MIT" },
+    { name: "Unicode Unihan (kHanyuPinlu)", what: "settings.about.unihan", licence: "Unicode License" },
+    { name: "Tone Perfect · Michigan State University", what: "settings.about.toneperfect", licence: "—" },
+    { name: "Whisper · OpenAI", what: "settings.about.whisper", licence: "MIT" },
+    { name: "LXGW WenKai, Noto Serif SC, ZCOOL…", what: "settings.about.fonts", licence: "SIL OFL 1.1" },
+    { name: "Tauri · Svelte · SQLite", what: "settings.about.stack", licence: "MIT / Apache-2.0 · public domain" },
+  ];
+
+  // ---------- sections (the side bar) ----------
+  type Section = "general" | "reading" | "study" | "audio" | "speech" | "ai" | "data" | "dictionary" | "about";
+  const SECTIONS: { key: Section; label: Parameters<typeof t>[0] }[] = [
+    { key: "general", label: "settings.general" },
+    { key: "reading", label: "settings.reading" },
+    { key: "study", label: "settings.study" },
+    { key: "audio", label: "settings.audio" },
+    { key: "speech", label: "settings.speech" },
+    { key: "ai", label: "settings.ai" },
+    { key: "data", label: "settings.data" },
+    { key: "dictionary", label: "settings.dictionary" },
+    { key: "about", label: "settings.about" },
+  ];
+  const SECTION_KEY = "settings.section";
+  const isSection = (k: unknown): k is Section => SECTIONS.some((x) => x.key === k);
+  let section = $state<Section>(
+    (() => {
+      if (isSection(nav.settingsSection)) return nav.settingsSection; // opened from another page
+      try {
+        const saved = localStorage.getItem(SECTION_KEY);
+        if (isSection(saved)) return saved;
+      } catch {
+        /* the first section */
+      }
+      return "general";
+    })(),
+  );
+  nav.settingsSection = null;
+  let mainEl = $state<HTMLElement | null>(null);
+  function chooseSection(k: Section) {
+    section = k;
+    mainEl?.scrollTo({ top: 0 });
+    try {
+      localStorage.setItem(SECTION_KEY, k);
+    } catch {
+      /* not essential */
+    }
   }
 
   const modelName = (m: string) => (m.includes("haiku") ? "Haiku 5.5" : m.includes("opus") ? "Opus 5.5" : m);
@@ -338,8 +556,20 @@
   }
 </script>
 
-<div class="page narrow">
-  <div class="page-head"><h1>{t("settings.title")}</h1></div>
+<div class="settings-layout">
+  <nav class="secnav" aria-label={t("settings.title")}>
+    <h2 class="secnav-title">{t("settings.title")}</h2>
+    {#each SECTIONS as x (x.key)}
+      <button class="sec" class:on={section === x.key} aria-current={section === x.key ? "page" : undefined} onclick={() => chooseSection(x.key)}>
+        {t(x.label)}
+      </button>
+    {/each}
+  </nav>
+  <div class="secmain" bind:this={mainEl}>
+  <div class="page narrow">
+  <div class="page-head"><h1>{t(SECTIONS.find((x) => x.key === section)?.label ?? "settings.title")}</h1></div>
+
+  {#if section === "general"}
 
   <section class="group card-surface">
     <label class="row">
@@ -351,12 +581,49 @@
     </label>
     <label class="row">
       <span>{t("settings.theme")}</span>
-      <select value={settings.theme} onchange={(e) => saveSetting("theme", e.currentTarget.value)}>
+      <select value={themeMode} onchange={(e) => chooseThemeMode(e.currentTarget.value)}>
         <option value="system">{t("settings.theme.system")}</option>
         <option value="light">{t("settings.theme.light")}</option>
         <option value="dark">{t("settings.theme.dark")}</option>
+        <option value="custom">{t("settings.theme.custom")}</option>
       </select>
     </label>
+    {#if themeMode === "custom"}
+      <div class="row col">
+        <div class="swatches" role="radiogroup" aria-label={t("settings.theme.custom")}>
+          {#each CUSTOM_THEMES as th (th.key)}
+            <button
+              class="swatch"
+              class:on={settings.theme === th.key}
+              role="radio"
+              aria-checked={settings.theme === th.key}
+              title={`${th.name} · ${th.zh}`}
+              onclick={() => chooseCustom(th.key)}
+            >
+              <span class="sw-square" style="background:{th.bg}; --sw-accent:{th.accent}; --sw-soft:{th.accentSoft}; --sw-surface:{th.surface}">
+                {#if th.emblem === "flower"}
+                  <svg class="sw-flowers" viewBox="0 0 64 64" aria-hidden="true">
+                    {#each [{ x: 22, y: 24, r: 9, a: 10 }, { x: 44, y: 40, r: 11, a: 40 }, { x: 18, y: 48, r: 6, a: 70 }] as f, i (i)}
+                      <g transform="translate({f.x} {f.y}) rotate({f.a})">
+                        {#each [0, 72, 144, 216, 288] as rot (rot)}
+                          <ellipse cx="0" cy={-f.r * 0.95} rx={f.r * 0.55} ry={f.r * 0.95} transform="rotate({rot})" fill="#f29bb7" />
+                        {/each}
+                        <circle r={f.r * 0.3} fill="#d6457a" />
+                      </g>
+                    {/each}
+                  </svg>
+                {:else}
+                  <span class="sw-card"><span class="sw-glyph han" lang="zh-CN">{th.emblem}</span></span>
+                {/if}
+                <span class="sw-bar"></span>
+              </span>
+              <span class="sw-name">{th.name}</span>
+              <span class="sw-zh han faint" lang="zh-CN">{th.zh}</span>
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
     <label class="row">
       <span>{t("settings.toneColors")}</span>
       <input
@@ -368,7 +635,131 @@
     </label>
   </section>
 
-  <h2>{t("settings.study")}</h2>
+  {/if}
+
+  {#if section === "reading"}
+  <section class="group card-surface">
+    <label class="row">
+      <span>{t("settings.readingFont")}</span>
+      <FontSelect />
+    </label>
+    <p class="row small faint fonthint">{t("settings.readingFontHint")}</p>
+    {#if fontFiles.list.length}
+      {@const nDownloaded = fontFiles.list.filter((f) => f.downloaded).length}
+      {@const nSystem = fontFiles.list.filter((f) => !f.downloaded && systemFonts.has(f.key)).length}
+      {@const nBusy = Object.keys(fontFiles.progress).length}
+      <div class="row col">
+        <button
+          class="fonttoggle"
+          aria-expanded={fontsOpen}
+          aria-controls="font-downloads"
+          onclick={() => setFontsOpen(!fontsOpen)}
+        >
+          <span class="twisty" class:open={fontsOpen} aria-hidden="true">▸</span>
+          <span class="fonttitle">{t("settings.readingDownloads")}</span>
+          <small class="faint">
+            {t("settings.readingDownloadsSummary", { n: fontFiles.list.length, d: nDownloaded, s: nSystem })}{#if nBusy}
+              · {t("settings.readingDownloading")}{/if}
+          </small>
+        </button>
+        {#if fontsOpen}
+        <small class="faint">{t("settings.readingDownloadsHint")}</small>
+        <div class="fontlist" id="font-downloads">
+          {#each fontFiles.list as f (f.key)}
+            {@const busy = fontFiles.progress[f.key] !== undefined}
+            {@const system = systemFonts.has(f.key) && !f.downloaded}
+            <div class="fontrow" class:chosen={settings.readingFont === f.key && (f.downloaded || system)}>
+              <div class="fontname">
+                <span>{t(`reading.font.${f.key}` as Parameters<typeof t>[0])}</span>
+                <small class="faint">{(f.sizeBytes / 1e6).toFixed(1)} MB · SIL OFL</small>
+              </div>
+              <img class="fontsample" src={sampleOf(f.key)} alt="春眠不觉晓，处处闻啼鸟。" />
+              <!-- two fixed slots: status (or Remove) on the left, the button on the right, so
+                   Use / Download line up in every row -->
+              <div class="fontact">
+                <span class="fa-status">
+                  {#if busy}
+                    <span class="small muted">{fontFiles.progress[f.key]}%</span>
+                  {:else if system}
+                    <span class="small faint">{t("settings.readingFontSystem")}</span>
+                  {:else if f.downloaded}
+                    <button class="btn ghost small" onclick={() => dropFont(f.key)}>{t("settings.readingFontRemove")}</button>
+                  {/if}
+                </span>
+                <span class="fa-main">
+                  {#if busy}
+                    <!-- downloading -->
+                  {:else if (system || f.downloaded) && settings.readingFont === f.key}
+                    <span class="small inuse">{t("settings.readingFontInUse")}</span>
+                  {:else if system || f.downloaded}
+                    <button class="btn small" onclick={() => saveSetting("readingFont", f.key)}>{t("settings.readingFontUse")}</button>
+                  {:else}
+                    <button class="btn small" onclick={() => getFont(f.key)}>{t("settings.readingFontDownload")}</button>
+                  {/if}
+                </span>
+              </div>
+            </div>
+          {/each}
+        </div>
+        {/if}
+      </div>
+    {/if}
+    <div class="row col">
+      <div class="line">
+        <span>{t("settings.readingSize")}</span>
+        <strong>{settings.readingSize}px</strong>
+      </div>
+      <input
+        type="range"
+        min={SIZE_MIN}
+        max={SIZE_MAX}
+        step="1"
+        value={settings.readingSize}
+        oninput={(e) => (settings.readingSize = Number(e.currentTarget.value))}
+        onchange={(e) => saveSetting("readingSize", clampSize(Number(e.currentTarget.value)))}
+      />
+    </div>
+    <div class="row col">
+      <div class="line">
+        <span>{t("settings.readingLineHeight")}</span>
+        <strong>{settings.readingLineHeight.toFixed(1)}</strong>
+      </div>
+      <input
+        type="range"
+        min={LINE_MIN}
+        max={LINE_MAX}
+        step="0.1"
+        value={settings.readingLineHeight}
+        oninput={(e) => (settings.readingLineHeight = Number(e.currentTarget.value))}
+        onchange={(e) => saveSetting("readingLineHeight", Number(e.currentTarget.value))}
+      />
+    </div>
+    <div class="row col">
+      <p
+        class="reading-preview"
+        lang="zh-CN"
+        style="font-family:{readingFont(settings.readingFont)}; font-size:{settings.readingSize}px; line-height:{settings.readingLineHeight}"
+      >
+        {t("settings.readingPreview")}
+      </p>
+    </div>
+    <label class="row">
+      <span>
+        {t("settings.readingToneColors")}
+        <small class="faint block">{t("settings.readingToneColorsHint")}</small>
+      </span>
+      <input
+        type="checkbox"
+        class="toggle"
+        checked={settings.readingToneColors}
+        onchange={(e) => saveSetting("readingToneColors", e.currentTarget.checked)}
+      />
+    </label>
+  </section>
+
+  {/if}
+
+  {#if section === "study"}
   <section class="group card-surface">
     <div class="row col">
       <div class="line">
@@ -399,23 +790,141 @@
     </label>
     <label class="row">
       <span>
-        {t("settings.hskAutotag")}
-        <small class="faint block">{t("settings.hskAutotagHint")}</small>
+        {t("settings.answerButtons")}
+        <small class="faint block">{t("settings.answerButtonsHint")}</small>
+      </span>
+      <select value={settings.answerButtons} onchange={(e) => saveSetting("answerButtons", e.currentTarget.value)}>
+        <option value="2">{t("settings.answerButtons2")}</option>
+        <option value="4">{t("settings.answerButtons4")}</option>
+      </select>
+    </label>
+    <label class="row">
+      <span>
+        {t("settings.oneDirection")}
+        <small class="faint block">{t("settings.oneDirectionHint")}</small>
       </span>
       <input
         type="checkbox"
         class="toggle"
-        checked={settings.hskAutotag}
-        onchange={(e) => saveSetting("hskAutotag", e.currentTarget.checked)}
+        checked={settings.oneDirectionPerSession}
+        onchange={(e) => saveSetting("oneDirectionPerSession", e.currentTarget.checked)}
       />
     </label>
-    <div class="row">
-      <span class="small muted">{t("settings.hskTagAllHint")}</span>
-      <button class="btn small" disabled={hskBusy} onclick={tagAllHsk}>{t("settings.hskTagAll")}</button>
-    </div>
   </section>
 
-  <h2>{t("settings.audio")}</h2>
+
+  <h2>
+    <button class="fonttoggle advtoggle" aria-expanded={advOpen} onclick={() => setAdvOpen(!advOpen)}>
+      <span class="twisty" class:open={advOpen} aria-hidden="true">▸</span>
+      <span class="fonttitle">{t("settings.adv.title")}</span>
+      <small class="faint">{isDefaultStudy ? t("settings.adv.usingDefaults") : t("settings.adv.customised")}</small>
+    </button>
+  </h2>
+  {#if advOpen}
+    <section class="group card-surface how">
+      <h3>{t("settings.adv.howTitle")}</h3>
+      <ul>
+        <li>{t("settings.adv.how1")}</li>
+        <li>{t("settings.adv.how2")}</li>
+        <li>{t("settings.adv.how3")}</li>
+        <li>{t("settings.adv.how4")}</li>
+        <li>{t("settings.adv.how5")}</li>
+        <li>{t("settings.adv.how6")}</li>
+      </ul>
+    </section>
+
+    <section class="group card-surface">
+      <label class="row">
+        <span>
+          {t("settings.adv.newRecalls")}
+          <small class="faint block">{t("settings.adv.newRecallsHint")}</small>
+        </span>
+        <input type="number" min="1" max="6" class="num" value={settings.newRecalls}
+          onchange={(e) => saveSetting("newRecalls", int(e.currentTarget.value, 1, 6, 3))} />
+      </label>
+      <label class="row">
+        <span>
+          {t("settings.adv.newOrder")}
+          <small class="faint block">{t("settings.adv.newOrderHint")}</small>
+        </span>
+        <select value={settings.newOrder} onchange={(e) => saveSetting("newOrder", e.currentTarget.value)}>
+          <option value="hsk">{t("settings.adv.newOrder.hsk")}</option>
+          <option value="deck">{t("settings.adv.newOrder.deck")}</option>
+          <option value="random">{t("settings.adv.newOrder.random")}</option>
+        </select>
+      </label>
+      <label class="row">
+        <span>
+          {t("settings.adv.gaps")}
+          <small class="faint block">{t("settings.adv.gapsHint")}</small>
+        </span>
+        <input type="text" class="num gaps" value={settings.learnGaps}
+          onchange={(e) => { const v = cleanGaps(e.currentTarget.value); e.currentTarget.value = v; saveSetting("learnGaps", v); }} />
+      </label>
+      <label class="row">
+        <span>
+          {t("settings.adv.again")}
+          <small class="faint block">{t("settings.adv.againHint")}</small>
+        </span>
+        <input type="number" min="1" max="1440" class="num" value={settings.againMinutes}
+          onchange={(e) => saveSetting("againMinutes", int(e.currentTarget.value, 1, 1440, 1))} />
+      </label>
+      <label class="row">
+        <span>
+          {t("settings.adv.relearnRecalls")}
+          <small class="faint block">{t("settings.adv.relearnRecallsHint")}</small>
+        </span>
+        <input type="number" min="1" max="4" class="num" value={settings.relearnRecalls}
+          onchange={(e) => saveSetting("relearnRecalls", int(e.currentTarget.value, 1, 4, 1))} />
+      </label>
+      <label class="row">
+        <span>
+          {t("settings.adv.relearn")}
+          <small class="faint block">{t("settings.adv.relearnHint")}</small>
+        </span>
+        <input type="number" min="1" max="1440" class="num" value={settings.relearnMinutes}
+          onchange={(e) => saveSetting("relearnMinutes", int(e.currentTarget.value, 1, 1440, 10))} />
+      </label>
+      <label class="row">
+        <span>
+          {t("settings.adv.minGap")}
+          <small class="faint block">{t("settings.adv.minGapHint")}</small>
+        </span>
+        <input type="number" min="1" max="50" class="num" value={settings.minGapCards}
+          onchange={(e) => saveSetting("minGapCards", int(e.currentTarget.value, 1, 50, 5))} />
+      </label>
+      <label class="row">
+        <span>
+          {t("settings.adv.fuzz")}
+          <small class="faint block">{t("settings.adv.fuzzHint")}</small>
+        </span>
+        <input type="checkbox" class="toggle" checked={settings.fuzz} onchange={(e) => saveSetting("fuzz", e.currentTarget.checked)} />
+      </label>
+      <label class="row">
+        <span>
+          {t("settings.adv.maxDays")}
+          <small class="faint block">{t("settings.adv.maxDaysHint")}</small>
+        </span>
+        <input type="number" min="1" max="36500" class="num" value={settings.maxIntervalDays}
+          onchange={(e) => saveSetting("maxIntervalDays", int(e.currentTarget.value, 1, 36500, 36500))} />
+      </label>
+      <label class="row">
+        <span>
+          {t("settings.adv.leech")}
+          <small class="faint block">{t("settings.adv.leechHint")}</small>
+        </span>
+        <input type="number" min="0" max="99" class="num" value={settings.leechLapses}
+          onchange={(e) => saveSetting("leechLapses", int(e.currentTarget.value, 0, 99, 8))} />
+      </label>
+      <div class="row">
+        <span class="small muted">{t("settings.adv.restoreHint")}</span>
+        <button class="btn small" disabled={isDefaultStudy} onclick={restoreStudyDefaults}>{t("settings.adv.restore")}</button>
+      </div>
+    </section>
+  {/if}
+  {/if}
+
+  {#if section === "audio"}
   <section class="group card-surface">
     <label class="row">
       <span>{t("settings.autoplay")}</span>
@@ -474,7 +983,9 @@
     {/if}
   </section>
 
-  <h2>{t("settings.speech")}</h2>
+  {/if}
+
+  {#if section === "speech"}
   <section class="group card-surface">
     <label class="row">
       <span>{t("settings.speechEngine")}</span>
@@ -599,7 +1110,9 @@
     {/if}
   </section>
 
-  <h2>{t("settings.ai")}</h2>
+  {/if}
+
+  {#if section === "ai"}
   <section class="group card-surface">
     <div class="row col">
       <small class="faint">{t("settings.aiHint")}</small>
@@ -684,86 +1197,194 @@
     {/if}
   </section>
 
-  <h2>{t("settings.data")}</h2>
+  {/if}
+
+  {#if section === "data"}
+  {#snippet dbBlock(kind: DbKind)}
+    {@const d = data[kind]}
+    <h2>{t(kind === "cards" ? "settings.dataCards" : "settings.dataReading")}</h2>
+    <section class="group card-surface">
+      <div class="row">
+        <span class="data-current">
+          {t(kind === "cards" ? "settings.dataCurrent" : "settings.dataCurrentReading")}
+          <small class="faint block">
+            {d ? `${summary(d.current.contents, kind)} · ${t("settings.dataSize", { mb: mb(d.current.sizeBytes) })}` : "…"}
+          </small>
+          {#if d}<code class="data-path">{d.current.path}</code>{/if}
+        </span>
+      </div>
+      <div class="row">
+        <span>
+          {t("settings.dataBackup")}
+          <small class="faint block">{t(kind === "cards" ? "settings.dataBackupHint" : "settings.dataBackupHintReading")}</small>
+        </span>
+        <span class="key-state">
+          <button class="btn ghost" disabled={dataBusy} onclick={() => saveCopy(kind)}>{t("settings.dataSaveCopy")}</button>
+          <button class="btn" disabled={dataBusy} onclick={() => backupNow(kind)}>{t("settings.dataBackupNow")}</button>
+        </span>
+      </div>
+      <div class="row">
+        <span>
+          {t("settings.dataOther")}
+          <small class="faint block">{t("settings.dataOtherHint")}</small>
+        </span>
+        <button class="btn" disabled={dataBusy} onclick={() => pickFile(kind)}>{t("settings.dataChoose")}</button>
+      </div>
+      {#if d?.backups.length}
+        <div class="row col">
+          <div class="line">
+            <span>
+              {t("settings.dataBackups", { n: d.backups.length })}
+              <small class="faint block"><code class="data-path">{d.backupFolder}</code></small>
+            </span>
+            <button class="btn ghost small" onclick={() => (showBackups[kind] = !showBackups[kind])}>
+              {showBackups[kind] ? t("settings.dataHideBackups") : t("settings.dataShowBackups")}
+            </button>
+          </div>
+          {#if showBackups[kind]}
+            <table class="spend-table">
+              <thead>
+                <tr>
+                  <th>{t("settings.dataSaved")}</th>
+                  <th>{t("settings.dataHolds")}</th>
+                  <th class="num-c">{t("settings.dataSizeCol")}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each d.backups as b (b.path)}
+                  <tr>
+                    <td title={b.name}>{when(b.modified)}</td>
+                    <td>{summary(b.contents, kind)}</td>
+                    <td class="num-c">{mb(b.sizeBytes)} MB</td>
+                    <td class="num-c">
+                      {#if b.contents}
+                        <button class="btn ghost small" disabled={dataBusy} onclick={() => useFile(kind, b.path)}
+                          >{t("settings.dataRestore")}</button
+                        >
+                      {/if}
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {/if}
+        </div>
+      {/if}
+      {#if kind === "cards"}
+        <label class="row">
+          <span>
+            {t("settings.hskAutotag")}
+            <small class="faint block">{t("settings.hskAutotagHint")}</small>
+          </span>
+          <input
+            type="checkbox"
+            class="toggle"
+            checked={settings.hskAutotag}
+            onchange={(e) => saveSetting("hskAutotag", e.currentTarget.checked)}
+          />
+        </label>
+        <div class="row">
+          <span class="small muted">{t("settings.hskTagAllHint")}</span>
+          <button class="btn small" disabled={hskBusy} onclick={tagAllHsk}>{t("settings.hskTagAll")}</button>
+        </div>
+      {/if}
+    </section>
+  {/snippet}
   <section class="group card-surface">
     <div class="row">
       <span class="data-current">
-        {t("settings.dataCurrent")}
-        <small class="faint block">
-          {data ? `${summary(data.current.contents)} · ${t("settings.dataSize", { mb: mb(data.current.sizeBytes) })}` : "…"}
-        </small>
-        {#if data}<code class="data-path">{data.current.path}</code>{/if}
+        {t("settings.dataFolder")}
+        <small class="faint block">{t("settings.dataFolderHint")}</small>
+        <code class="data-path">{data.cards?.folder ?? data.reading?.folder ?? "…"}</code>
       </span>
-      <button class="btn ghost small" onclick={() => api.dataShowInFolder().catch((e) => showToast(errorText(e), "err"))}>
+      <button class="btn" onclick={() => api.dataShowInFolder().catch((e) => showToast(errorText(e), "err"))}>
         {t("settings.dataShow")}
+      </button>
+    </div>
+  </section>
+  {@render dbBlock("cards")}
+  {@render dbBlock("reading")}
+  {/if}
+
+  {#if section === "dictionary"}
+  <h2>CC-CEDICT</h2>
+  <section class="group card-surface">
+    <div class="row">
+      <span class="data-current">
+        {dict?.entries ? t("dict.entries", { n: fmtNum(dict.entries) }) : t("dict.notInstalled")}
+        <small class="faint block">
+          {dict?.importedAt ? t("settings.dictUpdated", { when: when(dict.importedAt) }) : t("settings.dictAbout")}
+        </small>
+      </span>
+      <button class="btn" onclick={() => goto("dictionary")}>{t("settings.dictOpen")}</button>
+    </div>
+    <div class="row">
+      <span>
+        {t("settings.dictUpdate")}
+        <small class="faint block">{t("settings.dictUpdateHint")}</small>
+      </span>
+      <button class="btn" disabled={dictBusy} onclick={() => installDict(false)}>
+        {dictBusy ? t("settings.dictWorking") : dict?.entries ? t("settings.dictUpdateBtn") : t("dict.download")}
       </button>
     </div>
     <div class="row">
       <span>
-        {t("settings.dataBackup")}
-        <small class="faint block">{t("settings.dataBackupHint")}</small>
+        {t("settings.dictImport")}
+        <small class="faint block">{t("settings.dictImportHint")}</small>
       </span>
-      <span class="key-state">
-        <button class="btn ghost" disabled={dataBusy} onclick={saveCopy}>{t("settings.dataSaveCopy")}</button>
-        <button class="btn" disabled={dataBusy} onclick={backupNow}>{t("settings.dataBackupNow")}</button>
-      </span>
+      <button class="btn ghost" disabled={dictBusy} onclick={() => installDict(true)}>{t("dict.importFile")}</button>
     </div>
+    <p class="small faint dict-licence">{t("dict.attribution")}</p>
+  </section>
+
+  {/if}
+
+  {#if section === "about"}
+  <section class="about-hero card-surface">
+    <div class="about-logo han" aria-hidden="true">文</div>
+    <div class="about-id">
+      <div class="about-name">{t("app.name")} <span class="han about-zh">汉字卡</span></div>
+      <div class="faint small">{t("settings.about.version", { v: appVersion || "…" })}</div>
+      <p class="about-tag">{t("settings.about.tagline")}</p>
+      <div class="about-chips">
+        <span class="chip">{t("settings.about.chipOpen")}</span>
+        <span class="chip">{t("settings.about.chipLocal")}</span>
+        <span class="chip">{t("settings.about.chipPlatforms")}</span>
+      </div>
+    </div>
+    <div class="about-motto han" lang="zh-CN" title={t("settings.about.mottoMeaning")}>
+      学而时习之
+      <small>{t("settings.about.mottoMeaning")}</small>
+    </div>
+  </section>
+
+  <h2>{t("settings.about.licence")}</h2>
+  <section class="group card-surface">
     <div class="row">
       <span>
-        {t("settings.dataOther")}
-        <small class="faint block">{t("settings.dataOtherHint")}</small>
+        {t("settings.about.licenceMit")}
+        <small class="faint block">{t("settings.about.licenceHint")}</small>
       </span>
-      <button class="btn" disabled={dataBusy} onclick={pickFile}>{t("settings.dataChoose")}</button>
-    </div>
-    {#if data?.backups.length}
-      <div class="row col">
-        <div class="line">
-          <span>{t("settings.dataBackups", { n: data.backups.length })}</span>
-          <button class="btn ghost small" onclick={() => (showBackups = !showBackups)}>
-            {showBackups ? t("settings.spendingHide") : t("settings.spendingShow")}
-          </button>
-        </div>
-        {#if showBackups}
-          <table class="spend-table">
-            <thead>
-              <tr>
-                <th>{t("settings.dataSaved")}</th>
-                <th>{t("settings.dataHolds")}</th>
-                <th class="num-c">{t("settings.dataSizeCol")}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each data.backups as b (b.path)}
-                <tr>
-                  <td title={b.name}>{when(b.modified)}</td>
-                  <td>{summary(b.contents)}</td>
-                  <td class="num-c">{mb(b.sizeBytes)} MB</td>
-                  <td class="num-c">
-                    {#if b.contents}
-                      <button class="btn ghost small" disabled={dataBusy} onclick={() => useFile(b.path)}>{t("settings.dataRestore")}</button>
-                    {/if}
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        {/if}
-      </div>
-    {/if}
-  </section>
-
-  <h2>{t("settings.dictionary")}</h2>
-  <section class="group card-surface">
-    <div class="row">
-      <span>{dict?.entries ? t("dict.entries", { n: fmtNum(dict.entries) }) : t("dict.notInstalled")}</span>
-      <button class="btn" onclick={() => goto("dictionary")}>{t("nav.dictionary")}</button>
+      <button class="btn" onclick={() => (showLicence = true)}>{t("settings.about.readLicence")}</button>
     </div>
   </section>
 
-  <h2>{t("settings.about")}</h2>
+  <h2>{t("settings.about.credits")}</h2>
   <section class="group card-surface">
-    <p class="muted">{t("settings.aboutText", { v: appVersion })}</p>
+    <ul class="credits">
+      {#each CREDITS as c (c.name)}
+        <li>
+          <span class="credit-name">{c.name}</span>
+          <span class="faint small">{t(c.what)}</span>
+          <span class="credit-lic small">{c.licence}</span>
+        </li>
+      {/each}
+    </ul>
+  </section>
+
+  <h2>{t("settings.about.troubleshooting")}</h2>
+  <section class="group card-surface">
     <label class="row">
       <span>
         {t("settings.debugMode")}
@@ -778,11 +1399,254 @@
       />
     </label>
   </section>
+  <p class="small faint about-foot">{t("settings.about.thanks")}</p>
+  {/if}
+  </div>
+  </div>
 </div>
 
+{#if showLicence}
+  <Modal title={t("settings.about.licence")} onclose={() => (showLicence = false)} width={620}>
+    <pre class="licence">{licenceText}</pre>
+  </Modal>
+{/if}
+
 <style>
+  .about-hero {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 20px;
+    padding: 22px 24px;
+    border-radius: var(--radius-lg);
+    background:
+      radial-gradient(circle at 100% 0%, var(--accent-soft), transparent 60%),
+      var(--surface);
+  }
+  .about-logo {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: var(--accent);
+    color: var(--accent-text);
+    display: grid;
+    place-items: center;
+    font-size: 36px;
+    box-shadow: var(--shadow);
+  }
+  .about-name {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .about-zh {
+    font-weight: 500;
+    color: var(--text-2);
+    margin-left: 4px;
+  }
+  .about-tag {
+    margin: 8px 0 10px;
+    color: var(--text-2);
+  }
+  .about-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .about-motto {
+    font-family: var(--font-han-serif);
+    font-size: 26px;
+    writing-mode: vertical-rl;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 8px;
+    border-left: 1px solid var(--border);
+  }
+  .about-motto small {
+    writing-mode: horizontal-tb;
+    font-family: var(--font);
+    font-size: 11px;
+    letter-spacing: normal;
+    color: var(--text-3);
+    display: none;
+  }
+  .swatches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: 12px;
+    padding: 4px 0 6px;
+  }
+  .swatch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 4px 8px;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius);
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  .swatch:hover {
+    background: var(--surface-2);
+  }
+  .sw-square {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08), var(--shadow);
+    margin-bottom: 4px;
+  }
+  .swatch.on .sw-square {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .sw-card {
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    background: var(--sw-surface);
+    display: grid;
+    place-items: center;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+  }
+  .sw-glyph {
+    font-size: 22px;
+    line-height: 1;
+    color: var(--sw-accent);
+  }
+  .sw-flowers {
+    width: 64px;
+    height: 64px;
+  }
+  .sw-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 7px;
+    background: var(--sw-accent);
+  }
+  .sw-name {
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .sw-zh {
+    font-size: 12px;
+  }
+  .advtoggle {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  .how h3 {
+    margin: 14px 0 6px;
+    font-size: 14px;
+  }
+  .how ul {
+    margin: 0 0 14px;
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--text-2);
+    line-height: 1.5;
+  }
+  .row input.gaps {
+    width: 110px;
+  }
+  .dict-licence {
+    margin: 0;
+    padding: 10px 0 12px;
+  }
+  /* one set of columns for every row (subgrid), so each column starts at the same place */
+  .credits {
+    list-style: none;
+    margin: 0;
+    padding: 6px 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.5fr) max-content;
+    column-gap: 20px;
+  }
+  .credits li {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: baseline;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .credits li:last-child {
+    border-bottom: none;
+  }
+  .credit-name {
+    font-weight: 550;
+  }
+  .credit-lic {
+    color: var(--text-2);
+    white-space: nowrap;
+    text-align: right;
+  }
+  .licence {
+    margin: 0;
+    white-space: pre-wrap;
+    font-size: 12.5px;
+    line-height: 1.5;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .about-foot {
+    text-align: center;
+    margin: 22px 0 8px;
+  }
+  .settings-layout {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    height: 100%;
+  }
+  .secnav {
+    border-right: 1px solid var(--border);
+    padding: 22px 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .secnav-title {
+    margin: 0;
+    padding: 0 10px 10px;
+  }
+  .sec {
+    border: none;
+    background: transparent;
+    padding: 8px 10px;
+    border-radius: 8px;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+  }
+  .sec:hover {
+    background: var(--surface-2);
+  }
+  .sec.on {
+    background: var(--surface-3);
+    font-weight: 600;
+  }
+  .secmain {
+    overflow-y: auto;
+    min-width: 0;
+  }
+  /* as wide as the window allows, up to a comfortable reading width */
   .narrow {
-    max-width: 720px;
+    max-width: 880px;
   }
   h2 {
     margin: 26px 0 10px;
@@ -790,6 +1654,111 @@
   .group {
     border-radius: var(--radius);
     padding: 4px 18px;
+  }
+  .fonttoggle {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .fonttoggle:hover .fonttitle {
+    color: var(--accent);
+  }
+  .fonttoggle .twisty {
+    display: inline-block;
+    width: 12px;
+    color: var(--text-3);
+    font-size: 12px;
+    transition: transform 0.12s;
+  }
+  .fonttoggle .twisty.open {
+    transform: rotate(90deg);
+  }
+  .fontlist {
+    display: flex;
+    flex-direction: column;
+    margin-top: 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .fontrow {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr) 190px;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fontrow:last-child {
+    border-bottom: none;
+  }
+  .fontrow.chosen {
+    background: var(--accent-soft);
+  }
+  .fontname {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .fontsample {
+    height: 24px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+    object-position: left center;
+  }
+  /* the pictures are black text: make it light on the dark theme */
+  :global(:root[data-theme="dark"]) .fontsample {
+    filter: invert(1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme="light"])) .fontsample {
+      filter: invert(1);
+    }
+  }
+  .fontact {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 92px;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .fa-status {
+    justify-self: end;
+  }
+  .fa-main {
+    justify-self: stretch;
+    display: grid;
+  }
+  .fa-main .btn {
+    width: 100%;
+  }
+  .inuse {
+    text-align: center;
+    color: var(--ok);
+    font-weight: 600;
+  }
+  .fonthint {
+    margin: 0;
+  }
+  /* the font menu (a component, so .row select doesn't reach it) */
+  .row :global(select) {
+    width: 220px;
+  }
+  .reading-preview {
+    margin: 0;
+    padding: 12px 16px;
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    overflow-wrap: anywhere;
   }
   .row {
     display: flex;

@@ -429,7 +429,7 @@
     {#if keySet === false}
       <div class="notice">
         <p>{t("tutor.noKey")}</p>
-        <button class="btn primary" onclick={() => goto("settings")}>{t("tutor.addKey")}</button>
+        <button class="btn primary" onclick={() => goto("settings", "ai")}>{t("tutor.addKey")}</button>
       </div>
       {#if error}<div class="notice err small">{error}</div>{/if}
     {:else if keySet}
@@ -477,6 +477,7 @@
         <label class="opt">
           <span>{t("tutor.opt.length")}</span>
           <select bind:value={options.length}>
+            <option value="tiny">{t("tutor.opt.length.tiny")}</option>
             <option value="short">{t("tutor.opt.length.short")}</option>
             <option value="normal">{t("tutor.opt.length.normal")}</option>
             <option value="long">{t("tutor.opt.length.long")}</option>
@@ -912,7 +913,7 @@
     border-radius: 50%;
     border: none;
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-text);
     display: grid;
     place-items: center;
     flex-shrink: 0;

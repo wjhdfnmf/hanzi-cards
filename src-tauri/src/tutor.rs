@@ -149,7 +149,7 @@ fn tools() -> Vec<Value> {
 pub struct TutorOptions {
     /// "hsk1" | "hsk2" | "hsk3"
     pub level: String,
-    /// "short" | "normal" | "long"
+    /// "tiny" | "short" | "normal" | "long"
     pub length: String,
     /// "off" | "gentle" | "every"
     pub corrections: String,
@@ -194,6 +194,7 @@ fn system_prompt(scenario: &str, words: &[(String, String, String, bool)], o: &T
         _ => "a complete beginner (around HSK 1): very short, simple sentences with the most common words and patterns",
     };
     let length = match o.length.as_str() {
+        "tiny" => "only one short statement or question per turn (about 3 to 10 characters, e.g. 你喜欢喝茶吗？), never more",
         "short" => "one short sentence per turn",
         "long" => "two to five sentences per turn",
         _ => "one to three short sentences per turn",
@@ -545,6 +546,15 @@ mod tests {
         let summary = end(s.session_id).unwrap();
         assert_eq!(summary.turns, 0);
         assert!(end(s.session_id).is_err(), "ended sessions are gone");
+    }
+
+    #[test]
+    fn reply_lengths() {
+        let words = [("茶".to_string(), "chá".to_string(), "tea".to_string(), false)];
+        let p = |len: &str| system_prompt("", &words, &TutorOptions { length: len.into(), ..Default::default() });
+        assert!(p("tiny").contains("only one short statement or question per turn"));
+        assert!(p("short").contains("one short sentence per turn"));
+        assert!(p("normal").contains("one to three short sentences"));
     }
 
     #[test]
