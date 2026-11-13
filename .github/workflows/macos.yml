@@ -1,0 +1,70 @@
+# Builds the macOS app for Apple Silicon and Intel.
+#
+#   Actions > macOS build > Run workflow
+#     with no tag:   builds the chosen branch; the disk images are kept as downloads of the run
+#     with a tag:    builds that release's code and adds the disk images to the release
+#
+# The app is ad-hoc signed (tauri.conf.json > bundle > macOS > signingIdentity "-") unless the
+# repository has Apple signing secrets: see docs/building-for-mac.md.
+name: macOS build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and upload to (for example v0.4.0); empty = just build"
+        required: false
+  push:
+    branches: [mac-build]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest # an Apple Silicon machine; it builds the Intel version too
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin # Apple Silicon
+          - target: x86_64-apple-darwin # Intel
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run tauri build -- --target ${{ matrix.target }} --bundles app,dmg
+
+      - name: Check the signature
+        run: codesign --verify --deep --strict --verbose=2 "src-tauri/target/${{ matrix.target }}/release/bundle/macos/Hanzi Cards.app"
+
+      - name: Keep the disk image with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanzi-cards-${{ matrix.target }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+      - name: Add the disk image to the release
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg --clobber
