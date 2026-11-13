@@ -53,7 +53,12 @@
   // Session state.
   let queue = $state<StudyItem[]>([]);
   let total = $state(0);
+  // The count at the top: cards answered at least once, and how many of those are still to
+  // come round again (learning steps) before the session ends.
   let done = $state(0);
+  let again = $state(0);
+  let answered = new Set<string>();
+  const itemKey = (x: StudyItem) => `${x.card.id}:${x.direction}`;
   let revealed = $state(false);
   let previews = $state<IntervalPreview[]>([]);
   let shownAt = 0;
@@ -308,6 +313,8 @@
       queue = spreadSameWords(sel.shuffle ? shuffle(info.items) : info.items);
       total = queue.length;
       done = 0;
+      again = 0;
+      answered = new Set();
       result = { reviewed: 0, correct: 0, ms: 0 };
       phase = "session";
       if (sel.directions.some((d) => (isSpoken(d) && speech.engine === "whisper") || d === "say_meaning"))
@@ -370,9 +377,10 @@
         const pace = Math.max(4, result.ms / result.reviewed / 1000); // seconds per card
         const pos = Math.min(rest.length, Math.max(MIN_GAP, Math.round(res.intervalSecs / pace)));
         rest.splice(pos, 0, item);
-      } else {
-        done++;
       }
+      answered.add(itemKey(item));
+      again = rest.filter((x) => answered.has(itemKey(x))).length;
+      done = total - (rest.length - again); // every card but those not yet shown
       queue = rest;
       await show();
     } catch (e) {
@@ -636,8 +644,8 @@
         <Icon name="check" size={15} />
         {t("study.end")}
       </button>
-      <div class="bar" aria-hidden="true"><div style="width:{total ? (done / total) * 100 : 0}%"></div></div>
-      <span class="count small">{t("study.progress", { done, total })}</span>
+      <div class="bar" aria-hidden="true"><div style="width:{total ? ((done - again / 2) / total) * 100 : 0}%"></div></div>
+      <span class="count small">{again ? t("study.progressAgain", { done, total, n: again }) : t("study.progress", { done, total })}</span>
     </div>
 
     <div class="stage">

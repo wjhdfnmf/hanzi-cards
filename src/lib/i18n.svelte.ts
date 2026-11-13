@@ -550,6 +550,7 @@ const en = {
   "settings.oneDirectionHint":
     "After you answer a word one way (e.g. characters → meaning), its other directions wait for the next session instead of giving the answer away.",
   "study.progress": "{done} of {total}",
+  "study.progressAgain": "{done} of {total} · {n} to repeat",
   "study.end": "End study",
   "study.endHint": "Every answer is already saved; this ends the session and shows your summary. You can switch pages and come back to continue.",
   "study.sessionRunning": "A study session is still running: end it to start studying that deck (it's selected for next time).",
@@ -1406,6 +1407,7 @@ const zh: Partial<Record<Key, string>> = {
   "settings.oneDirection": "每次学习每个词只练一个方向",
   "settings.oneDirectionHint": "一个词按某个方向答过后（如汉字 → 意思），它的其他方向留到下一次学习，免得提前看到答案。",
   "study.progress": "{done} / {total}",
+  "study.progressAgain": "{done} / {total} · {n} 张待重复",
   "study.end": "结束学习",
   "study.endHint": "每个回答都已保存；这会结束本次学习并显示总结。你可以切换页面，回来后继续。",
   "study.sessionRunning": "学习还在进行：结束后才能学习那个卡组（已为下次选好）。",
