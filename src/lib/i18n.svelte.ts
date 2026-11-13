@@ -724,7 +724,7 @@ const en = {
   "stats.range.7": "7 days",
   "stats.range.all": "All time",
   "stats.emptyFilter": "Nothing has been studied here yet.",
-  "stats.points": "points",
+  "stats.points": "pts",
   "stats.unit.h": "h",
   "stats.unit.m": "m",
   "stats.unit.s": "s",

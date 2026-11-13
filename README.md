@@ -2,6 +2,12 @@
 
 A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows, macOS and Linux.
 
+![Studying a card in the Sakura theme: the characters coloured by tone, pinyin, meaning and the four answer buttons](docs/images/study.png)
+
+![The Statistics page: what the figures mean in a few sentences, headline numbers, and time studied by day](docs/images/statistics.png)
+
+<sub>Screenshots use sample data.</sub>
+
 - **Cards** with characters, pinyin, English meaning, notes and tags, organised into **nested decks**
   (e.g. Class › Class 9; a deck includes its subdecks when listing, studying and exporting)
 - **Duplicates**: the same word can be in several decks but is studied once, with progress shared

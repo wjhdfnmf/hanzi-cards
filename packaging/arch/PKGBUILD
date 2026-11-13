@@ -49,5 +49,9 @@ package() {
   chmod 755 "$pkgdir/usr/bin/$_appname"
   # Arch keeps licence texts under /usr/share/licenses/<package>
   install -Dm644 "$pkgdir/usr/share/doc/$_appname/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  # (the note on the bundled dictionary's licence; in the .deb from 0.3.2 on)
+  if [ -f "$pkgdir/usr/share/doc/$_appname/NOTICE" ]; then
+    install -Dm644 "$pkgdir/usr/share/doc/$_appname/NOTICE" "$pkgdir/usr/share/licenses/$pkgname/NOTICE"
+  fi
   rm -r "$pkgdir/usr/share/doc"
 }
