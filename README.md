@@ -30,6 +30,10 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   by speech recognition, either Windows' built-in Mandarin recognizer or OpenAI Whisper run locally
   (downloaded in Settings). Audio never leaves the computer. Optionally, the pitch of your voice decides
   between words that differ only in tone (妈 mā / 马 mǎ), which Whisper on its own tends to miss
+  (see [How tone checking was built and measured](#how-tone-checking-was-built-and-measured)).
+  While studying: **Back** returns to the card just answered and takes its answer back; *Show answer*
+  stays in place as *Hide answer* with Wrong / Right below it; Space shows or hides, 9 or 1 is wrong,
+  0 or 2 is right; the counter says how many cards are answered and how many will come round again
 - **AI conversation tutor** (optional, needs your own Anthropic API key): a spoken role-play with Claude
   built from your decks' words. Speak (Whisper, on this computer) or type; it answers aloud, notes which of
   your words you used correctly, suggests new words, and at the end records reviews and adds cards. Each
@@ -40,7 +44,9 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
 - **Dictionary**: CC-CEDICT (~120k entries), searchable by characters, pinyin (with or without tones) or English; one click adds a word as a card. The card editor auto-fills pinyin and meaning from it
 - **Voices**: words, stories and the tutor are read aloud by the system's Chinese voice. Where there
   is none (most Linux installs), or if you prefer it, Settings › Audio downloads a built-in voice
-  (Kokoro, 147 MB, Chinese and English) that runs on the computer itself
+  (Kokoro, 147 MB, Chinese and English) that runs on the computer itself. With no voice at all, the
+  speaker buttons are switched off and say why. The options that were weighed are in
+  [docs/tts-options.md](docs/tts-options.md)
 - **Statistics** for all decks or one, over the last week, month, quarter, year or all time. The
   simple view has the headline figures (time studied, reviews, how much you remembered against your
   target, new words, streak, what is due), a few sentences on what they mean, time or reviews over
@@ -48,7 +54,7 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   HSK level and by deck, true retention for young and mature words, how you answered, when you study
   (by hour and weekday), time by study direction, how long memories last and how hard words are, and
   the words you forget most. Time on the Reading and AI Tutor pages is counted with flashcard time
-- **Tone colours** for characters and pinyin, OS text-to-speech for pronunciation
+- **Tone colours** for characters and pinyin
 - **Pleco flashcards** (`.xml`): import categories as (nested) decks (re-importing an updated file skips cards you
   already have; pinyin is checked against the dictionary, with Pleco's reading choosing between readings),
   and export any deck back to Pleco (decks become categories, pinyin as tone numbers)
@@ -56,7 +62,8 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   the subdeck path, e.g. `Class 9` or `Lesson 1/Food`. Every file format the app reads and writes is
   described in [docs/import-formats.md](docs/import-formats.md)
 - **Reading**: stories in nested collections (type them, or import text files or a whole folder), with
-  bookmarks and a full-screen view; a word that isn't a card yet can be made one from its hover note; export a
+  bookmarks and a full-screen view; **Read aloud** reads a story a sentence at a time and marks the
+  sentence being read (and the word, where the voice reports it); a word that isn't a card yet can be made one from its hover note; export a
   story or a whole collection as plain text files, to keep or to share with other learners (importing
   them gives the same stories back); hover a word for its pinyin and meaning; choose the typeface (free Chinese fonts can be downloaded), size and
   spacing. Stories are kept in a database of their own
@@ -72,6 +79,7 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
 |---|---|
 | Shell | [Tauri 2](https://v2.tauri.app) (system webview: WebView2 / WKWebView / WebKitGTK) |
 | Core | Rust: `rusqlite` (bundled SQLite), FSRS-6 scheduler, CC-CEDICT parser/search |
+| Speech | Whisper through `candle` (speech recognition), the app's own pitch tracker for tones, `sherpa-onnx` for the built-in voice |
 | UI | Svelte 5 + TypeScript + Vite |
 
 Data lives in three SQLite files in the OS app-data folder (`com.hanzicards.app/`):
@@ -131,9 +139,70 @@ and then follow the same rules.
   file takes the mark off again.
 - The Anthropic API key is kept in the system keychain, never in a file. Speech is recognised on this
   computer; recordings are not written to disk (only in debug mode, for checking recognition).
-- Downloads (dictionary, Whisper models, fonts, NVIDIA's libraries) use HTTPS with time limits.
-  NVIDIA's archives and Whisper's model weights are checked against the SHA-256 their publishers give,
-  and a download that is cut short or doesn't match is thrown away.
+- Downloads (dictionary, Whisper models, the built-in voice, fonts, NVIDIA's libraries) use HTTPS
+  with time limits. NVIDIA's archives and Whisper's model weights are checked against the SHA-256
+  their publishers give, the built-in voice against a SHA-256 fixed in the app, and a download that
+  is cut short or doesn't match is thrown away.
+
+## How tone checking was built and measured
+
+Whisper writes down the likeliest word, so a learner who says mǎ for mā is usually "heard" as
+having said the right one. The app therefore tracks the pitch of the voice itself (`tones.rs`) and
+uses it to choose between words that differ only in tone (`tone_check.rs`; Settings › Speech
+recognition › *Use pitch to tell tones apart*). Two sets of recordings, neither of them in this
+repository or in the app, were used to build and check that. The full record, with every figure
+and what was tried and dropped, is in [docs/tone-recognition.md](docs/tone-recognition.md) and
+[docs/native-tone-recordings.md](docs/native-tone-recordings.md).
+
+**Tone Perfect** (Michigan State University; citation under [Licences of data](#licences-of-data)):
+9,839 studio recordings of single syllables, 410 syllables in each of the four tones, said by six
+native speakers (three women, three men). It was requested through the project's form. It was used
+for:
+
+- **A benchmark with speakers the code had never been tuned on.** The first version, tone shapes
+  taken from textbook pitch levels with no data at all, scored 83%; half of all 4th tones were
+  heard as 1st tones.
+- **Finding and fixing what was wrong**, each change kept only if the score rose: counting the
+  creaky, pitchless end of a falling tone as the bottom of the voice (4th tones 49% → 75%), the
+  size of a syllable's fall and rise, and its length against the speaker's usual (4th tones are
+  about 62% as long as the speaker's median, 3rd tones 125%). Together: 91.5%.
+- **Fitting a small classifier** (softmax regression on a syllable's five pitch points, its fall,
+  rise and length). Judged the fair way, each speaker by a model fitted to the other five, it
+  scores 97.1% alone. The app blends it with the tone shapes for a syllable said on its own:
+  95.4% on unseen speakers, 4th tones 79% → 90%. The weights that ship in the app (76 numbers in
+  `tones.rs`, `TONE_MODEL`) were fitted to all six speakers; no recording ships.
+- **Showing that Whisper can't judge tones**: asked which of four characters a syllable was, it was
+  right 47% (Small) to 53% (Large-v3 Turbo) of the time, where chance is 25%. With the pitch added,
+  answers ending on the tone actually said went from 34% to 88% (Small) in an end-to-end test on
+  ten cards.
+- **Sizing calibration**: a speaker's range taken from only the four tones of "ma", as Settings ›
+  *Calibrate tone detection* does, gives 94.1% against 96.6% from all their recordings.
+
+**speaker1**: one native speaker reading the project's own sheet
+(`docs/tone-recordings/speaker-sheet.pdf`) into a phone at home, with consent: 80 single syllables
+and 47 two-syllable words so far, 127 clips. It is the check that Tone Perfect can't give: an
+everyday voice, a plain microphone, and tones inside words. It was used for:
+
+- **Tones in words**, which Tone Perfect doesn't have. The first run got 61% of syllables in words
+  right; finding syllables through creak, allowing only the low "half third" tone before another
+  syllable, and counting pitch height half as much in words (pitch drifts down through a phrase)
+  brought that to 75%.
+- **A brake on over-fitting to studio voices.** The learned classifier alone was better on Tone
+  Perfect and worse on speaker1 (it took low 3rd tones that never rise for 4th tones), and in words
+  it was worse at every weight. That is why the app blends it instead of switching to it, and
+  only for a syllable said alone. Other changes that helped one set and hurt the other were dropped.
+- **Knowing what is still wrong**: 2nd tones in words heard as 3rd (15 of 44), because this
+  speaker's 2nd tones start low and rise late.
+
+What this doesn't cover: one home-recorded speaker is a small sample; nobody has recorded wrong
+tones on purpose yet (parts C and D of the sheet), so how often a wrong tone is let through is
+not measured; and there are no labelled learner recordings. The effect of the new classifier on
+the combined Whisper + pitch judgement hasn't been measured either. Tone Perfect came without a
+licence text, and whether weights fitted to it may be distributed has not been confirmed with its
+authors.
+
+To repeat the measurements with your own copy of the data: "How to re-run the measurements" in
+[docs/tone-recognition.md](docs/tone-recognition.md).
 
 ## Develop
 
@@ -171,6 +240,7 @@ built with GPU support but runs on the processor by default; nothing large is bu
 - **NVIDIA's libraries** (cuBLAS, cuBLASLt, cuRAND; about 505 MB from NVIDIA's official redistributable
   archives, SHA-256 checked) are offered in Settings only when an NVIDIA card is found. The app
   delay-loads them, so it starts and works without them on any PC.
+- **The built-in voice** (Kokoro, 147 MB) is downloaded in Settings › Audio.
 
 Building it needs the CUDA Toolkit and Visual Studio C++ build tools (the script finds them); the
 plain `npm run tauri build` makes a CPU-only installer.
@@ -189,7 +259,8 @@ Only the Microsoft Store avoids the warning entirely.
 ### macOS
 
 `.github/workflows/macos.yml` builds disk images for Apple Silicon and Intel on GitHub (Actions ›
-macOS build › Run workflow, with a release's tag to add them to that release). They are ad-hoc
+macOS build › Run workflow, with a release's tag to add them to that release; or
+`gh workflow run macos.yml --ref main -f tag=v<version>`). They are ad-hoc
 signed: on first open, macOS asks for **Open Anyway** in System Settings › Privacy & Security.
 The Mac build has not been tested on a Mac yet; see [docs/building-for-mac.md](docs/building-for-mac.md).
 
@@ -211,8 +282,9 @@ published release; it is updated, with the new checksum, once a release's `.deb`
 Chinese characters need a CJK font (`fonts-noto-cjk` on Debian/Ubuntu, `noto-fonts-cjk` on Arch);
 the `.deb` and `.rpm` recommend one, and desktop installs usually have one already.
 On Linux, Whisper runs on the processor (no GPU build), and the AI tutor's key is kept in the
-Secret Service keyring (GNOME Keyring, KWallet, KeePassXC). Reading aloud uses the webview's speech
-support, which most distributions' WebKitGTK doesn't include yet, so cards may stay silent there.
+Secret Service keyring (GNOME Keyring, KWallet, KeePassXC). Most distributions' WebKitGTK has no
+speech support and so no system voice: install the built-in voice in Settings › Audio to have
+cards and stories read aloud (not yet tried on a Linux desktop).
 The microphone needs GStreamer's PulseAudio or PipeWire source (`gst-plugins-good` or
 `gst-plugin-pipewire`).
 
@@ -238,9 +310,17 @@ src-tauri/src/
   stats.rs            statistics
   dictionary.rs       CC-CEDICT import/download/search (its own file, dictionary.db)
   pinyin.rs           tone marks, syllables, search keys, tone sandhi
-  speech.rs           checking spoken answers; whisper.rs runs Whisper
-  tones.rs            pitch tracking and tone shapes; tone_check.rs picks words by tone
+  hsk.rs              HSK 3.0 levels for tags
+  speech.rs           checking spoken answers; whisper.rs runs Whisper (whisper_net.rs is the
+                      network), gpu.rs fetches NVIDIA's libraries
+  tones.rs            pitch tracking, tone shapes and the learned tone model; tone_check.rs picks
+                      words by tone; calibration.rs builds the learner's pitch profile
+  tts.rs, kokoro.rs   speech as a sound file: the system voice (Windows), the built-in voice
+  fonts.rs            downloadable Chinese fonts for Reading
   pleco.rs            Pleco flashcard XML import/export
+docs/                 import formats, building for Mac, tone recognition, voices, GPU Whisper
+scripts/              theme generator, tone data preparation, the Windows GPU build
+packaging/arch/       PKGBUILD for Arch Linux
 ```
 
 ## Licence
@@ -256,8 +336,13 @@ Hanzi Cards' own code is under the [MIT licence](LICENSE). The data below keeps 
 - `src-tauri/data/hsk.tsv`: HSK 3.0 word levels (2026 syllabus and 2021 lists) from
   [complete-hsk-vocabulary](https://github.com/drkameleon/complete-hsk-vocabulary) © Yanis Zafirópulos, MIT licence
   (reproduced at the top of the file).
+- The built-in voice is run by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0) and
+  ONNX Runtime (MIT), which are part of the app; the Kokoro voice model (Apache-2.0) is downloaded
+  only when asked for. See [NOTICE](NOTICE).
 - Tone checking by pitch (`tones.rs`, `tone_check.rs`) was measured and tuned on the Tone Perfect
-  recordings, which are not included in this repository or the app:
+  recordings, and the weights of its small classifier were fitted to them
+  ([how](#how-tone-checking-was-built-and-measured)). The recordings themselves are not included in
+  this repository or the app:
   Catherine Ryu, Mandarin Tone Perception & Production Team, and Michigan State University Libraries.
   *Tone Perfect: Multimodal Database for Mandarin Chinese.* Accessed 1 January 2022. https://tone.lib.msu.edu/
 
