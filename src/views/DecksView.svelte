@@ -578,7 +578,7 @@
             class:open={!collapsed.includes(d.id)}
             aria-label={collapsed.includes(d.id) ? t("decks.expand") : t("decks.collapse")}
             aria-expanded={!collapsed.includes(d.id)}
-            onclick={() => toggleCollapsed(d.id)}>▸</button
+            onclick={() => toggleCollapsed(d.id)}><Icon name="chevron-right" size={14} /></button
           >
         {:else}
           <span class="twisty-space"></span>
@@ -1251,7 +1251,6 @@
     width: 30px;
   }
   .phone .twisty {
-    font-size: 18px;
     color: var(--text-2);
     align-self: stretch;
   }

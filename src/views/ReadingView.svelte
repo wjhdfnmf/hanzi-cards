@@ -661,7 +661,7 @@
             class:open={!collapsed.includes(f.id)}
             aria-label={collapsed.includes(f.id) ? t("reading.expand") : t("reading.collapse")}
             aria-expanded={!collapsed.includes(f.id)}
-            onclick={() => toggleCollapsed(f.id)}>▸</button
+            onclick={() => toggleCollapsed(f.id)}><Icon name="chevron-right" size={14} /></button
           >
         {:else}
           <span class="twisty-space"></span>
@@ -739,7 +739,7 @@
       {#if vocab.length}
         <section class="vocab card-surface" style="--rs:{settings.readingSize}px">
           <button class="vocab-head" aria-expanded={showVocab} onclick={() => (showVocab = !showVocab)}>
-            <span class="twisty" class:open={showVocab} aria-hidden="true">▸</span>
+            <span class="twisty" class:open={showVocab} aria-hidden="true"><Icon name="chevron-right" size={14} /></span>
             <span>{t("reading.keyVocab")}</span>
             <small class="faint">{vocab.length}</small>
           </button>
@@ -1105,8 +1105,21 @@
     padding: 4px 0;
   }
   .phone .vocab-head .twisty {
-    width: 16px;
-    font-size: 16px;
+    width: 22px;
+    color: var(--text-2);
+  }
+  .phone .vocab-head {
+    align-items: center;
+  }
+  /* the collections' arrows too: bigger, with a bigger place to tap */
+  .phone .twisty,
+  .phone .twisty-space {
+    flex-basis: 30px;
+    width: 30px;
+  }
+  .phone .folderrow .twisty {
+    color: var(--text-2);
+    align-self: stretch;
   }
   .phone .vm {
     grid-column: 1 / -1;
@@ -1344,8 +1357,8 @@
     cursor: pointer;
   }
   .vocab-head .twisty {
-    display: inline-block;
-    width: 12px;
+    align-self: center;
+    width: 14px;
     color: var(--text-3);
     font-size: 12px;
     font-weight: normal;

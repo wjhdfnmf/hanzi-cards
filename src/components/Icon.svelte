@@ -26,6 +26,7 @@
     book: "M4 5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2V5Z M4 19a2 2 0 0 1 2-2h14",
     arrow: "M5 12h14 M13 6l6 6-6 6",
     "chevron-left": "M15 18l-6-6 6-6",
+    "chevron-right": "M9 6l6 6-6 6",
     "chevrons-left": "M11 17l-5-5 5-5 M18 17l-5-5 5-5",
     "chevrons-right": "M13 17l5-5-5-5 M6 17l5-5-5-5",
     sync: "M20 11a8 8 0 0 0-14.6-4.2L4 8 M4 3.5V8h4.5 M4 13a8 8 0 0 0 14.6 4.2L20 16 M20 20.5V16h-4.5",

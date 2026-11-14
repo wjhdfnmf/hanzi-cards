@@ -2110,6 +2110,13 @@ button.chip.on {
   max-width: 1100px;
   margin: 0 auto;
 }
+/* an expand arrow (a chevron that turns down when open) */
+.twisty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .page-head {
   display: flex;
   align-items: flex-end;
@@ -2152,6 +2159,11 @@ button.chip.on {
     overflow: hidden;
     overscroll-behavior: none;
     touch-action: pan-x pan-y;
+  }
+  /* expand arrows (Decks, Reading, Settings): big enough to see and tap */
+  .twisty svg {
+    width: 22px;
+    height: 22px;
   }
   /* no grey flash over whatever is tapped */
   button,

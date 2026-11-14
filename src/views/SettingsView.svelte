@@ -14,6 +14,7 @@
   import { sync, refreshStatus, ping, syncNow, summary as syncSummary } from "../lib/sync.svelte";
   import { device as layout, ios, trackLevel } from "../lib/device.svelte";
   import Back from "../components/Back.svelte";
+  import Icon from "../components/Icon.svelte";
   import { SIZE_MIN, SIZE_MAX, LINE_MIN, LINE_MAX, readingFont, clampSize } from "../lib/reading";
   import FontSelect from "../components/FontSelect.svelte";
   import { CUSTOM_THEMES, THEME_GROUPS, isCustomTheme } from "../lib/themes";
@@ -836,7 +837,7 @@
           aria-controls="font-downloads"
           onclick={() => setFontsOpen(!fontsOpen)}
         >
-          <span class="twisty" class:open={fontsOpen} aria-hidden="true">▸</span>
+          <span class="twisty" class:open={fontsOpen} aria-hidden="true"><Icon name="chevron-right" size={14} /></span>
           <span class="fonttitle">{t("settings.readingDownloads")}</span>
           <small class="faint">
             {t("settings.readingDownloadsSummary", { n: fontFiles.list.length, d: nDownloaded, s: nSystem })}{#if nBusy}
@@ -1009,7 +1010,7 @@
 
   <h2>
     <button class="fonttoggle advtoggle" aria-expanded={advOpen} onclick={() => setAdvOpen(!advOpen)}>
-      <span class="twisty" class:open={advOpen} aria-hidden="true">▸</span>
+      <span class="twisty" class:open={advOpen} aria-hidden="true"><Icon name="chevron-right" size={14} /></span>
       <span class="fonttitle">{t("settings.adv.title")}</span>
       <small class="faint">{isDefaultStudy ? t("settings.adv.usingDefaults") : t("settings.adv.customised")}</small>
     </button>
