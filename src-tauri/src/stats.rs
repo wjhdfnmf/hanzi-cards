@@ -189,6 +189,27 @@ fn date_label(day: i64) -> String {
         .unwrap_or_default()
 }
 
+/// Start the statistics over: every recorded answer and all reading and tutor time go. The
+/// cards and what the scheduler remembers of each (when it is due, how well it is known)
+/// stay, so studying carries on where it was. Returns how many answers were removed.
+///
+/// The reset is written down with its time, so that devices kept the same as this one drop
+/// their copies of the same history instead of handing it back (see `hanzi_sync::merge`).
+pub fn reset(conn: &mut Connection) -> AppResult<usize> {
+    let tx = conn.transaction()?;
+    // (one record of the reset, not one of every answer: the triggers stand back)
+    tx.execute("INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('applying', '1')", [])?;
+    let answers = tx.execute("DELETE FROM review_log", [])?;
+    tx.execute("DELETE FROM study_time", [])?;
+    tx.execute("DELETE FROM sync_deleted WHERE kind = 'log'", [])?;
+    tx.execute("INSERT OR REPLACE INTO sync_deleted (kind, uid, at) VALUES ('reset', 'statistics', ?1)", [now()])?;
+    // the last answer can no longer be taken back: its record is gone
+    tx.execute("DELETE FROM settings WHERE key = 'last_answer'", [])?;
+    tx.execute("DELETE FROM sync_meta WHERE key = 'applying'", [])?;
+    tx.commit()?;
+    Ok(answers)
+}
+
 /// Add reading or tutor time to today's total. Small steps only: a page reports as it goes.
 pub fn log_time(conn: &Connection, kind: &str, seconds: i64) -> AppResult<()> {
     if !TIME_KINDS.contains(&kind) {

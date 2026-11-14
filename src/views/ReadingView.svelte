@@ -549,9 +549,9 @@
   const folderName = (id: number | null) => (id === null ? "" : (folders.find((f) => f.id === id)?.path ?? ""));
 </script>
 
-{#snippet storyTools(corner: boolean)}
+{#snippet storyTools()}
   {#if story}
-  <div class="tools" class:corner>
+  <div class="tools">
     <button
       class="btn ghost icon mark"
       class:on={story.bookmarked}
@@ -675,17 +675,16 @@
         <span class="small muted num">{settings.readingSize}px</span>
       </div>
       <span class="sample han" style="font-family:{fontFamily}">汉字阅读</span>
-      {#if full && story}{@render storyTools(true)}{/if}
     </div>
 
     {#if story}
-      <div class="head">
+      <div class="head story-head" style="--rs:{settings.readingSize}px">
         <div class="title">
           <button class="btn ghost back" onclick={closeStory}>
             <span class="flip"><Icon name="arrow" size={16} /></span>{folder?.name ?? t("reading.allStories")}
           </button>
         </div>
-        {#if !full}{@render storyTools(false)}{/if}
+        {@render storyTools()}
       </div>
       {#if look}
         {@const about = stories.find((x) => x.id === story?.id)?.preview ?? story.body.slice(0, 160)}
@@ -1117,6 +1116,10 @@
     gap: 16px;
     margin-bottom: 14px;
     flex-wrap: wrap;
+  }
+  /* (in line with "All stories", ending where the banner and the text do) */
+  .story-head {
+    max-width: calc(52 * var(--rs));
   }
   .tools {
     display: flex;
@@ -1567,12 +1570,6 @@
     z-index: 40;
     background: var(--bg);
     --pad: max(28px, calc((100vw - 1000px) / 2));
-  }
-  /* full screen: the story's buttons sit in the bar's corner, under the sample text */
-  .tools.corner {
-    flex-basis: 100%;
-    justify-content: flex-end;
-    margin-top: -6px;
   }
   .tip-head {
     display: flex;

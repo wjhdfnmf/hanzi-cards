@@ -561,6 +561,36 @@ mod tests {
         assert_eq!(count(&b.0, "SELECT COUNT(*) FROM review_log"), 0);
     }
 
+    /// Statistics reset on one device: the answers and the time go, the schedules stay, and
+    /// a device that still has the old history doesn't hand it back.
+    #[test]
+    fn a_reset_of_the_statistics_reaches_the_other_devices() {
+        let (mut a, mut b) = (device(), device());
+        let mut boxed = Snapshot::default();
+        let word = count(&a.0, "SELECT id FROM cards WHERE hanzi = '你好'");
+        crate::study::answer_at(&mut a.0, word, "recognition", 3, 1500, db::now() - 3 * 86_400).unwrap();
+        a.0.execute("INSERT INTO study_time (day, kind, device, seconds) VALUES (?1, 'reading', 'x', 600)", [db::now() / 86_400 - 5]).unwrap();
+        sync(&mut a, &mut boxed);
+        sync(&mut b, &mut boxed);
+        assert_eq!(count(&b.0, "SELECT COUNT(*) FROM review_log"), 1);
+
+        assert_eq!(crate::stats::reset(&mut b.0).unwrap(), 1);
+        assert_eq!(count(&b.0, "SELECT COUNT(*) FROM review_log") + count(&b.0, "SELECT COUNT(*) FROM study_time"), 0);
+        assert_eq!(count(&b.0, "SELECT COUNT(*) FROM progress"), 1, "when the word is due is not statistics");
+        assert_eq!(count(&b.0, "SELECT COUNT(*) FROM sync_deleted"), 1, "one record of the reset, not one per answer");
+        // an answer after the reset is kept
+        crate::study::answer(&mut b.0, word, "recognition", 3, 900).unwrap();
+
+        sync(&mut b, &mut boxed);
+        sync(&mut a, &mut boxed);
+        sync(&mut b, &mut boxed);
+        for d in [&a, &b] {
+            assert_eq!(count(&d.0, "SELECT COUNT(*) FROM review_log"), 1);
+            assert_eq!(count(&d.0, "SELECT COUNT(*) FROM study_time"), 0);
+            assert_eq!(count(&d.0, "SELECT COUNT(*) FROM progress"), 1);
+        }
+    }
+
     #[test]
     fn a_snapshot_that_doesnt_fit_changes_nothing() {
         let (mut c, s) = device();
@@ -639,5 +669,38 @@ mod tests {
         crate::data::check(&s).unwrap();
         drop((c, s));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The library as it was with the old story titles, and as it is with the new ones (byte
+    /// copies of both, copied again here): synced, there is one of each story, newly titled.
+    /// OLD_DIR=<folder> NEW_DIR=<folder> cargo test --lib retitled_real -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn retitled_real_copies_become_one_library() {
+        let (Ok(old), Ok(new)) = (std::env::var("OLD_DIR"), std::env::var("NEW_DIR")) else { return };
+        let open = |from: &str, name: &str| {
+            let dir = std::env::temp_dir().join(format!("hanzi-sync-retitled-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            for f in [crate::data::DB_FILE, stories::DB_FILE] {
+                std::fs::copy(std::path::Path::new(from).join(f), dir.join(f)).unwrap();
+            }
+            (db::open(&dir.join(crate::data::DB_FILE)).unwrap(), stories::open(&dir.join(stories::DB_FILE)).unwrap())
+        };
+        let (mut a, mut b) = (open(&old, "old"), open(&new, "new"));
+        let ascii = |c: &Connection| count(c, "SELECT COUNT(*) FROM stories WHERE title GLOB '*[A-Za-z][A-Za-z][A-Za-z]*'");
+        println!("old: {} stories ({} with English in the title); new: {} ({})", count(&a.1, "SELECT COUNT(*) FROM stories"), ascii(&a.1), count(&b.1, "SELECT COUNT(*) FROM stories"), ascii(&b.1));
+        let mut boxed = Snapshot::default();
+        sync(&mut a, &mut boxed);
+        sync(&mut b, &mut boxed);
+        sync(&mut a, &mut boxed);
+        for (name, d) in [("old", &a), ("new", &b)] {
+            println!("{name} after: {} stories ({} with English in the title), {} collections, {} cards", count(&d.1, "SELECT COUNT(*) FROM stories"), ascii(&d.1), count(&d.1, "SELECT COUNT(*) FROM story_folders"), count(&d.0, "SELECT COUNT(*) FROM cards"));
+        }
+        assert_eq!(count(&a.1, "SELECT COUNT(*) FROM stories"), count(&b.1, "SELECT COUNT(*) FROM stories"));
+        assert_eq!(count(&b.1, "SELECT COUNT(*) FROM stories"), 247);
+        // and a device that had already taken both sets in is put right too
+        let both = Snapshot { stories: export(&open(&old, "old2").0, &open(&old, "old3").1).unwrap().stories.into_iter().chain(boxed.stories.clone()).collect(), ..boxed.clone() };
+        assert_eq!(merge(&both, &boxed).stories.len(), 247);
     }
 }

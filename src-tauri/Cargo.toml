@@ -1,6 +1,6 @@
 [package]
 name = "hanzi-cards"
-version = "0.4.0"
+version = "0.4.1"
 description = "Mandarin Chinese flash cards with spaced repetition and a built-in dictionary"
 edition = "2021"
 license = "MIT"
@@ -37,6 +37,7 @@ sherpa-onnx = "2.0.1"
 tar = "0.4.46"
 bzip2 = "0.6.1"
 hanzi-sync = { path = "../sync" }
+if-addrs = "0.15.0"
 
 [features]
 # Run Whisper on an NVIDIA GPU (needs the CUDA Toolkit to build): cargo build --features gpu

@@ -37,6 +37,8 @@ export const settings = $state({
   /** Tag new cards with their HSK level (2026 syllabus). */
   hskAutotag: true,
   speechRate: 0.9,
+  /** How loud the app speaks, 0 to 1 (of the system's volume). */
+  speechVolume: 1,
   autoplayAudio: false,
   voice: "",
   /** Where speech plays: "" = the system's default output, else a device id (with its name,
@@ -87,6 +89,7 @@ const KEYS: Record<string, keyof typeof settings> = {
   tone_colors: "toneColors",
   hsk_autotag: "hskAutotag",
   speech_rate: "speechRate",
+  speech_volume: "speechVolume",
   autoplay_audio: "autoplayAudio",
   voice: "voice",
   audio_output: "audioOutput",

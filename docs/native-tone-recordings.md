@@ -1,7 +1,8 @@
 # Plan: native-speaker recordings for tone detection
 
-Status: plan and recording kit written 2026-11-09. First native speaker's pass 1, blocks 1-13
-(Parts A and B), recorded 2026-11-10; results and the fixes they led to at the end.
+Status: plan and recording kit written 2026-11-09. First native speaker: pass 1, blocks 1-13
+(Parts A and B), recorded 2026-11-10; the rest (Parts C and D, pass 2) on 2026-11-13. Results
+at the end.
 Follows on from `tone-recognition.md`, which found that both prototypes (pitch shapes in
 `tones.rs`, Whisper's tone scoring in `whisper::score`) are limited by the test voice, an old
 synthetic voice that doesn't say its tones the way people do.
@@ -164,3 +165,92 @@ the voice turns creaky between syllables (qiān-bǐ, shēn-tǐ heard 13→14), a
 fall only a little in words. Single syllables were already at 92% and didn't change.
 `SPEAKER_SHAPES=2` prints every tone-2 contour; `SPEAKER_RUNS=1` how each word was split.
 Check any further change on a second speaker and on Tone Perfect before keeping it.
+
+## The rest of speaker 1's recordings (2026-11-14)
+
+Blocks 14-29 arrived on 2026-11-13: Part C (20 words with one tone said wrong on purpose),
+Part D (10 sentences), and pass 2 (Parts A and B again at everyday speed). All 29 blocks cut
+cleanly: `tone-data/speaker1` now has 157 clips (pass 1), `tone-data/speaker1-pass2` 127.
+The clips cut on 2026-11-10 came out identical.
+
+`speaker_bench`, clean recordings, the app's judge as shipped in 0.4.0 (shapes, fall/rise,
+length and the learned model for a syllable said alone; shapes alone in words). Syllables
+judged right:
+
+| | Part A (alone) | Part B (in words) | Part C (wrong on purpose) | Part D (sentences) |
+|---|---|---|---|---|
+| pass 1, careful | 72/80, 90% | 64/88, 73% | 20/40, 50% | 25/42, 60% |
+| pass 1, noisy | 70/80, 88% | 60/88, 68% | 21/39, 54% | 26/42, 62% |
+| pass 2, everyday speed | 72/80, 90% | 57/87, 66% | | |
+| pass 2, noisy | 70/80, 88% | 54/88, 61% | | |
+
+(Part A was 74/80 on 2026-11-10: the speaker's range is now taken from all 157 clips,
+sentences included, and two borderline syllables moved.)
+
+By tone, pass 1 clean, all parts: T1 58/61, **T2 31/61**, T3 46/59, T4 46/70. Pass 2:
+T1 37/40, **T2 23/44**, T3 34/38, T4 35/46.
+
+### What the new recordings show
+
+1. **Syllables said alone hold up at everyday speed** (90% on both passes), with this
+   speaker's usual syllable a fifth shorter in pass 2 (33 frames against 41).
+2. **Words get worse at everyday speed**: 73% to 66%. Nearly all of it is 2nd tones:
+   in words they were right 15 times of 40 in pass 1 and 9 of 24 in pass 2.
+3. **2nd tone heard as 3rd is the one large error**: 21 of 61 in pass 1, 21 of 44 in pass 2,
+   alone as well as in words (chuáng, fáng, bá, má are missed in both passes). This
+   speaker's 2nd tone sits at the bottom of the voice and rises only at the very end, or,
+   inside a word at everyday speed, hardly at all.
+4. **4th tone heard as 3rd is the second**: 19 of 70 in pass 1, in words. After another
+   syllable a 4th tone starts in the middle of the voice and falls into creak, which is what
+   a low 3rd tone looks like.
+5. **Sentences (60%) fail earlier than the tones**: with no pause between syllables, cutting
+   the pitch into as many pieces as there are syllables puts the cuts in the wrong places
+   (pieces 1 to 12 frames long, syllables with no pitch at all). The tone shapes never get a
+   fair look.
+
+### Part C can't be scored yet
+
+The wrong tones were passed as the right ones 3 times of 20, which looks good, but the
+recordings don't support a figure. Of the eight syllables the sheet asked for as a 2nd tone
+(shēn-**tí**, **wén**-tí, **qí**-chē, **dián**-nǎo, kǎo-**shí**, fēi-**jí** …), seven have no rise in the
+recording: the pitch is level and high, or falls (`late_rise_bench` prints each one). The
+tracker is not in doubt there: the pitch is steady and clean. The speaker, reading pinyin for
+words that don't exist, did not say the tone that was asked for. The 1st and 4th tones asked
+for were said (lāo-shī, hǎo-kān, tiāo-wǔ and lǚ-xìng are heard as written).
+
+So the label "tone as said" is wrong for an unknown part of Part C, and neither the 50% nor
+the 3 of 20 means what it seems to. Before Part C is used, someone who hears tones has to
+listen to the 20 clips and write down what was said (the labelling page proposed above under
+"Later: the learner's side" would do for this too). I can't listen to them.
+
+### One thing tried: counting a late rise
+
+`late_rise_bench`: in words, the further the last fifth of a syllable climbs above its
+lowest earlier point, the more it counts for a 2nd tone and against a 3rd.
+
+| | pass 1, Part B | pass 1, 2nd tones in words | pass 2, Part B | pass 2, 2nd tones in words |
+|---|---|---|---|---|
+| as shipped | 64/88 | 15/40 | 57/87 | 9/24 |
+| late rise, strongest setting | 67/88 | 20/40 | 57/87 | 10/24 |
+
+It helps the careful pass and does nothing at everyday speed, where the 2nd tones barely
+rise. Not adopted: it would be fitted to one speaker reading carefully.
+
+### Where improvement could come from
+
+- **A second and third speaker.** Everything about words rests on one man's voice, and his
+  low, late 2nd tone is the main error. Whether that is him or Mandarin can't be told from
+  one speaker. This is still the most useful thing to get.
+- **A model for syllables in words.** The learned model (2026-11-13) only knows syllables said
+  alone, and made words worse. Words need their own, with the neighbouring syllables' pitch
+  as inputs (a 2nd tone is low *against what follows it*, a 3rd is low throughout). Tone
+  Perfect has no words, so this needs word recordings from several speakers: pass 1 and
+  pass 2 here are 175 syllables from one.
+- **Creak as a cue between 2nd and 3rd.** Still untried. In a syllable said alone, this
+  speaker's 3rd tones have stretches with no pitch and his 2nd tones are pitched throughout;
+  7 single 2nd tones are heard as 3rd in each pass.
+- **Finding syllables in running speech.** Whisper's word timings (or a forced alignment) to
+  place the cuts, instead of dividing the pitch track by the number of syllables. Needed
+  before sentences can be judged at all.
+- **Labels for Part C**, as above, to get the number that matters most for telling a learner
+  "that was the wrong tone": how often a wrong tone is passed.

@@ -192,15 +192,6 @@
 }
 /* Sakura: the parts of the notebook that aren't colours (see SAKURA_ART in gen_themes.py) */
 
-/* page titles under a stroke of highlighter */
-:root[data-theme="sakura"] h1 {
-  text-decoration: underline;
-  text-decoration-color: rgb(255 202 92 / 0.62);
-  text-decoration-thickness: 0.4em;
-  text-underline-offset: -0.16em;
-  text-decoration-skip-ink: none;
-}
-
 /* buttons you can press: a pill with an edge that gives way */
 :root[data-theme="sakura"] .btn.primary {
   border-radius: 999px;
@@ -368,13 +359,6 @@
   --radius-lg: 20px;
 }
 /* lavender: its own details (scripts/gen_themes.py) */
-:root[data-theme="lavender"] h1 {
-  text-decoration: underline;
-  text-decoration-color: rgb(190 165 245 / 0.5);
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.4em;
-  text-underline-offset: -0.16em;
-}
 :root[data-theme="lavender"] .btn.primary {
   border-radius: 999px;
   box-shadow: 0 2px 0 var(--accent-hover);
@@ -510,13 +494,6 @@
   --cat-3: #1baf7a;
 }
 /* plum: its own details (scripts/gen_themes.py) */
-:root[data-theme="plum"] h1 {
-  text-decoration: underline;
-  text-decoration-color: #981d43;
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.09em;
-  text-underline-offset: 0.3em;
-}
 :root[data-theme="plum"] .logo {
   font-family: var(--font-han-serif);
   border-radius: 12px;
@@ -633,13 +610,6 @@
   --radius-lg: 18px;
 }
 /* rouge: its own details (scripts/gen_themes.py) */
-:root[data-theme="rouge"] h1 {
-  text-decoration: underline;
-  text-decoration-color: #e8b96a;
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.09em;
-  text-underline-offset: 0.3em;
-}
 :root[data-theme="rouge"] .btn.primary {
   border-radius: 999px;
   box-shadow: 0 2px 0 var(--accent-hover);
@@ -775,14 +745,6 @@
   --radius-lg: 10px;
 }
 /* slate: its own details (scripts/gen_themes.py) */
-:root[data-theme="slate"] h1 {
-  text-decoration: underline;
-  text-decoration-color: #1f5fae;
-  text-decoration-skip-ink: none;
-  text-decoration-style: double;
-  text-decoration-thickness: 0.05em;
-  text-underline-offset: 0.3em;
-}
 :root[data-theme="slate"] .btn {
   border-radius: 4px;
 }
@@ -872,13 +834,6 @@
   --radius-lg: 14px;
 }
 /* indigo: its own details (scripts/gen_themes.py) */
-:root[data-theme="indigo"] h1 {
-  text-decoration: underline;
-  text-decoration-color: #79a8ff;
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.09em;
-  text-underline-offset: 0.3em;
-}
 :root[data-theme="indigo"] .btn {
   border-radius: 4px;
 }
@@ -967,13 +922,6 @@
   --cat-3: #199e70;
 }
 /* pine: its own details (scripts/gen_themes.py) */
-:root[data-theme="pine"] h1 {
-  text-decoration: underline;
-  text-decoration-color: #82d6a3;
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.09em;
-  text-underline-offset: 0.3em;
-}
 :root[data-theme="pine"] .btn {
   border-radius: 4px;
 }
@@ -1090,13 +1038,6 @@
   --radius-lg: 12px;
 }
 /* imperial: its own details (scripts/gen_themes.py) */
-:root[data-theme="imperial"] h1 {
-  text-decoration: underline;
-  text-decoration-color: #e4b44f;
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.09em;
-  text-underline-offset: 0.3em;
-}
 :root[data-theme="imperial"] .btn {
   border-radius: 4px;
 }
@@ -1213,13 +1154,6 @@
   --cat-3: #199e70;
 }
 /* lantern: its own details (scripts/gen_themes.py) */
-:root[data-theme="lantern"] h1 {
-  text-decoration: underline;
-  text-decoration-color: rgb(255 143 69 / 0.3);
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.4em;
-  text-underline-offset: -0.16em;
-}
 :root[data-theme="lantern"] .logo {
   border-radius: 50%;
   background: radial-gradient(circle at 50% 40%, #ffb066, #e2521f);
@@ -1331,13 +1265,6 @@
   --radius-lg: 10px;
 }
 /* ink: its own details (scripts/gen_themes.py) */
-:root[data-theme="ink"] h1 {
-  text-decoration: underline;
-  text-decoration-color: #1b1a17;
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.09em;
-  text-underline-offset: 0.3em;
-}
 :root[data-theme="ink"] .btn {
   border-radius: 4px;
 }
@@ -1434,13 +1361,6 @@
   --radius-lg: 22px;
 }
 /* jade: its own details (scripts/gen_themes.py) */
-:root[data-theme="jade"] h1 {
-  text-decoration: underline;
-  text-decoration-color: rgb(120 200 175 / 0.45);
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.4em;
-  text-underline-offset: -0.16em;
-}
 :root[data-theme="jade"] .btn.primary {
   border-radius: 999px;
 }
@@ -1521,13 +1441,6 @@
   --radius-lg: 18px;
 }
 /* matcha: its own details (scripts/gen_themes.py) */
-:root[data-theme="matcha"] h1 {
-  text-decoration: underline;
-  text-decoration-color: rgb(186 208 88 / 0.5);
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.4em;
-  text-underline-offset: -0.16em;
-}
 :root[data-theme="matcha"] .btn.primary {
   border-radius: 999px;
 }
@@ -1612,13 +1525,6 @@
   --cat-3: #1baf7a;
 }
 /* maple: its own details (scripts/gen_themes.py) */
-:root[data-theme="maple"] h1 {
-  text-decoration: underline;
-  text-decoration-color: rgb(255 170 90 / 0.5);
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.4em;
-  text-underline-offset: -0.16em;
-}
 :root[data-theme="maple"] .logo {
   border-radius: 12px;
   background: linear-gradient(145deg, #d2622a, #923716);
@@ -1731,13 +1637,6 @@
   --cat-3: #1baf7a;
 }
 /* dunhuang: its own details (scripts/gen_themes.py) */
-:root[data-theme="dunhuang"] h1 {
-  text-decoration: underline;
-  text-decoration-color: rgb(226 172 80 / 0.5);
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.4em;
-  text-underline-offset: -0.16em;
-}
 :root[data-theme="dunhuang"] .logo {
   font-family: var(--font-han-serif);
   border-radius: 10px;
@@ -1829,13 +1728,6 @@
   --radius-lg: 20px;
 }
 /* moon: its own details (scripts/gen_themes.py) */
-:root[data-theme="moon"] h1 {
-  text-decoration: underline;
-  text-decoration-color: rgb(198 173 255 / 0.28);
-  text-decoration-skip-ink: none;
-  text-decoration-thickness: 0.4em;
-  text-underline-offset: -0.16em;
-}
 :root[data-theme="moon"] .btn.primary {
   border-radius: 999px;
 }

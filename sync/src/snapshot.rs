@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
 /// The format this build writes.
-pub const FORMAT: u32 = 1;
+pub const FORMAT: u32 = 2;
 
 /// The most a snapshot may unpack to: a guard against a small file that expands without end.
 pub const MAX_UNPACKED: u64 = 512 * 1024 * 1024;
@@ -125,7 +125,9 @@ pub struct Story {
     pub updated_at: i64,
 }
 
-/// "deck" | "card" | "log" | "folder" | "story"
+/// "deck" | "card" | "log" | "folder" | "story", or ("reset", "statistics"): the statistics were
+/// started over at that time, and answers and study time from before it are dropped
+/// (format 2).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default)]
 pub struct Tomb {

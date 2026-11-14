@@ -12,6 +12,8 @@
 //! - **A word's schedule**: from wherever it was reviewed last, for every copy of the word.
 //! - **Reading and tutor time**: each device's own total for a day, the larger figure of the two
 //!   (a device only ever adds to its own).
+//! - **Statistics that were reset** stay reset: answers from before the reset, and study
+//!   time from days before it, are dropped wherever they come from.
 //! - **The same thing made separately on two devices** (the starter deck, a file imported
 //!   on both) becomes one thing: same place, same content, one id from then on.
 //!
@@ -256,6 +258,30 @@ pub fn merge(a: &Snapshot, b: &Snapshot) -> Snapshot {
     unify_items(&a.stories, &b.stories, &mut same, |s| &s.uid, |s, same| {
         (s.folder.as_ref().map(|f| same.find(f)).unwrap_or_default(), s.title.clone(), s.body.clone())
     });
+    // The same text in the same collection is one story, whatever it is called (a story that
+    // was given a new title in a copy of the library, and so a new id, is still that story).
+    // Unlike the pairing above, this also joins two that one device already holds. A story
+    // that was deleted is left out of it: deleting one copy must not take the other.
+    {
+        let deleted: BTreeSet<String> = a.deleted.iter().chain(&b.deleted).filter(|t| t.kind == "story").map(|t| same.find(&t.uid)).collect();
+        let mut first: BTreeMap<(String, &str), String> = BTreeMap::new();
+        for s in a.stories.iter().chain(&b.stories) {
+            let uid = same.find(&s.uid);
+            if s.body.trim().is_empty() || deleted.contains(&uid) {
+                continue;
+            }
+            let key = (s.folder.as_ref().map(|f| same.find(f)).unwrap_or_default(), s.body.as_str());
+            match first.get(&key) {
+                Some(other) => {
+                    let other = other.clone();
+                    same.union(&other, &uid);
+                }
+                None => {
+                    first.insert(key, uid);
+                }
+            }
+        }
+    }
     let id = |uid: &str| same.find(uid);
 
     // ---- deletions, the latest of each ----
@@ -329,11 +355,14 @@ pub fn merge(a: &Snapshot, b: &Snapshot) -> Snapshot {
         _ => true,
     });
 
+    // ---- the statistics were started over: nothing from before that comes back ----
+    let reset = deleted.get(&("reset".to_string(), "statistics".to_string())).copied();
+
     // ---- answers: all of them, except the ones taken back ----
     let mut log: BTreeMap<String, Review> = BTreeMap::new();
     for r in a.log.iter().chain(&b.log) {
         let r = Review { uid: id(&r.uid), card: id(&r.card), ..r.clone() };
-        if cards.contains_key(&r.card) && !log_gone.contains_key(&r.uid) {
+        if cards.contains_key(&r.card) && !log_gone.contains_key(&r.uid) && reset.is_none_or(|at| r.reviewed_at >= at) {
             put(&mut log, r.uid.clone(), r, |r| r.reviewed_at);
         }
     }
@@ -368,7 +397,8 @@ pub fn merge(a: &Snapshot, b: &Snapshot) -> Snapshot {
 
     // ---- reading and tutor time: each device's own total for a day ----
     let mut time: BTreeMap<(i64, String, String), i64> = BTreeMap::new();
-    for t in a.time.iter().chain(&b.time) {
+    // (days are counted from 1970; the day of the reset itself is kept: time since counts)
+    for t in a.time.iter().chain(&b.time).filter(|t| reset.is_none_or(|at| t.day >= at / 86_400)) {
         let s = time.entry((t.day, t.kind.clone(), t.device.clone())).or_insert(0);
         *s = (*s).max(t.seconds);
     }
@@ -522,6 +552,27 @@ mod tests {
     }
 
     #[test]
+    fn statistics_that_were_reset_stay_reset() {
+        let t = |day, seconds| Time { day, kind: "reading".into(), device: "A".into(), seconds };
+        let mut a = base();
+        a.log = vec![review("r1", "c1", 86_400 * 10), review("r2", "c1", 86_400 * 20)];
+        a.progress = vec![prog("c1", "recognition", 86_400 * 20, 2)];
+        a.time = vec![t(10, 600), t(20, 300)];
+        // b started its statistics over on day 15, and has studied since
+        let mut b = base();
+        b.deleted = vec![tomb("reset", "statistics", 86_400 * 15 + 100)];
+        b.log = vec![review("r3", "c2", 86_400 * 16)];
+        b.time = vec![t(16, 60)];
+        let m = both_ways(&a, &b);
+        assert_eq!(m.log.iter().map(|r| r.uid.as_str()).collect::<Vec<_>>(), ["r2", "r3"], "answers from before the reset are gone");
+        assert_eq!(m.time, vec![t(16, 60), t(20, 300)]);
+        assert_eq!(m.progress.len(), 1, "what the scheduler remembers stays");
+        assert_eq!(m.deleted, b.deleted, "the reset is remembered");
+        // a third device with the old history doesn't bring it back
+        assert_eq!(both_ways(&m, &a), m);
+    }
+
+    #[test]
     fn copies_of_a_word_share_the_latest_schedule() {
         let mut a = base();
         a.decks.push(deck("d2", None, "Other", 11));
@@ -580,6 +631,49 @@ mod tests {
         assert_eq!(m2.cards.iter().find(|c| c.hanzi == "你好").unwrap().meaning, "hello!");
     }
 
+    /// A library whose stories were given new titles in a copy (and so new ids), synced
+    /// with a box that still has them under the old titles: one of each, with the new title.
+    #[test]
+    fn a_retitled_copy_of_a_story_is_the_same_story() {
+        let story = |uid: &str, folder: Option<&str>, title: &str, body: &str, at: i64| Story {
+            uid: uid.into(),
+            folder: folder.map(String::from),
+            title: title.into(),
+            body: body.into(),
+            created_at: 10,
+            updated_at: at,
+            ..Default::default()
+        };
+        let folders = vec![Folder { uid: "f1".into(), name: "Beginner".into(), created_at: 1, updated_at: 1, ..Default::default() }];
+        let old = Snapshot {
+            folders: folders.clone(),
+            stories: vec![story("o1", Some("f1"), "Fable: 狼来了 – The Boy Who Cried Wolf", "从前，有一个小男孩……", 10), story("o2", None, "Song: 橄榄树", "不要问我从哪里来", 10), story("o3", Some("f1"), "Only here", "别的故事", 10)],
+            ..Default::default()
+        };
+        let new = Snapshot {
+            folders,
+            stories: vec![story("n1", Some("f1"), "狼来了", "从前，有一个小男孩……", 50), story("n2", None, "橄榄树", "不要问我从哪里来", 50), story("n9", Some("f1"), "橄榄树", "不要问我从哪里来", 50)],
+            ..Default::default()
+        };
+        let m = both_ways(&old, &new);
+        let titles: Vec<&str> = m.stories.iter().map(|s| s.title.as_str()).collect();
+        assert_eq!(m.stories.len(), 4, "{titles:?}");
+        assert!(titles.contains(&"狼来了") && !titles.iter().any(|t| t.starts_with("Fable")), "{titles:?}");
+        assert_eq!(titles.iter().filter(|t| **t == "橄榄树").count(), 2, "the same text in two collections stays two stories");
+        assert!(titles.contains(&"Only here"));
+        // a device that already took both sets in (each story twice) is put right by its next sync
+        let both = Snapshot { folders: old.folders.clone(), stories: old.stories.iter().chain(&new.stories).cloned().collect(), ..Default::default() };
+        assert_eq!(tidy(&both).stories.len(), 4);
+        assert_eq!(both_ways(&both, &m).stories, m.stories);
+        // deleting the copy with the old title by hand doesn't take the other with it
+        let mut by_hand = both.clone();
+        by_hand.stories.retain(|s| s.uid != "o1");
+        by_hand.deleted = vec![tomb("story", "o1", 99)];
+        let m2 = both_ways(&by_hand, &both);
+        assert!(m2.stories.iter().any(|s| s.title == "狼来了"), "the retitled story is still there");
+        assert!(!m2.stories.iter().any(|s| s.title.starts_with("Fable")));
+    }
+
     #[test]
     fn two_decks_moved_into_each_other_dont_make_a_loop() {
         let mut a = Snapshot { decks: vec![deck("d1", None, "One", 10), deck("d2", None, "Two", 10)], ..Default::default() };
@@ -599,7 +693,7 @@ mod tests {
             uid: uid.into(),
             folder: folder.map(String::from),
             title: title.into(),
-            body: "从前……".into(),
+            body: format!("从前……{title}"),
             created_at: at,
             updated_at: at,
             ..Default::default()

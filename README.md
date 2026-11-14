@@ -14,7 +14,8 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
 <sub>Screenshots use sample data.</sub>
 
 - **Cards** with characters, pinyin, English meaning, notes and tags, organised into **nested decks**
-  (e.g. Class › Class 9; a deck includes its subdecks when listing, studying and exporting)
+  (e.g. Class › Class 9; a deck includes its subdecks when listing, studying and exporting; one button
+  collapses or expands them all)
 - **Duplicates**: the same word can be in several decks but is studied once, with progress shared
   between the copies (a copy added later takes it up too), and counted once in the due and new counts; the editor warns about duplicates, and imports skip same-deck duplicates and
   ask before adding words that are already in other decks. In the card list a word that several decks
@@ -44,7 +45,7 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
 - **Dictionary**: CC-CEDICT (~120k entries), searchable by characters, pinyin (with or without tones) or English; one click adds a word as a card. The card editor auto-fills pinyin and meaning from it
 - **Voices**: words, stories and the tutor are read aloud by the system's Chinese voice. Where there
   is none (most Linux installs), or if you prefer it, Settings › Audio downloads a built-in voice
-  (Kokoro, 147 MB, Chinese and English) that runs on the computer itself. With no voice at all, the
+  (Kokoro, 147 MB, Chinese and English) that runs on the computer itself, with its own volume setting. With no voice at all, the
   speaker buttons are switched off and say why. The options that were weighed are in
   [docs/tts-options.md](docs/tts-options.md)
 - **Statistics** for all decks or one, over the last week, month, quarter, year or all time. The
@@ -53,7 +54,8 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   time, card progress, an activity heatmap and a 30-day forecast. The advanced view adds progress by
   HSK level and by deck, true retention for young and mature words, how you answered, when you study
   (by hour and weekday), time by study direction, how long memories last and how hard words are, and
-  the words you forget most. Time with a story open or in a tutor conversation is counted with flashcard time (only while the
+  the words you forget most. Settings › Your data can start the statistics over (after a backup;
+  cards and their due dates stay). Time with a story open or in a tutor conversation is counted with flashcard time (only while the
   window is in front and in use)
 - **Tone colours** for characters and pinyin
 - **Pleco flashcards** (`.xml`): import categories as (nested) decks (re-importing an updated file skips cards you

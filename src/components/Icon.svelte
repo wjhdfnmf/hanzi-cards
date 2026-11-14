@@ -28,6 +28,8 @@
     "chevrons-left": "M11 17l-5-5 5-5 M18 17l-5-5 5-5",
     "chevrons-right": "M13 17l5-5-5-5 M6 17l5-5-5-5",
     sync: "M20 11a8 8 0 0 0-14.6-4.2L4 8 M4 3.5V8h4.5 M4 13a8 8 0 0 0 14.6 4.2L20 16 M20 20.5V16h-4.5",
+    "collapse-all": "M7 4l5 5 5-5 M7 20l5-5 5 5",
+    "expand-all": "M7 9l5-5 5 5 M7 15l5 5 5-5",
     folder: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z",
   };
 </script>

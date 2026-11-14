@@ -33,6 +33,12 @@ export function voicesReady(): Promise<SpeechSynthesisVoice[]> {
 
 // ---------- the webview's speech (default output) ----------
 
+/** How loud to speak (Settings › Audio), for the system's voices and for sound files alike. */
+function volume(): number {
+  const v = Number(settings.speechVolume);
+  return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
+}
+
 function webSpeak(text: string, rate: number, interrupt: boolean) {
   const s = synth();
   if (!s || !text.trim()) return;
@@ -40,6 +46,7 @@ function webSpeak(text: string, rate: number, interrupt: boolean) {
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "zh-CN";
   u.rate = rate;
+  u.volume = volume();
   const voices = chineseVoices();
   const voice = voices.find((v) => v.name === settings.voice) ?? voices[0];
   if (voice) u.voice = voice;
@@ -115,6 +122,7 @@ async function play() {
         if (mine !== generation) break;
         const url = URL.createObjectURL(new Blob([wav], { type: "audio/wav" }));
         const audio = new Audio(url);
+        audio.volume = volume();
         current = audio;
         if (device) await (audio as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(device);
         await new Promise<void>((done) => {
@@ -173,6 +181,7 @@ export async function playClip(blob: Blob): Promise<void> {
   stopClip();
   const url = URL.createObjectURL(blob);
   const audio = new Audio(url);
+  audio.volume = volume();
   clip = audio;
   try {
     if (settings.audioOutput) {
@@ -244,6 +253,7 @@ export function readAloud(
       const u = new SpeechSynthesisUtterance(parts[i]);
       u.lang = "zh-CN";
       u.rate = rate;
+      u.volume = volume();
       const voices = chineseVoices();
       const voice = voices.find((v) => v.name === settings.voice) ?? voices[0];
       if (voice) u.voice = voice;
@@ -260,6 +270,7 @@ export function readAloud(
     if (!alive()) return;
     const url = URL.createObjectURL(new Blob([wav], { type: "audio/wav" }));
     const audio = new Audio(url);
+    audio.volume = volume();
     current = audio; // so that stopping pauses it
     try {
       if (device) await (audio as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(device);
