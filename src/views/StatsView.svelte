@@ -895,5 +895,14 @@
     .figs {
       grid-template-columns: repeat(2, 1fr);
     }
+    /* tables: tighter, and a wide one scrolls sideways inside its panel rather than spilling */
+    .panel {
+      overflow-x: auto;
+    }
+    th,
+    td {
+      padding: 6px 6px;
+      font-size: 13px;
+    }
   }
 </style>

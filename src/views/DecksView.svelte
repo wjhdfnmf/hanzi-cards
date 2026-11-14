@@ -1244,6 +1244,17 @@
   .twisty.open {
     transform: rotate(90deg);
   }
+  /* a phone: a bigger arrow, and a bigger place to tap it */
+  .phone .twisty,
+  .phone .twisty-space {
+    flex-basis: 30px;
+    width: 30px;
+  }
+  .phone .twisty {
+    font-size: 18px;
+    color: var(--text-2);
+    align-self: stretch;
+  }
   .crumbs {
     margin: 0 0 2px;
   }

@@ -153,7 +153,8 @@
   }
 
   // ---------- on a phone: the side bar comes only when it's asked for ----------
-  // Pulling a page down past its top shows it; scrolling down or tapping anything on the page
+  // Pulling a page down past its top twice in a row shows it (once is only the usual bounce,
+  // and reaching the top shouldn't bring it); scrolling down or tapping anything on the page
   // hides it again. (Pages that want the whole screen call hideRail.)
   const lastTop = new WeakMap<EventTarget, number>();
   // For a moment after the bar comes or goes, scrolling doesn't move it: the page reflows to
@@ -170,8 +171,7 @@
     lastTop.set(e.target, top);
     if (performance.now() < settleUntil) return;
     if (device.level !== null) return; // (a list keeps the bar; an item inside one never has it)
-    if (top < -40) showRail(); // (iOS lets a page be pulled past its top)
-    else if (top > before + 10 && top > 40) device.railOpen = false;
+    if (top > before + 10 && top > 40) device.railOpen = false;
   }
   /** The scrolling pane a touch is in. */
   function paneOf(el: EventTarget | null): HTMLElement | null {
@@ -181,9 +181,9 @@
     }
     return null;
   }
-  // A page that doesn't scroll (or is already at its top) can't be pulled past it the usual
-  // way, so a downward drag that starts at the top counts too.
+  // A pull: a downward drag that starts with the page at its top. Two within a moment show the bar.
   let pullFrom: { x: number; y: number } | null = null;
+  let lastPull = 0;
   function touchStart(e: TouchEvent) {
     const p = e.touches[0];
     const pane = paneOf(e.target);
@@ -193,7 +193,11 @@
     if (!pullFrom) return;
     const p = e.touches[0];
     if (p.clientY - pullFrom.y > 70 && Math.abs(p.clientX - pullFrom.x) < 50) {
-      showRail();
+      const now = performance.now();
+      if (now - lastPull < 2000) {
+        showRail();
+        lastPull = 0;
+      } else lastPull = now;
       pullFrom = null;
     }
   }
@@ -562,18 +566,18 @@
   }
 
   /* ---------- a phone: the icon bar alone, sliding away when the page wants the room ---------- */
-  /* (everything starts below the status bar, so nothing scrolls up behind the clock) */
   .shell.phone {
     grid-template-columns: calc(60px + env(safe-area-inset-left)) minmax(0, 1fr);
     height: 100dvh;
-    padding-top: env(safe-area-inset-top);
     position: relative;
   }
   .shell.phone.railhidden {
     grid-template-columns: 0px minmax(0, 1fr);
   }
   .phone .sidebar {
-    padding: 10px 8px calc(env(safe-area-inset-bottom) + 10px) calc(env(safe-area-inset-left) + 8px);
+    /* (the bar's colour and edge run up behind the status bar; its icons start below it) */
+    padding: calc(env(safe-area-inset-top) + 10px) 8px calc(env(safe-area-inset-bottom) + 10px)
+      calc(env(safe-area-inset-left) + 8px);
     gap: 16px;
   }
   .phone.railhidden .sidebar {
@@ -589,7 +593,9 @@
   .phone .links {
     gap: 4px;
   }
+  /* (pages start below the status bar, so nothing scrolls up behind the clock) */
   .phone main {
+    margin-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
     padding-right: env(safe-area-inset-right);
   }

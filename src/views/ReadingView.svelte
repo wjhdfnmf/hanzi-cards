@@ -183,15 +183,36 @@
     return null;
   }
   // Pressing the button can clear the selection before the click arrives, so it is read as
-  // the press begins.
+  // the press begins. On an iPhone even that is too late: the tap clears it first. So the last
+  // selection in the story is kept for a moment after it goes, and put back when reading starts
+  // from it (it stays marked while it's read).
   let pressedAt: number | null = null;
+  let kept: { at: number; range: Range; gone: number } | null = null;
+  function selectionChanged() {
+    const at = selectionStart();
+    const sel = window.getSelection();
+    if (at !== null && sel?.rangeCount) kept = { at, range: sel.getRangeAt(0).cloneRange(), gone: 0 };
+    else if (kept && !kept.gone) kept.gone = performance.now();
+  }
+  /** Where to start: the selection, or one that a tap on the button has only just cleared. */
+  function startPoint(): number | null {
+    const now = selectionStart();
+    if (now !== null) return now;
+    if (kept && (!kept.gone || performance.now() - kept.gone < 800)) {
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(kept.range);
+      return kept.at;
+    }
+    return null;
+  }
   function play() {
     if (!segments) return;
     const segs = segments;
     let parts = sentences(segs);
     if (!parts.length) return;
     // with text selected, reading begins where the selection does (mid-sentence if need be)
-    const from = pressedAt ?? selectionStart();
+    const from = pressedAt ?? startPoint();
     pressedAt = null;
     if (from !== null) {
       const p = parts.findIndex((x) => x.to >= from);
@@ -539,7 +560,7 @@
       .filter((p) => p[0]?.trim())
       .map(([word, py = "", ...meaning]) => ({ word: word.trim(), pinyin: py.trim(), meaning: meaning.join(" – ").trim() })),
   );
-  let showVocab = $state(true);
+  let showVocab = $state(false); // (opened when wanted)
 
   async function importFiles() {
     importMenu = false;
@@ -570,16 +591,18 @@
       aria-pressed={story.bookmarked}
       onclick={toggleBookmark}><span aria-hidden="true">{story.bookmarked ? "★" : "☆"}</span></button
     >
+    {#if !device.phone}
     <button
       class="btn"
       class:primary={!playing}
       disabled={!segments || !voice.available}
-      onpointerdown={() => (pressedAt = playing ? null : selectionStart())}
+      onpointerdown={() => (pressedAt = playing ? null : startPoint())}
       title={voice.available ? t("reading.playHint") : t("speech.noVoice")}
       onclick={() => (playing ? stopReading() : play())}
     >
       <Icon name={playing ? "close" : "speaker"} size={15} />{playing ? t("reading.stop") : t("reading.play")}
     </button>
+    {/if}
     {#if !device.phone}
       <button class="btn ghost" onclick={() => setFull(!full)} title={t("reading.fullScreenHint")}>
         {full ? t("reading.exitFull") : t("reading.fullScreen")}
@@ -732,6 +755,19 @@
             </ul>
           {/if}
         </section>
+      {/if}
+      {#if device.phone}
+        <!-- a phone: reading aloud from a round button at the bottom corner, in reach of a thumb -->
+        <button
+          class="readfab"
+          class:on={!!playing}
+          disabled={!segments || !voice.available}
+          aria-label={playing ? t("reading.stop") : t("reading.play")}
+          onpointerdown={() => (pressedAt = playing ? null : startPoint())}
+          onclick={() => (playing ? stopReading() : play())}
+        >
+          <Icon name={playing ? "close" : "speaker"} size={24} />
+        </button>
       {/if}
       <!-- svelte-ignore a11y_mouse_events_have_key_events -->
       <article
@@ -893,6 +929,7 @@
   <CardEditor card={null} {decks} deckId={null} prefill={adding} onclose={() => (adding = null)} onsaved={cardAdded} />
 {/if}
 
+<svelte:document onselectionchange={selectionChanged} onscrollcapture={() => (hover = null)} />
 <svelte:window
   onkeydown={(e) => {
     if (e.key === "Escape" && full && !adding && !storyForm) setFull(false);
@@ -1007,12 +1044,84 @@
   .phone .tools .lbl {
     display: none;
   }
-  /* the text settings: only beside a story, and without their labels */
-  .phone:not(:has(.story-head)) .textbar,
-  .phone .textbar .tb-field > .small,
-  .phone .textbar .sample,
-  .phone .textbar .num {
+  /* the font and size: Settings › Reading on a phone */
+  .phone .textbar {
     display: none;
+  }
+  /* a story: the way back, and its few buttons on the same line */
+  .phone .main {
+    --pad: 12px;
+    padding-top: 10px;
+  }
+  .phone .story-head {
+    flex-wrap: nowrap;
+    max-width: none;
+    margin-bottom: 8px;
+  }
+  .phone .story-head .title {
+    flex: 1;
+    min-width: 0;
+  }
+  .phone .story-head .back {
+    margin: 0 0 0 -8px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+  }
+  .phone .story-head .tools {
+    flex-wrap: nowrap;
+    gap: 2px;
+  }
+  /* the text as wide as the screen */
+  .phone .text {
+    max-width: none;
+    padding: 18px 16px 90px;
+  }
+  .phone .vocab,
+  .phone .banner {
+    max-width: none;
+  }
+  /* key words: the word and its pinyin, the meaning under them */
+  .phone .vocab-list {
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 2px 12px;
+  }
+  .phone .vocab-head {
+    padding: 4px 0;
+  }
+  .phone .vocab-head .twisty {
+    width: 16px;
+    font-size: 16px;
+  }
+  .phone .vm {
+    grid-column: 1 / -1;
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+  .readfab {
+    position: fixed;
+    right: calc(env(safe-area-inset-right) + 18px);
+    bottom: calc(env(safe-area-inset-bottom) + 18px);
+    z-index: 30;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    display: grid;
+    place-items: center;
+    background: var(--accent);
+    color: var(--accent-text);
+    box-shadow: var(--shadow-lg);
+  }
+  .readfab.on {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .readfab:disabled {
+    opacity: 0.45;
   }
   .side-handle {
     position: absolute;
@@ -1210,6 +1319,9 @@
     display: flex;
     align-items: baseline;
     gap: 8px;
+    width: 100%;
+    text-align: left;
+    white-space: nowrap;
     border: none;
     background: none;
     padding: 0;

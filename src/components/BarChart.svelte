@@ -46,7 +46,9 @@
   const barW = $derived(Math.max(2, Math.min(28, step - 2)));
   // Every label when there are few bars, about 8 otherwise; the last bar is always named, and
   // a label that would run into it is left out.
-  const labelEvery = $derived(totals.length <= 12 ? 1 : Math.ceil(totals.length / 8));
+  // (and no more than fit side by side: a phone has room for fewer)
+  const fits = $derived(Math.max(2, Math.floor(plotW / 48)));
+  const labelEvery = $derived(totals.length <= Math.min(12, fits) ? 1 : Math.ceil(totals.length / Math.min(8, fits)));
   const labelled = (i: number) => {
     const last = totals.length - 1;
     return i === last || (i % labelEvery === 0 && last - i >= labelEvery / 2);
