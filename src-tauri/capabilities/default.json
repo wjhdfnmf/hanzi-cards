@@ -3,5 +3,6 @@
   "identifier": "default",
   "description": "Permissions for the main window",
   "windows": ["main"],
+  "platforms": ["linux", "macOS", "windows"],
   "permissions": ["core:default", "dialog:default", "core:window:allow-set-fullscreen", "core:window:allow-is-fullscreen"]
 }
