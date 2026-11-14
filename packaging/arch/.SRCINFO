@@ -1,6 +1,6 @@
 pkgbase = hanzi-cards-bin
 	pkgdesc = Mandarin Chinese flash cards with spaced repetition and a built-in dictionary
-	pkgver = 0.3.1
+	pkgver = 0.3.2
 	pkgrel = 1
 	url = https://github.com/wjhdfnmf/hanzi-cards
 	arch = x86_64
@@ -25,7 +25,7 @@ pkgbase = hanzi-cards-bin
 	conflicts = hanzi-cards
 	options = !strip
 	options = !debug
-	source = hanzi-cards-0.3.1.deb::https://github.com/wjhdfnmf/hanzi-cards/releases/download/v0.3.1/Hanzi.Cards_0.3.1_amd64.deb
-	sha256sums = 21e99f8120f5d0ade9c5e96ff2ed28283aafbe80ec580c1359830393866f1dd5
+	source = hanzi-cards-0.3.2.deb::https://github.com/wjhdfnmf/hanzi-cards/releases/download/v0.3.2/Hanzi.Cards_0.3.2_amd64.deb
+	sha256sums = 9acca3695a648757c21fbb21a24697e87ff33e5156dc6de162e39d3d56ca1fa1
 
 pkgname = hanzi-cards-bin
