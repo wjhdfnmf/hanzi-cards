@@ -11,6 +11,10 @@ mod error;
 mod fonts;
 mod gpu;
 mod hsk;
+#[cfg(desktop)]
+mod kokoro;
+#[cfg(mobile)]
+#[path = "kokoro_mobile.rs"]
 mod kokoro;
 mod input;
 mod models;
@@ -93,15 +97,17 @@ fn allow_microphone(app: &tauri::App) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        // First, so a second copy stops before it opens anything: starting the app again
-        // brings the running window forward instead.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
-        }))
+    let builder = tauri::Builder::default();
+    // First, so a second copy stops before it opens anything: starting the app again
+    // brings the running window forward instead. (A phone only ever runs one copy.)
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+    }));
+    builder
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;

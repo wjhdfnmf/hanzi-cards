@@ -1,7 +1,8 @@
 node_modules/
 dist/
 src-tauri/target/
-src-tauri/gen/
+# (gen/apple, the Xcode project `tauri ios init` makes, is kept)
+src-tauri/gen/schemas/
 *.log
 .DS_Store
 

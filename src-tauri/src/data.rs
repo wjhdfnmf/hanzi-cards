@@ -753,11 +753,17 @@ pub fn start_fresh(conn: &mut Connection, app_data: &Path, kind: Kind) -> AppRes
 
 /// Open a folder (the app-data folder) in the system's file manager.
 pub fn open_folder(dir: &Path) -> AppResult<()> {
+    // a phone has no file manager to open a folder in
+    #[cfg(mobile)]
+    let r: std::io::Result<()> = {
+        let _ = dir;
+        Err(std::io::Error::other("This device can't open the app's folder."))
+    };
     #[cfg(target_os = "windows")]
     let r = std::process::Command::new("explorer").arg(dir).spawn();
     #[cfg(target_os = "macos")]
     let r = std::process::Command::new("open").arg(dir).spawn();
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(all(desktop, unix, not(target_os = "macos")))]
     let r = std::process::Command::new("xdg-open").arg(dir).spawn();
     r.map(|_| ()).map_err(|e| AppError::msg(e.to_string()))
 }

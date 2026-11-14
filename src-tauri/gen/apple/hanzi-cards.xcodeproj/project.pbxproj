@@ -1,0 +1,526 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0918F8A362E13B2A0AFD61FC /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 40481AF3309DFCADC0CA5629 /* WebKit.framework */; };
+		133F2242591EBE7C5F9A23C9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B8DD72116385D9B05EB246F6 /* Assets.xcassets */; };
+		265184640C5435AAF555A23B /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = D0811C7369A3A28DDC5D3EBD /* main.mm */; };
+		38081DBBB8DDD8D1EC09252E /* assets in Resources */ = {isa = PBXBuildFile; fileRef = EE2716AAD06118E81F23B160 /* assets */; };
+		4370B1E0B0E8EA9568E2862B /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A7C75DC7F3D04452C422BD1 /* Security.framework */; };
+		4AEF429F8746B42CA98A5A99 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 609F3D4804AEAF651BB8EEE1 /* Metal.framework */; };
+		70760DEF8C8AF5CA1DE8322B /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BD54B4A1784D91766CA07476 /* LaunchScreen.storyboard */; };
+		8B345B2D237221224D0A82C5 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0936D65F2A32F21790ABD1A8 /* QuartzCore.framework */; };
+		9A3B768E1839A60C97C7732E /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9AE2DD3D8C79476F248C48AE /* MetalKit.framework */; };
+		AFFE19703DA32F738132CF2F /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2DA5DA5B771A0B5ACEBD0F50 /* UIKit.framework */; };
+		B0A02568713DD31B31B925AB /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 842B5DEA7B944C74AE324D84 /* CoreGraphics.framework */; };
+		E9A5EFE6A1D720810C14E589 /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5AD76696B54F4D6D7CF6DC7E /* libapp.a */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		055582D51374495C5E919394 /* models.rs */ = {isa = PBXFileReference; path = models.rs; sourceTree = "<group>"; };
+		0936D65F2A32F21790ABD1A8 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		0970A73AD4D9829F322BABAB /* commands.rs */ = {isa = PBXFileReference; path = commands.rs; sourceTree = "<group>"; };
+		1BA4004D0996B124EAEAC48B /* tutor.rs */ = {isa = PBXFileReference; path = tutor.rs; sourceTree = "<group>"; };
+		22764C0F073C1FE13F2FDFEB /* sync.rs */ = {isa = PBXFileReference; path = sync.rs; sourceTree = "<group>"; };
+		2DA5DA5B771A0B5ACEBD0F50 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		35C00A99CCA4CF758F5B95A8 /* kokoro_mobile.rs */ = {isa = PBXFileReference; path = kokoro_mobile.rs; sourceTree = "<group>"; };
+		39573E344FA105A490741C8B /* data.rs */ = {isa = PBXFileReference; path = data.rs; sourceTree = "<group>"; };
+		40481AF3309DFCADC0CA5629 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		468318882DB856CA226DF860 /* whisper_net.rs */ = {isa = PBXFileReference; path = whisper_net.rs; sourceTree = "<group>"; };
+		4993EA10159C6E83DFD5C7B7 /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
+		4F1B5E967894FE51C7B1866F /* speech.rs */ = {isa = PBXFileReference; path = speech.rs; sourceTree = "<group>"; };
+		4F920C4DAF12C63BD15B8AA4 /* billing.rs */ = {isa = PBXFileReference; path = billing.rs; sourceTree = "<group>"; };
+		56195B8CC699F0FAD5306852 /* stories.rs */ = {isa = PBXFileReference; path = stories.rs; sourceTree = "<group>"; };
+		58331A40A0AFBDFD1CCD34E4 /* pleco.rs */ = {isa = PBXFileReference; path = pleco.rs; sourceTree = "<group>"; };
+		590902C0A0E5E6D5B4A335B7 /* error.rs */ = {isa = PBXFileReference; path = error.rs; sourceTree = "<group>"; };
+		5AD76696B54F4D6D7CF6DC7E /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
+		5B78199B4091B9EC1050FFA1 /* tones.rs */ = {isa = PBXFileReference; path = tones.rs; sourceTree = "<group>"; };
+		609F3D4804AEAF651BB8EEE1 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		619A6B19437E4028156F5F8E /* ai.rs */ = {isa = PBXFileReference; path = ai.rs; sourceTree = "<group>"; };
+		61F1AC81E47AC1F390DCF133 /* input.rs */ = {isa = PBXFileReference; path = input.rs; sourceTree = "<group>"; };
+		7223DE49F714DBE1B2A454E8 /* hanzi-cards_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "hanzi-cards_iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		788429D42706CB1BFF796E40 /* scheduler.rs */ = {isa = PBXFileReference; path = scheduler.rs; sourceTree = "<group>"; };
+		7A7C75DC7F3D04452C422BD1 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		7B8C8DA1BE032DCBE93D6725 /* hsk.rs */ = {isa = PBXFileReference; path = hsk.rs; sourceTree = "<group>"; };
+		842B5DEA7B944C74AE324D84 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		862DF94FF1ED5C828577ACC5 /* fonts.rs */ = {isa = PBXFileReference; path = fonts.rs; sourceTree = "<group>"; };
+		8DDBBA0FBD5B4135D9F32817 /* whisper.rs */ = {isa = PBXFileReference; path = whisper.rs; sourceTree = "<group>"; };
+		8EAB33833E350A379BE9D2E5 /* decks.rs */ = {isa = PBXFileReference; path = decks.rs; sourceTree = "<group>"; };
+		959EC88E5CE8C99F3A2FD98D /* kokoro.rs */ = {isa = PBXFileReference; path = kokoro.rs; sourceTree = "<group>"; };
+		998C12645A56CA6170E7FC8E /* tts.rs */ = {isa = PBXFileReference; path = tts.rs; sourceTree = "<group>"; };
+		9AE2DD3D8C79476F248C48AE /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		A3A3BC9B5B96294EF8D6E5AF /* stats.rs */ = {isa = PBXFileReference; path = stats.rs; sourceTree = "<group>"; };
+		ABD26D10FF6AAEF4EC4B4B98 /* sync_data.rs */ = {isa = PBXFileReference; path = sync_data.rs; sourceTree = "<group>"; };
+		B8DD72116385D9B05EB246F6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BA2FC50A3F27E8C1879D4648 /* tone_check.rs */ = {isa = PBXFileReference; path = tone_check.rs; sourceTree = "<group>"; };
+		BD54B4A1784D91766CA07476 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		BD7B930F022A83DFFCD2CF82 /* hanzi-cards_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "hanzi-cards_iOS.entitlements"; sourceTree = "<group>"; };
+		C0AB2E7390E6434729EAA134 /* dictionary.rs */ = {isa = PBXFileReference; path = dictionary.rs; sourceTree = "<group>"; };
+		C269AF35EC4E8F8ECC4845A0 /* study.rs */ = {isa = PBXFileReference; path = study.rs; sourceTree = "<group>"; };
+		CFFBD3237CDBCC5A66068F58 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D0811C7369A3A28DDC5D3EBD /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
+		D162572313409D28EE54C17E /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
+		D25125E01790F3AD9C3B35A2 /* gpu.rs */ = {isa = PBXFileReference; path = gpu.rs; sourceTree = "<group>"; };
+		D2E516D1E412B1A7BBB36DCF /* db.rs */ = {isa = PBXFileReference; path = db.rs; sourceTree = "<group>"; };
+		D5A65E50ED066A5C40C8E8B4 /* pinyin.rs */ = {isa = PBXFileReference; path = pinyin.rs; sourceTree = "<group>"; };
+		EE241E5AB35DB740C4EB6BEB /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
+		EE2716AAD06118E81F23B160 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
+		F449AA43BCA19CC09BAF8007 /* net.rs */ = {isa = PBXFileReference; path = net.rs; sourceTree = "<group>"; };
+		FA658E025F4B6B9919C70D0D /* cards.rs */ = {isa = PBXFileReference; path = cards.rs; sourceTree = "<group>"; };
+		FC00EB81CB279115AC0A0030 /* calibration.rs */ = {isa = PBXFileReference; path = calibration.rs; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1CFD1EA0C528C975989F62D7 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9A5EFE6A1D720810C14E589 /* libapp.a in Frameworks */,
+				B0A02568713DD31B31B925AB /* CoreGraphics.framework in Frameworks */,
+				4AEF429F8746B42CA98A5A99 /* Metal.framework in Frameworks */,
+				9A3B768E1839A60C97C7732E /* MetalKit.framework in Frameworks */,
+				8B345B2D237221224D0A82C5 /* QuartzCore.framework in Frameworks */,
+				4370B1E0B0E8EA9568E2862B /* Security.framework in Frameworks */,
+				AFFE19703DA32F738132CF2F /* UIKit.framework in Frameworks */,
+				0918F8A362E13B2A0AFD61FC /* WebKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0E9453DF81FD220B974BA2BA /* bindings */ = {
+			isa = PBXGroup;
+			children = (
+				4993EA10159C6E83DFD5C7B7 /* bindings.h */,
+			);
+			path = bindings;
+			sourceTree = "<group>";
+		};
+		13D438E0FAF91B9DDDC2F16C /* src */ = {
+			isa = PBXGroup;
+			children = (
+				619A6B19437E4028156F5F8E /* ai.rs */,
+				4F920C4DAF12C63BD15B8AA4 /* billing.rs */,
+				FC00EB81CB279115AC0A0030 /* calibration.rs */,
+				FA658E025F4B6B9919C70D0D /* cards.rs */,
+				0970A73AD4D9829F322BABAB /* commands.rs */,
+				39573E344FA105A490741C8B /* data.rs */,
+				D2E516D1E412B1A7BBB36DCF /* db.rs */,
+				8EAB33833E350A379BE9D2E5 /* decks.rs */,
+				C0AB2E7390E6434729EAA134 /* dictionary.rs */,
+				590902C0A0E5E6D5B4A335B7 /* error.rs */,
+				862DF94FF1ED5C828577ACC5 /* fonts.rs */,
+				D25125E01790F3AD9C3B35A2 /* gpu.rs */,
+				7B8C8DA1BE032DCBE93D6725 /* hsk.rs */,
+				61F1AC81E47AC1F390DCF133 /* input.rs */,
+				35C00A99CCA4CF758F5B95A8 /* kokoro_mobile.rs */,
+				959EC88E5CE8C99F3A2FD98D /* kokoro.rs */,
+				EE241E5AB35DB740C4EB6BEB /* lib.rs */,
+				D162572313409D28EE54C17E /* main.rs */,
+				055582D51374495C5E919394 /* models.rs */,
+				F449AA43BCA19CC09BAF8007 /* net.rs */,
+				D5A65E50ED066A5C40C8E8B4 /* pinyin.rs */,
+				58331A40A0AFBDFD1CCD34E4 /* pleco.rs */,
+				788429D42706CB1BFF796E40 /* scheduler.rs */,
+				4F1B5E967894FE51C7B1866F /* speech.rs */,
+				A3A3BC9B5B96294EF8D6E5AF /* stats.rs */,
+				56195B8CC699F0FAD5306852 /* stories.rs */,
+				C269AF35EC4E8F8ECC4845A0 /* study.rs */,
+				ABD26D10FF6AAEF4EC4B4B98 /* sync_data.rs */,
+				22764C0F073C1FE13F2FDFEB /* sync.rs */,
+				BA2FC50A3F27E8C1879D4648 /* tone_check.rs */,
+				5B78199B4091B9EC1050FFA1 /* tones.rs */,
+				998C12645A56CA6170E7FC8E /* tts.rs */,
+				1BA4004D0996B124EAEAC48B /* tutor.rs */,
+				468318882DB856CA226DF860 /* whisper_net.rs */,
+				8DDBBA0FBD5B4135D9F32817 /* whisper.rs */,
+			);
+			name = src;
+			path = ../../src;
+			sourceTree = "<group>";
+		};
+		24E4184607297E011DAA9D46 /* hanzi-cards */ = {
+			isa = PBXGroup;
+			children = (
+				D0811C7369A3A28DDC5D3EBD /* main.mm */,
+				0E9453DF81FD220B974BA2BA /* bindings */,
+			);
+			path = "hanzi-cards";
+			sourceTree = "<group>";
+		};
+		2C1DCB094E2B96ED9AA1AF50 = {
+			isa = PBXGroup;
+			children = (
+				EE2716AAD06118E81F23B160 /* assets */,
+				B8DD72116385D9B05EB246F6 /* Assets.xcassets */,
+				BD54B4A1784D91766CA07476 /* LaunchScreen.storyboard */,
+				3EE54E52AE60349F624EF021 /* Externals */,
+				BBBD7B20C658006CD5D04930 /* hanzi-cards_iOS */,
+				3F03403D7305E7624B699680 /* Sources */,
+				13D438E0FAF91B9DDDC2F16C /* src */,
+				875EAF4923F8F71689CB3CED /* Frameworks */,
+				AFF01325A103274FBFE03F28 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		3EE54E52AE60349F624EF021 /* Externals */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Externals;
+			sourceTree = "<group>";
+		};
+		3F03403D7305E7624B699680 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				24E4184607297E011DAA9D46 /* hanzi-cards */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		875EAF4923F8F71689CB3CED /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				842B5DEA7B944C74AE324D84 /* CoreGraphics.framework */,
+				5AD76696B54F4D6D7CF6DC7E /* libapp.a */,
+				609F3D4804AEAF651BB8EEE1 /* Metal.framework */,
+				9AE2DD3D8C79476F248C48AE /* MetalKit.framework */,
+				0936D65F2A32F21790ABD1A8 /* QuartzCore.framework */,
+				7A7C75DC7F3D04452C422BD1 /* Security.framework */,
+				2DA5DA5B771A0B5ACEBD0F50 /* UIKit.framework */,
+				40481AF3309DFCADC0CA5629 /* WebKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		AFF01325A103274FBFE03F28 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				7223DE49F714DBE1B2A454E8 /* hanzi-cards_iOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BBBD7B20C658006CD5D04930 /* hanzi-cards_iOS */ = {
+			isa = PBXGroup;
+			children = (
+				BD7B930F022A83DFFCD2CF82 /* hanzi-cards_iOS.entitlements */,
+				CFFBD3237CDBCC5A66068F58 /* Info.plist */,
+			);
+			path = "hanzi-cards_iOS";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		9FA9DF5E4892C00AC591003D /* hanzi-cards_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A84D5B7601F3231146CE9EF /* Build configuration list for PBXNativeTarget "hanzi-cards_iOS" */;
+			buildPhases = (
+				9D402CF49989601145D9394D /* Build Rust Code */,
+				2E9548842186841CCCBDA23D /* Sources */,
+				9397E4227F16690DDE4884C6 /* Resources */,
+				1CFD1EA0C528C975989F62D7 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "hanzi-cards_iOS";
+			packageProductDependencies = (
+			);
+			productName = "hanzi-cards_iOS";
+			productReference = 7223DE49F714DBE1B2A454E8 /* hanzi-cards_iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		7FC301619518317D3B134341 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = F635D2B031F684BA793ABE23 /* Build configuration list for PBXProject "hanzi-cards" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 2C1DCB094E2B96ED9AA1AF50;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = AFF01325A103274FBFE03F28 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				9FA9DF5E4892C00AC591003D /* hanzi-cards_iOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		9397E4227F16690DDE4884C6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				133F2242591EBE7C5F9A23C9 /* Assets.xcassets in Resources */,
+				70760DEF8C8AF5CA1DE8322B /* LaunchScreen.storyboard in Resources */,
+				38081DBBB8DDD8D1EC09252E /* assets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		9D402CF49989601145D9394D /* Build Rust Code */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust Code";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a",
+				"$(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "npm run -- tauri ios xcode-script -v --platform \"${PLATFORM_DISPLAY_NAME:?}\" --sdk-root \"${SDKROOT:?}\" --framework-search-paths \"${FRAMEWORK_SEARCH_PATHS:?}\" --header-search-paths \"${HEADER_SEARCH_PATHS:?}\" --gcc-preprocessor-definitions \"${GCC_PREPROCESSOR_DEFINITIONS:-}\" --configuration \"${CONFIGURATION:?}\" ${FORCE_COLOR} ${ARCHS:?}\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2E9548842186841CCCBDA23D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				265184640C5435AAF555A23B /* main.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1A607B21D8540C1200BDA6C8 /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = (
+					arm64,
+				);
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "hanzi-cards_iOS/hanzi-cards_iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = "hanzi-cards_iOS/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.hanzicards.app;
+				PRODUCT_NAME = "Hanzi Cards";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = debug;
+		};
+		56C84D3928B25492EC4140FE /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = release;
+		};
+		B929517143073C1FE24318A4 /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = debug;
+		};
+		E62D84655E339E703053781C /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = (
+					arm64,
+				);
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "hanzi-cards_iOS/hanzi-cards_iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = "hanzi-cards_iOS/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.hanzicards.app;
+				PRODUCT_NAME = "Hanzi Cards";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1A84D5B7601F3231146CE9EF /* Build configuration list for PBXNativeTarget "hanzi-cards_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A607B21D8540C1200BDA6C8 /* debug */,
+				E62D84655E339E703053781C /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+		F635D2B031F684BA793ABE23 /* Build configuration list for PBXProject "hanzi-cards" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B929517143073C1FE24318A4 /* debug */,
+				56C84D3928B25492EC4140FE /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 7FC301619518317D3B134341 /* Project object */;
+}
