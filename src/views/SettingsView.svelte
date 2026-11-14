@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import { ask, open, save } from "@tauri-apps/plugin-dialog";
   import { getVersion } from "@tauri-apps/api/app";
@@ -574,7 +574,8 @@
   function chooseSection(k: Section) {
     section = k;
     sectionOpen = true;
-    mainEl?.scrollTo({ top: 0 });
+    // (after it's shown: on a phone the pane was hidden, and kept the last section's place)
+    tick().then(() => mainEl?.scrollTo({ top: 0 }));
     try {
       localStorage.setItem(SECTION_KEY, k);
     } catch {
@@ -657,9 +658,10 @@
     <button class="sec door" tabindex="-1" aria-hidden="true" onclick={() => (sync.consoleOpen = true)}>&nbsp;</button>
   </nav>
   <div class="secmain" bind:this={mainEl}>
+  <!-- a phone: the way back stays at the top while the section scrolls under it -->
+  {#if layout.phone}<div class="backbar"><Back label={t("settings.title")} onclick={() => (sectionOpen = false)} /></div>{/if}
   <div class="page narrow">
   <div class="page-head">
-    {#if layout.phone}<Back label={t("settings.title")} onclick={() => (sectionOpen = false)} />{/if}
     <h1>{t(SECTIONS.find((x) => x.key === section)?.label ?? "settings.title")}</h1>
   </div>
 
@@ -744,7 +746,7 @@
       <span>{t("settings.readingFont")}</span>
       <FontSelect />
     </label>
-    <p class="row small faint fonthint">{t("settings.readingFontHint")}</p>
+    {#if !ios}<p class="row small faint fonthint">{t("settings.readingFontHint")}</p>{/if}
     {#if fontFiles.list.length}
       {@const nDownloaded = fontFiles.list.filter((f) => f.downloaded).length}
       {@const nSystem = fontFiles.list.filter((f) => !f.downloaded && systemFonts.has(f.key)).length}
@@ -764,7 +766,7 @@
           </small>
         </button>
         {#if fontsOpen}
-        <small class="faint">{t("settings.readingDownloadsHint")}</small>
+        {#if !ios}<small class="faint">{t("settings.readingDownloadsHint")}</small>{/if}
         <div class="fontlist" id="font-downloads">
           {#each fontFiles.list as f (f.key)}
             {@const busy = fontFiles.progress[f.key] !== undefined}
@@ -935,6 +937,8 @@
     </button>
   </h2>
   {#if advOpen}
+    <!-- (a phone: the settings, without the essay on how scheduling works) -->
+    {#if !layout.phone}
     <section class="group card-surface how">
       <h3>{t("settings.adv.howTitle")}</h3>
       <ul>
@@ -946,6 +950,7 @@
         <li>{t("settings.adv.how6")}</li>
       </ul>
     </section>
+    {/if}
 
     <section class="group card-surface">
       <label class="row">
@@ -1049,6 +1054,8 @@
         onchange={(e) => saveSetting("autoplayAudio", e.currentTarget.checked)}
       />
     </label>
+    <!-- (an iPhone: its own Chinese voice, its own volume buttons, its own speaker) -->
+    {#if !ios}
     <label class="row">
       <span>{t("settings.voice")}</span>
       <select value={settings.voice} onchange={(e) => saveSetting("voice", e.currentTarget.value)} disabled={!voices.length && !voice.builtIn}>
@@ -1056,6 +1063,7 @@
         {#if voice.builtIn}<option value={BUILT_IN}>{t("settings.builtIn")}</option>{/if}
       </select>
     </label>
+    {/if}
     <!-- (an iPhone uses its own Chinese voices: no built-in voice there) -->
     {#if !ios}
     <div class="row">
@@ -1076,7 +1084,7 @@
       {/if}
     </div>
     {/if}
-    {#if canChooseOutput}
+    {#if canChooseOutput && !ios}
       <label class="row">
         <span>
           {t("settings.output")}
@@ -1113,6 +1121,7 @@
         <button class="btn" onclick={() => speak("你好，欢迎学习中文。")}>{t("settings.test")}</button>
       </div>
     </div>
+    {#if !ios}
     <div class="row">
       <span>
         {t("settings.volume")}
@@ -1135,6 +1144,7 @@
         <strong class="vol">{Math.round(settings.speechVolume * 100)}%</strong>
       </div>
     </div>
+    {/if}
     {#if voicesChecked && !voices.length}
       <div class="notice small">{t("settings.noVoice")}</div>
     {/if}
@@ -1579,6 +1589,8 @@
     </ul>
   </section>
 
+  <!-- (debug mode keeps recordings for tuning Whisper and the pitch model: neither is on an iPhone) -->
+  {#if !ios}
   <h2>{t("settings.about.troubleshooting")}</h2>
   <section class="group card-surface">
     <label class="row">
@@ -1595,6 +1607,7 @@
       />
     </label>
   </section>
+  {/if}
   <p class="small faint about-foot">{t("settings.about.thanks")}</p>
   {/if}
   </div>
@@ -1883,6 +1896,89 @@
   .phone.open .secnav,
   .phone:not(.open) .secmain {
     display: none;
+  }
+  /* a font: its name and button on one line, its sample under them */
+  .phone .fontrow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+  }
+  .phone .fontsample {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+  }
+  /* a picker under its label, the full width, rather than squeezing the label */
+  .phone .row:has(select) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  /* fewer words: the explanations under each setting go (the figures, like what a database
+     holds, stay) */
+  .phone .row > span:not(.data-current) > small.faint.block,
+  .phone .row .line > span > small.faint.block {
+    display: none;
+  }
+  .phone .spend-tiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* the list of sections: larger, like a page title, with rows like an iPhone's Settings */
+  .phone .secnav-title {
+    font-size: 24px;
+    padding: 0 12px 8px;
+  }
+  .phone .sec:not(.door) {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+  }
+  .phone .sec:not(.door)::after {
+    content: "›";
+    color: var(--text-3);
+    font-size: 20px;
+    line-height: 1;
+  }
+  /* About: the logo and motto above, the name and words below; credits one under another */
+  .phone .about-hero {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 14px 16px;
+    padding: 18px;
+  }
+  .phone .about-id {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .phone .about-motto {
+    justify-self: end;
+    writing-mode: horizontal-tb;
+    font-size: 22px;
+    padding-left: 0;
+    border-left: none;
+  }
+  .phone .credits {
+    display: flex;
+    flex-direction: column;
+  }
+  .phone .credits li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+  }
+  .phone .credit-lic {
+    margin-left: auto;
+  }
+  .phone .credits li > .faint {
+    flex-basis: 100%;
+    order: 3;
+  }
+  .backbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: 8px 16px 2px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
   }
   /* as wide as the window allows, up to a comfortable reading width */
   .narrow {

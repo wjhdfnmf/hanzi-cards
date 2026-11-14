@@ -5,6 +5,7 @@
 // itself as a WAV (tts.rs) and plays it on that device instead.
 import { api } from "./api";
 import { settings } from "./settings.svelte";
+import { ios } from "./device.svelte";
 
 let cached: SpeechSynthesisVoice[] = [];
 
@@ -35,6 +36,7 @@ export function voicesReady(): Promise<SpeechSynthesisVoice[]> {
 
 /** How loud to speak (Settings › Audio), for the system's voices and for sound files alike. */
 function volume(): number {
+  if (ios) return 1; // (an iPhone's own buttons set how loud)
   const v = Number(settings.speechVolume);
   return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
 }
@@ -47,9 +49,12 @@ function webSpeak(text: string, rate: number, interrupt: boolean) {
   u.lang = "zh-CN";
   u.rate = rate;
   u.volume = volume();
-  const voices = chineseVoices();
-  const voice = voices.find((v) => v.name === settings.voice) ?? voices[0];
-  if (voice) u.voice = voice;
+  // (an iPhone speaks with its own Chinese voice, the one chosen in its Settings)
+  if (!ios) {
+    const voices = chineseVoices();
+    const voice = voices.find((v) => v.name === settings.voice) ?? voices[0];
+    if (voice) u.voice = voice;
+  }
   s.speak(u);
 }
 

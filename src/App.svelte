@@ -202,7 +202,10 @@
           class:on={nav.view === it.view}
           title={compact ? t(it.key) : undefined}
           aria-label={compact ? t(it.key) : undefined}
-          onclick={() => goto(it.view)}
+          onclick={() => {
+            goto(it.view);
+            if (device.phone) device.railOpen = false; // (a phone: the page chosen gets the room)
+          }}
         >
           <Icon name={it.icon} size={compact ? 22 : 18} />
           {#if !compact}<span>{t(it.key)}</span>{/if}
