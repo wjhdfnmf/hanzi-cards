@@ -1074,10 +1074,23 @@
     flex-wrap: nowrap;
     gap: 2px;
   }
-  /* the text as wide as the screen */
+  /* the text as wide as the screen, on paper that runs on off the bottom of it: no bottom edge,
+     down behind the home bar, and as tall as the screen when the story is short */
+  .phone .main:has(> article.text) {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 0;
+  }
+  .phone .main:has(> article.text) > * {
+    flex-shrink: 0;
+  }
   .phone .text {
+    flex: 1 0 auto;
     max-width: none;
-    padding: 18px 16px 90px;
+    padding: 18px 16px calc(env(safe-area-inset-bottom) + 96px);
+    border-bottom: none;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
   }
   .phone .vocab,
   .phone .banner {

@@ -309,7 +309,7 @@
     </div>
   </nav>
 
-  <main onscrollcapture={scrolled} onclickcapture={tapped}>
+  <main onscrollcapture={scrolled} onclickcapture={tapped} class:flush={nav.view === "reading"}>
     {#if startupError}
       <div class="page"><div class="notice err">{startupError}</div></div>
     {:else if settings.loaded}
@@ -598,6 +598,10 @@
     margin-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
     padding-right: env(safe-area-inset-right);
+  }
+  /* (Reading runs its paper down behind the home bar itself) */
+  .phone main.flush {
+    padding-bottom: 0;
   }
   .phone.railhidden main {
     padding-left: env(safe-area-inset-left);
