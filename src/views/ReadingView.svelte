@@ -11,6 +11,8 @@
   import { settings, saveSetting } from "../lib/settings.svelte";
   import { showToast } from "../lib/toast.svelte";
   import Icon from "../components/Icon.svelte";
+  import Back from "../components/Back.svelte";
+  import { device, hideRail, showRail } from "../lib/device.svelte";
   import Modal from "../components/Modal.svelte";
   import Pinyin from "../components/Pinyin.svelte";
   import { hanziTones } from "../lib/pinyin";
@@ -26,6 +28,9 @@
   const folder = $derived(folders.find((f) => f.id === selected) ?? null);
   const indent = (f: StoryFolder) => `${"  ".repeat(f.depth)}${f.name}`;
 
+  /** On a phone: the list of collections, or a collection's stories (one at a time). */
+  let shelfOpen = $state(false);
+
   // ---------- the open story ----------
   let story = $state<Story | null>(null);
   // raw: a long story is thousands of segments, only ever replaced whole
@@ -35,6 +40,7 @@
     stopReading();
     try {
       story = await api.getStory(id);
+      hideRail(); // (a phone: the story gets the whole width)
       segments = null;
       hover = null;
       remember();
@@ -49,6 +55,8 @@
   function closeStory() {
     stopReading();
     if (full) setFull(false);
+    shelfOpen = true; // (a phone: back to the story's collection)
+    showRail();
     story = null;
     segments = null;
     hover = null;
@@ -394,6 +402,7 @@
 
   function choose(id: number | null) {
     selected = id;
+    shelfOpen = true;
     story = null;
     segments = null;
     hover = null;
@@ -570,9 +579,11 @@
     >
       <Icon name={playing ? "close" : "speaker"} size={15} />{playing ? t("reading.stop") : t("reading.play")}
     </button>
-    <button class="btn ghost" onclick={() => setFull(!full)} title={t("reading.fullScreenHint")}>
-      {full ? t("reading.exitFull") : t("reading.fullScreen")}
-    </button>
+    {#if !device.phone}
+      <button class="btn ghost" onclick={() => setFull(!full)} title={t("reading.fullScreenHint")}>
+        {full ? t("reading.exitFull") : t("reading.fullScreen")}
+      </button>
+    {/if}
     <button
       class="btn ghost icon"
       title={t("reading.editStory")}
@@ -591,7 +602,7 @@
   {/if}
 {/snippet}
 
-<div class="layout" class:full style="--side:{sideWidth}px">
+<div class="layout" class:full class:phone={device.phone} class:open={shelfOpen || !!story} style="--side:{sideWidth}px">
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="side-handle"
@@ -748,6 +759,7 @@
     {:else}
       <div class="head">
         <div class="title">
+          {#if device.phone}<Back label={t("reading.title")} onclick={() => (shelfOpen = false)} />{/if}
           {#if folder && folder.depth > 0}
             <p class="crumbs small faint">{folder.path.split(" › ").slice(0, -1).join(" › ")}</p>
           {/if}
@@ -778,8 +790,8 @@
             </button>
           {/if}
           <div class="menuwrap">
-            <button class="btn" aria-haspopup="menu" aria-expanded={importMenu} onclick={() => (importMenu = !importMenu)}>
-              <Icon name="upload" size={16} />{t("reading.import")}
+            <button class="btn" aria-haspopup="menu" aria-expanded={importMenu} aria-label={t("reading.import")} onclick={() => (importMenu = !importMenu)}>
+              <Icon name="upload" size={16} /><span class="lbl">{t("reading.import")}</span>
             </button>
             {#if importMenu}
               <div class="menu card-surface" role="menu">
@@ -788,8 +800,8 @@
               </div>
             {/if}
           </div>
-          <button class="btn" disabled={!stories.length && !folder?.totalStories} title={t("reading.exportHint")} onclick={exportCollection}>
-            <Icon name="download" size={16} />{t("reading.export")}
+          <button class="btn" disabled={!stories.length && !folder?.totalStories} title={t("reading.exportHint")} aria-label={t("reading.export")} onclick={exportCollection}>
+            <Icon name="download" size={16} /><span class="lbl">{t("reading.export")}</span>
           </button>
           <button class="btn primary" onclick={() => (storyForm = { id: null, title: "", body: "", folderId: selected })}>
             <Icon name="plus" size={16} />{t("reading.addStory")}
@@ -974,6 +986,32 @@
     grid-template-columns: var(--side) minmax(0, 1fr);
     height: 100%;
     position: relative;
+  }
+  /* a phone: the collections, or one collection's stories, or a story; one at a time */
+  .layout.phone {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .phone .side-handle,
+  .phone.open .folderlist,
+  .phone:not(.open) .main {
+    display: none;
+  }
+  .phone .folderlist {
+    border-right: none;
+    padding: 14px 12px;
+  }
+  .phone .folder.on {
+    background: transparent;
+  }
+  .phone .tools .lbl {
+    display: none;
+  }
+  /* the text settings: only beside a story, and without their labels */
+  .phone:not(:has(.story-head)) .textbar,
+  .phone .textbar .tb-field > .small,
+  .phone .textbar .sample,
+  .phone .textbar .num {
+    display: none;
   }
   .side-handle {
     position: absolute;

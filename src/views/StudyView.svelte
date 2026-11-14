@@ -22,6 +22,7 @@
   import Hanzi from "../components/Hanzi.svelte";
   import Pinyin from "../components/Pinyin.svelte";
   import Icon from "../components/Icon.svelte";
+  import { hideRail, showRail } from "../lib/device.svelte";
   import DeckPicker from "../components/DeckPicker.svelte";
   import { recordUtterance, wavBlob } from "../lib/mic";
 
@@ -34,6 +35,11 @@
   const PREF_KEY = "study-selection";
 
   let phase = $state<Phase>("setup");
+  // On a phone a session has the whole width: the side bar slides away until it's over.
+  $effect(() => {
+    if (phase === "setup") showRail();
+    else hideRail();
+  });
   let decks = $state<Deck[]>([]);
   let tags = $state<string[]>([]);
   let error = $state("");
@@ -125,7 +131,7 @@
     try {
       if (localStorage.getItem("speech-model-offer") === "dismissed") return;
     } catch {}
-    if (speech.whisperModels.length) {
+    if (speech.whisperModels.length || speech.engine === "apple") {
       suggestModel = null;
       return;
     }
@@ -191,7 +197,7 @@
 
   function dirOff(d: Direction): string {
     if (d === "speaking" || d === "read_aloud") return speech.available ? "" : (speech.reason ?? t("speech.unavailable"));
-    if (d === "say_meaning") return speech.whisperModels.length ? "" : t("speech.needWhisper");
+    if (d === "say_meaning") return speech.whisperModels.length || speech.engine === "apple" ? "" : t("speech.needWhisper");
     return "";
   }
 
@@ -406,8 +412,9 @@
       // Other words in the session are offered as distractors.
       const others = queue.slice(1, 40).map((i) => i.card.hanzi);
       let res: SpokenAnswer;
-      // English answers always go to Whisper; Chinese ones to the chosen engine.
-      if (item.direction === "say_meaning" || speech.engine === "whisper") {
+      // English answers always go to Whisper (Apple's recognizer on an iPhone); Chinese ones to
+      // the chosen engine. Both take a recording; Windows' recognizer listens for itself.
+      if (item.direction === "say_meaning" || speech.engine === "whisper" || speech.engine === "apple") {
         recording = new AbortController();
         const pcm = await recordUtterance({ signal: recording.signal, onLevel: (l) => (level = l) });
         const aborted = recording.signal.aborted;
@@ -1236,6 +1243,12 @@
     top: 4px;
     right: 8px;
     font-size: 11px;
+  }
+  /* (keyboard shortcuts: not on a phone) */
+  @media (max-width: 640px) {
+    .key {
+      display: none;
+    }
   }
   .keys {
     margin-top: 4px;

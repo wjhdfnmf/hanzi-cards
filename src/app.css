@@ -2118,6 +2118,37 @@ button.chip.on {
   margin-bottom: 22px;
 }
 
+/* a phone: less room, so less padding and fewer words (the subtitles under page titles, and
+   the keyboard shortcuts, go) */
+@media (max-width: 640px) {
+  .page {
+    padding: 14px 16px 32px;
+  }
+  .page-head {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .page-head > .back {
+    flex-basis: 100%;
+    margin-bottom: -6px;
+  }
+  .page-head p.muted,
+  p.muted.intro,
+  p.keys {
+    display: none;
+  }
+  /* no grey flash over whatever is tapped */
+  button,
+  a,
+  label,
+  input,
+  select {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 .notice {
   padding: 10px 14px;
   border-radius: var(--radius);

@@ -131,7 +131,7 @@
       const [key, speech, ds] = await Promise.all([api.aiKeyStatus(), api.speechStatus(), api.listDecks()]);
       keySet = key.set;
       if (key.set) spentMonth = (await api.aiSpending().catch(() => null))?.thisMonth ?? null;
-      canSpeak = speech.whisperModels.length > 0;
+      canSpeak = speech.whisperModels.length > 0 || speech.engine === "apple";
       if (canSpeak) api.speechWarmup().catch(() => {});
       decks = ds;
       if (addDeck === null || !ds.some((d) => d.id === addDeck)) addDeck = ds[0]?.id ?? null;

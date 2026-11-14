@@ -151,6 +151,8 @@
     bind:value
     type="text"
     autocomplete="off"
+    autocapitalize="off"
+    autocorrect="off"
     spellcheck="false"
     lang={pinyin ? "zh-CN" : "en"}
     placeholder={pinyin ? t("pyinput.placeholderPinyin") : placeholder}

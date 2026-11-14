@@ -115,6 +115,9 @@
         placeholder={t("dict.placeholder")}
         bind:value={query}
         lang="zh-CN"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck="false"
       />
     </div>
 
@@ -146,7 +149,7 @@
             {#if e.inCards}
               <span class="badge review"><Icon name="check" size={12} /> {t("dict.inCards")}</span>
             {/if}
-            <button class="btn" onclick={() => (adding = e)}><Icon name="plus" size={16} />{t("dict.add")}</button>
+            <button class="btn" onclick={() => (adding = e)} aria-label={t("dict.add")}><Icon name="plus" size={16} /><span class="lbl">{t("dict.add")}</span></button>
           </div>
         </li>
       {/each}
@@ -263,5 +266,24 @@
   .attrib {
     margin-top: 22px;
     text-align: center;
+  }
+  /* a phone: the word and its buttons on top, the pinyin and meanings across the width below */
+  @media (max-width: 640px) {
+    .entry {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px 12px;
+      padding: 12px 14px;
+    }
+    .body {
+      grid-column: 1 / -1;
+    }
+    .acts {
+      grid-column: 2;
+      grid-row: 1;
+    }
+    .acts .lbl,
+    .hint {
+      display: none;
+    }
   }
 </style>

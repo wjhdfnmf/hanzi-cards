@@ -5,6 +5,7 @@
   import { onMount, tick } from "svelte";
   import { api, errorText } from "../lib/api";
   import { sync, refreshStatus, ping, syncNow, describe } from "../lib/sync.svelte";
+  import { ios } from "../lib/device.svelte";
 
   let { onclose }: { onclose: () => void } = $props();
 
@@ -56,15 +57,16 @@
     field?.focus();
   });
 
+  // (a phone can't be the server: iOS stops an app listening as soon as it's in the background)
   const HELP = [
     "  status                 what is set up here",
-    "  host [port]            make this device the server (the port is optional)",
+    ...(ios ? [] : ["  host [port]            make this device the server (the port is optional)"]),
     "  join <address> <code>  pair this device with a server",
     "  code                   show the pairing code again, for another device",
     "  ping                   is the other side there?",
     "  ip                     this computer's local and public addresses",
     "  sync                   send what is new here, take what is new there",
-    "  online | offline       (server) listen for your devices, or stop",
+    ...(ios ? [] : ["  online | offline       (server) listen for your devices, or stop"]),
     "  forget                 undo the setup on this device (your cards stay)",
     "  clear | exit",
   ];
@@ -96,7 +98,12 @@
         return onclose();
       case "status": {
         const s = await refreshStatus();
-        if (!s?.role) return say("Nothing is set up. `host` makes this device the server; `join <address> <code>` pairs it with one.");
+        if (!s?.role)
+          return say(
+            ios
+              ? "Nothing is set up. `join <address> <code>` pairs this phone with your computer."
+              : "Nothing is set up. `host` makes this device the server; `join <address> <code>` pairs it with one.",
+          );
         await say(`role       ${s.role}`);
         if (s.role === "server") {
           await say(`listening  ${s.online ? `yes, port ${s.port}` : "no (type `online`)"}`);
@@ -109,6 +116,7 @@
         return;
       }
       case "host": {
+        if (ios) return say("A phone can't be the server: iOS stops it listening whenever the app is in the background. Make your computer the server, then `join` it from here.", "err");
         const port = args[0] ? Number(args[0]) : undefined;
         if (port !== undefined && !(Number.isInteger(port) && port >= 1024 && port <= 65535)) return say("The port is a number from 1024 to 65535.", "err");
         await say("making a certificate and keys ...", "dim");

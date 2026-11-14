@@ -2189,6 +2189,7 @@ dependencies = [
 name = "hanzi-cards"
 version = "0.4.1"
 dependencies = [
+ "block2",
  "bzip2 0.6.1",
  "candle-core",
  "candle-nn",
@@ -2199,6 +2200,9 @@ dependencies = [
  "hanzi-sync",
  "if-addrs",
  "keyring",
+ "objc2",
+ "objc2-foundation",
+ "objc2-speech",
  "roxmltree",
  "rusqlite",
  "serde",
@@ -3441,6 +3445,17 @@ dependencies = [
  "bitflags 2.13.2",
  "objc2",
  "objc2-core-foundation",
+ "objc2-foundation",
+]
+
+[[package]]
+name = "objc2-speech"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9eb609f9d2a25e0f8b76954f3acaa58348ce2a91285fe867643b2224ac4d263"
+dependencies = [
+ "block2",
+ "objc2",
  "objc2-foundation",
 ]
 

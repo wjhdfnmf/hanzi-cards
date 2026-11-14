@@ -18,12 +18,20 @@
   import Hanzi from "../components/Hanzi.svelte";
   import Pinyin from "../components/Pinyin.svelte";
   import Icon from "../components/Icon.svelte";
+  import Back from "../components/Back.svelte";
+  import { device } from "../lib/device.svelte";
   import Modal from "../components/Modal.svelte";
   import CardEditor from "../components/CardEditor.svelte";
   import { stripTones, syllables, toneOf } from "../lib/pinyin";
 
   let decks = $state<Deck[]>([]);
   let selectedDeck = $state<number | null>(null); // null = all cards
+  /** On a phone: the deck list, or the chosen deck's cards (one at a time). */
+  let deckOpen = $state(false);
+  function openDeck(id: number | null) {
+    selectedDeck = id;
+    deckOpen = true;
+  }
   // raw: only ever replaced whole, so thousands of rows needn't each become a reactive proxy
   let cards = $state.raw<CardRow[]>([]);
   let search = $state("");
@@ -532,7 +540,7 @@
   }
 </script>
 
-<div class="layout" style="--side:{sideWidth}px">
+<div class="layout" class:phone={device.phone} class:open={deckOpen} style="--side:{sideWidth}px">
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="side-handle" title={t("decks.resizeHint")} onpointerdown={dragSide} ondblclick={resetSide}></div>
   <aside class="decklist">
@@ -557,7 +565,7 @@
         <Icon name="plus" />
       </button>
     </div>
-    <button class="deck" class:on={selectedDeck === null} onclick={() => (selectedDeck = null)}>
+    <button class="deck" class:on={selectedDeck === null} onclick={() => openDeck(null)}>
       <span class="dname">{t("decks.allCards")}</span>
       <span class="faint small">{decks.reduce((s, d) => s + d.cardCount, 0)}</span>
     </button>
@@ -574,7 +582,7 @@
         {:else}
           <span class="twisty-space"></span>
         {/if}
-        <button class="deck" class:on={selectedDeck === d.id} onclick={() => (selectedDeck = d.id)}>
+        <button class="deck" class:on={selectedDeck === d.id} onclick={() => openDeck(d.id)}>
           <span class="dname">{d.name}</span>
           <span class="counts small">
             {#if d.totalDue}<span class="due" title={t("common.due")}>{d.totalDue}</span>{/if}
@@ -589,6 +597,7 @@
   <section class="main">
     <div class="head">
       <div class="title">
+        {#if device.phone}<Back label={t("decks.title")} onclick={() => (deckOpen = false)} />{/if}
         {#if deck && deck.depth > 0}
           <p class="crumbs small faint">{deck.path.split(" › ").slice(0, -1).join(" › ")}</p>
         {/if}
@@ -618,10 +627,12 @@
             <Icon name="folder" />
           </button>
         {/if}
-        <button class="btn" onclick={importFile} title={t("decks.importHint")}><Icon name="upload" size={16} />{t("decks.import")}</button>
+        <button class="btn" onclick={importFile} title={t("decks.importHint")} aria-label={t("decks.import")}
+          ><Icon name="upload" size={16} /><span class="lbl">{t("decks.import")}</span></button
+        >
         <div class="menuwrap">
-          <button class="btn" aria-haspopup="menu" aria-expanded={exportMenu} onclick={() => (exportMenu = !exportMenu)}>
-            <Icon name="download" size={16} />{t("decks.export")}
+          <button class="btn" aria-haspopup="menu" aria-expanded={exportMenu} aria-label={t("decks.export")} onclick={() => (exportMenu = !exportMenu)}>
+            <Icon name="download" size={16} /><span class="lbl">{t("decks.export")}</span>
           </button>
           {#if exportMenu}
             <div class="menu card-surface" role="menu">
@@ -631,7 +642,9 @@
           {/if}
         </div>
         {#if deck}
-          <button class="btn" onclick={() => studyDeck(deck.id)}><Icon name="play" size={14} />{t("decks.studyDeck")}</button>
+          <button class="btn" onclick={() => studyDeck(deck.id)} aria-label={t("decks.studyDeck")}
+            ><Icon name="play" size={14} /><span class="lbl">{t("decks.studyDeck")}</span></button
+          >
         {/if}
         <button class="btn primary" disabled={!decks.length} onclick={() => (editing = { card: null, copies: [] })}>
           <Icon name="plus" size={16} />{t("decks.addCard")}
@@ -642,7 +655,7 @@
     <div class="filterbar">
       <div class="searchbox">
         <Icon name="search" size={16} />
-        <input type="search" placeholder={t("decks.searchCards")} bind:value={search} />
+        <input type="search" placeholder={t("decks.searchCards")} bind:value={search} autocapitalize="off" autocorrect="off" spellcheck="false" />
       </div>
       {#if folded || showCopies}
         <label class="copies small muted" title={t("decks.showCopiesHint")}>
@@ -852,6 +865,62 @@
     grid-template-columns: var(--side) minmax(0, 1fr);
     height: 100%;
     position: relative;
+  }
+  /* a phone: the deck list, or one deck */
+  .layout.phone {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .phone .side-handle,
+  .phone.open .decklist,
+  .phone:not(.open) .main {
+    display: none;
+  }
+  .phone .decklist {
+    border-right: none;
+    padding: 14px 12px;
+  }
+  .phone .deck.on {
+    background: transparent;
+  }
+  /* the tools as icons alone, except adding a card */
+  .phone .tools .lbl {
+    display: none;
+  }
+  /* each card as one compact row: the characters, then the pinyin over the meaning (tags,
+     status and due date stay on the card itself) */
+  .phone table {
+    display: block;
+    min-width: 0 !important;
+  }
+  .phone table thead,
+  .phone table colgroup {
+    display: none;
+  }
+  .phone table tbody {
+    display: block;
+  }
+  .phone table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(56px, max-content) minmax(0, 1fr);
+    column-gap: 14px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .phone table tbody td {
+    border: none;
+    padding: 0;
+  }
+  .phone table td.cb,
+  .phone table tbody td:nth-child(n + 5) {
+    display: none;
+  }
+  .phone table td.hz {
+    grid-row: span 2;
+    align-self: center;
+  }
+  .phone table td.wide {
+    color: var(--text-2);
+    font-size: 13px;
   }
   .side-handle {
     position: absolute;

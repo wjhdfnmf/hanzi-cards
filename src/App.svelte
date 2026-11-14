@@ -18,6 +18,7 @@
   import Console from "./components/Console.svelte";
   import { sync, refreshStatus, ping, syncNow, summary } from "./lib/sync.svelte";
   import { showToast } from "./lib/toast.svelte";
+  import { device, showRail } from "./lib/device.svelte";
 
   let startupError = $state("");
   /** A database that couldn't be opened (damaged): the recovery page shows instead of the app. */
@@ -113,6 +114,43 @@
     }
   }
 
+  // ---------- on a phone: the side bar slides away while reading down, and comes back ----------
+  // Scrolling down a page hides it; scrolling back up, a swipe in from the left edge or a tap
+  // on the tab at the edge shows it again. (Pages that want the whole screen call hideRail.)
+  const lastTop = new WeakMap<EventTarget, number>();
+  // For a moment after the bar comes or goes, scrolling doesn't move it: the page reflows to
+  // the new width, and a flick may still be gliding.
+  let settleUntil = 0;
+  $effect(() => {
+    void device.railOpen;
+    settleUntil = performance.now() + 500;
+  });
+  function scrolled(e: Event) {
+    if (!device.phone || !(e.target instanceof HTMLElement)) return;
+    const top = e.target.scrollTop;
+    const before = lastTop.get(e.target) ?? 0;
+    lastTop.set(e.target, top);
+    if (performance.now() < settleUntil) return;
+    // (the bounce at the end of the page scrolls back a little: that isn't scrolling up)
+    const end = e.target.scrollHeight - e.target.clientHeight;
+    if (top > end - 4 || before > end - 4) return;
+    if (top > before + 10 && top > 40) device.railOpen = false;
+    else if (top < before - 10 || top <= 0) device.railOpen = true;
+  }
+  let swipeFrom: { x: number; y: number } | null = null;
+  function touchStart(e: TouchEvent) {
+    const p = e.touches[0];
+    swipeFrom = device.phone && !device.railOpen && p.clientX < 24 ? { x: p.clientX, y: p.clientY } : null;
+  }
+  function touchMove(e: TouchEvent) {
+    if (!swipeFrom) return;
+    const p = e.touches[0];
+    if (p.clientX - swipeFrom.x > 36 && Math.abs(p.clientY - swipeFrom.y) < 40) {
+      showRail();
+      swipeFrom = null;
+    }
+  }
+
   const items: { view: View; icon: string; key: Parameters<typeof t>[0] }[] = [
     { view: "study", icon: "study", key: "nav.study" },
     { view: "tutor", icon: "chat", key: "nav.tutor" },
@@ -124,11 +162,21 @@
   ];
 </script>
 
+<svelte:window ontouchstart={touchStart} ontouchmove={touchMove} />
+
 {#if problem}
   <main class="alone"><Recovery kind={problem.kind} reason={problem.reason} message={problem.message} /></main>
 {:else}
-<div class="shell" class:compact>
-  <nav class="sidebar">
+<div
+  class="shell"
+  class:compact
+  class:phone={device.phone}
+  class:railhidden={device.phone && !device.railOpen}
+>
+  {#if device.phone && !device.railOpen}
+    <button class="peek" aria-label={t("nav.expand")} onclick={showRail}></button>
+  {/if}
+  <nav class="sidebar" aria-hidden={device.phone && !device.railOpen ? "true" : undefined}>
     <div class="brand" title={compact ? t("app.name") : undefined}>
       <div class="logo han">文</div>
       {#if !compact}
@@ -206,7 +254,7 @@
     </div>
   </nav>
 
-  <main>
+  <main onscrollcapture={scrolled}>
     {#if startupError}
       <div class="page"><div class="notice err">{startupError}</div></div>
     {:else if settings.loaded}
@@ -244,7 +292,7 @@
 
 {#if toast.message}
   {#key toast.id}
-    <div class="toast {toast.kind}" role="status">{toast.message}</div>
+    <div class="toast {toast.kind}" class:phone={device.phone} role="status">{toast.message}</div>
   {/key}
 {/if}
 
@@ -460,6 +508,69 @@
   }
   .keep.hidden {
     display: none;
+  }
+
+  /* ---------- a phone: the icon bar alone, sliding away when the page wants the room ---------- */
+  /* (everything starts below the status bar, so nothing scrolls up behind the clock) */
+  .shell.phone {
+    grid-template-columns: calc(60px + env(safe-area-inset-left)) minmax(0, 1fr);
+    height: 100dvh;
+    padding-top: env(safe-area-inset-top);
+    position: relative;
+  }
+  .shell.phone.railhidden {
+    grid-template-columns: 0px minmax(0, 1fr);
+  }
+  .phone .sidebar {
+    padding: 10px 8px calc(env(safe-area-inset-bottom) + 10px) calc(env(safe-area-inset-left) + 8px);
+    gap: 16px;
+  }
+  .phone.railhidden .sidebar {
+    padding-left: 0;
+    padding-right: 0;
+    border-right-width: 0;
+  }
+  .phone .logo {
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
+  }
+  .phone .links {
+    gap: 4px;
+  }
+  .phone main {
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-right: env(safe-area-inset-right);
+  }
+  .phone.railhidden main {
+    padding-left: env(safe-area-inset-left);
+  }
+  /* the tab at the left edge that brings the bar back */
+  .peek {
+    position: fixed;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 72px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    z-index: 40;
+  }
+  .peek::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 16px;
+    bottom: 16px;
+    width: 4px;
+    border-radius: 2px;
+    background: var(--accent);
+    opacity: 0.55;
+  }
+  .toast.phone {
+    bottom: calc(env(safe-area-inset-bottom) + 16px);
   }
   .toast {
     position: fixed;

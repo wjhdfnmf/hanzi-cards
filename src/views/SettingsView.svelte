@@ -12,6 +12,8 @@
   import { goto, nav } from "../lib/nav.svelte";
   import { settings, saveSetting } from "../lib/settings.svelte";
   import { sync } from "../lib/sync.svelte";
+  import { device as layout, ios } from "../lib/device.svelte";
+  import Back from "../components/Back.svelte";
   import { SIZE_MIN, SIZE_MAX, LINE_MIN, LINE_MAX, readingFont, clampSize } from "../lib/reading";
   import FontSelect from "../components/FontSelect.svelte";
   import { CUSTOM_THEMES, THEME_GROUPS, isCustomTheme } from "../lib/themes";
@@ -237,7 +239,9 @@
       ? t("settings.engine.windows")
       : speech?.engine === "whisper"
         ? t("settings.whisperModel", { name: speech.whisperModel ?? "" })
-        : "",
+        : speech?.engine === "apple"
+          ? t("settings.engine.apple")
+          : "",
   );
 
   async function setEngine(value: string) {
@@ -550,6 +554,9 @@
   ];
   const SECTION_KEY = "settings.section";
   const isSection = (k: unknown): k is Section => SECTIONS.some((x) => x.key === k);
+  // On a phone the list of sections and a section are two screens: a section opened from
+  // another page shows straight away, otherwise the list comes first.
+  let sectionOpen = $state(isSection(nav.settingsSection));
   let section = $state<Section>(
     (() => {
       if (isSection(nav.settingsSection)) return nav.settingsSection; // opened from another page
@@ -566,6 +573,7 @@
   let mainEl = $state<HTMLElement | null>(null);
   function chooseSection(k: Section) {
     section = k;
+    sectionOpen = true;
     mainEl?.scrollTo({ top: 0 });
     try {
       localStorage.setItem(SECTION_KEY, k);
@@ -637,7 +645,7 @@
   }
 </script>
 
-<div class="settings-layout">
+<div class="settings-layout" class:phone={layout.phone} class:open={sectionOpen}>
   <nav class="secnav" aria-label={t("settings.title")}>
     <h2 class="secnav-title">{t("settings.title")}</h2>
     {#each SECTIONS as x (x.key)}
@@ -650,7 +658,10 @@
   </nav>
   <div class="secmain" bind:this={mainEl}>
   <div class="page narrow">
-  <div class="page-head"><h1>{t(SECTIONS.find((x) => x.key === section)?.label ?? "settings.title")}</h1></div>
+  <div class="page-head">
+    {#if layout.phone}<Back label={t("settings.title")} onclick={() => (sectionOpen = false)} />{/if}
+    <h1>{t(SECTIONS.find((x) => x.key === section)?.label ?? "settings.title")}</h1>
+  </div>
 
   {#if section === "general"}
 
@@ -1045,6 +1056,8 @@
         {#if voice.builtIn}<option value={BUILT_IN}>{t("settings.builtIn")}</option>{/if}
       </select>
     </label>
+    <!-- (an iPhone uses its own Chinese voices: no built-in voice there) -->
+    {#if !ios}
     <div class="row">
       <span>
         {t("settings.builtIn")}
@@ -1062,6 +1075,7 @@
         <button class="btn small" class:primary={!voice.system} onclick={downloadVoice}>{t("settings.builtIn.download", { n: builtInMb })}</button>
       {/if}
     </div>
+    {/if}
     {#if canChooseOutput}
       <label class="row">
         <span>
@@ -1130,6 +1144,8 @@
 
   {#if section === "speech"}
   <section class="group card-surface">
+    <!-- (an iPhone has Apple's recognizer only: nothing to choose or download) -->
+    {#if !ios}
     <label class="row">
       <span>{t("settings.speechEngine")}</span>
       <select value={settings.speechEngine} onchange={(e) => setEngine(e.currentTarget.value)}>
@@ -1138,11 +1154,13 @@
         <option value="whisper" disabled={!speech?.whisperModels.length}>{t("settings.engine.whisper")}</option>
       </select>
     </label>
+    {/if}
     <div class="row">
       <span class="small muted">
         {speech?.available ? t("settings.speechUsing", { engine: engineLabel }) : (speech?.reason ?? t("settings.speechNone"))}
       </span>
     </div>
+    {#if !ios}
     <label class="row">
       <span>
         {t("settings.whisperDevice")}
@@ -1219,6 +1237,7 @@
         {/each}
       </div>
     </div>
+    <!-- (pitch helps Whisper choose between tones; Apple's recognizer can't be steered that way) -->
     <label class="row">
       <span>
         {t("settings.pitchTones")}
@@ -1234,6 +1253,7 @@
     <div class="row col">
       <PitchCalibration />
     </div>
+    {/if}
     <label class="row">
       <span>
         {t("settings.replayAnswers")}
@@ -1246,8 +1266,8 @@
         onchange={(e) => saveSetting("replayAnswers", e.currentTarget.checked)}
       />
     </label>
-    {#if speech?.whisperModels.length}
-      <div class="row">
+    {#if speech?.whisperModels.length || speech?.engine === "apple"}
+      <div class="row mic-row">
         <button class="btn" disabled={micState !== "idle"} onclick={micTest}>
           {micState === "recording" ? t("settings.micTestHint") : micState === "thinking" ? t("speech.thinking") : t("settings.micTest")}
         </button>
@@ -1356,7 +1376,7 @@
           <small class="faint block">
             {d ? `${summary(d.current.contents, kind)} · ${t("settings.dataSize", { mb: mb(d.current.sizeBytes) })}` : "…"}
           </small>
-          {#if d}<code class="data-path">{d.current.path}</code>{/if}
+          {#if d && !ios}<code class="data-path">{d.current.path}</code>{/if}
         </span>
       </div>
       <div class="row">
@@ -1365,10 +1385,12 @@
           <small class="faint block">{t(kind === "cards" ? "settings.dataBackupHint" : "settings.dataBackupHintReading")}</small>
         </span>
         <span class="key-state">
-          <button class="btn ghost" disabled={dataBusy} onclick={() => saveCopy(kind)}>{t("settings.dataSaveCopy")}</button>
+          {#if !ios}<button class="btn ghost" disabled={dataBusy} onclick={() => saveCopy(kind)}>{t("settings.dataSaveCopy")}</button>{/if}
           <button class="btn" disabled={dataBusy} onclick={() => backupNow(kind)}>{t("settings.dataBackupNow")}</button>
         </span>
       </div>
+      <!-- (an iPhone's app has its own data, nowhere else to keep it: no other files or folders) -->
+      {#if !ios}
       <div class="row">
         <span>
           {t("settings.dataOther")}
@@ -1376,6 +1398,7 @@
         </span>
         <button class="btn" disabled={dataBusy} onclick={() => pickFile(kind)}>{t("settings.dataChoose")}</button>
       </div>
+      {/if}
       <!-- the learner's own backups, then the app's own: two folders, two lists -->
       {#each [{ auto: false, list: d?.backups ?? [], folder: d?.backupFolder ?? "" }, { auto: true, list: d?.autoBackups ?? [], folder: d?.autoFolder ?? "" }] as group (group.auto)}
         {@const key = group.auto ? `${kind}-auto` : kind}
@@ -1387,7 +1410,7 @@
                 <small class="faint block">
                   {group.auto ? t("settings.dataAutoHint", { ...d.keep, mb: mb(group.list.reduce((s, b) => s + b.sizeBytes, 0)) }) : t("settings.dataOwnHint")}
                 </small>
-                <small class="faint block"><code class="data-path">{group.folder}</code></small>
+                {#if !ios}<small class="faint block"><code class="data-path">{group.folder}</code></small>{/if}
               </span>
               {#if group.list.length}
                 <button class="btn ghost small" onclick={() => (showBackups[key] = !showBackups[key])}>
@@ -1452,6 +1475,7 @@
       {/if}
     </section>
   {/snippet}
+  {#if !ios}
   <section class="group card-surface">
     <div class="row">
       <span class="data-current">
@@ -1464,6 +1488,7 @@
       </button>
     </div>
   </section>
+  {/if}
   {@render dbBlock("cards")}
   {@render dbBlock("reading")}
   <h2>{t("settings.statsData")}</h2>
@@ -1839,6 +1864,26 @@
     overflow-y: auto;
     min-width: 0;
   }
+  /* a phone: the list, or the section chosen from it */
+  .settings-layout.phone {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .phone .secnav {
+    border-right: none;
+    padding: 18px 14px;
+  }
+  .phone .sec {
+    padding: 13px 12px;
+    font-size: 16px;
+  }
+  .phone .sec.on {
+    background: transparent;
+    font-weight: inherit;
+  }
+  .phone.open .secnav,
+  .phone:not(.open) .secmain {
+    display: none;
+  }
   /* as wide as the window allows, up to a comfortable reading width */
   .narrow {
     max-width: 880px;
@@ -2095,8 +2140,13 @@
     overflow-wrap: anywhere;
     user-select: text;
   }
+  .mic-row {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
   .mic-text {
     font-size: 16px;
+    flex: 1 1 220px;
   }
   .rowbtns {
     display: inline-flex;

@@ -8,6 +8,9 @@
 //!   compared with the answer by characters, then by toned pinyin.
 //!
 //! The "speech_engine" setting picks one ("auto" = Windows when available).
+//!
+//! On an iPhone there is only Apple's recognizer (apple_speech.rs, engine "apple"), which
+//! transcribes freely like Whisper.
 
 use crate::cards;
 use crate::dictionary;
@@ -23,7 +26,7 @@ pub struct SpeechStatus {
     pub available: bool,
     /// Why not, when unavailable.
     pub reason: Option<String>,
-    /// The engine spoken answers will use: "windows" or "whisper".
+    /// The engine spoken answers will use: "windows", "whisper" or "apple" (an iPhone).
     pub engine: Option<String>,
     /// The Windows recognizer is usable.
     pub windows: bool,
@@ -50,6 +53,22 @@ pub struct SpokenAnswer {
     pub suggested: u8,
     /// "tone" when the syllables were right but a tone was wrong (Whisper only).
     pub note: String,
+}
+
+impl SpokenAnswer {
+    /// Nothing was said.
+    #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+    pub fn silence() -> Self {
+        SpokenAnswer {
+            status: "silence".into(),
+            heard: String::new(),
+            heard_pinyin: String::new(),
+            confidence: String::new(),
+            correct: false,
+            suggested: 1,
+            note: String::new(),
+        }
+    }
 }
 
 // ---------- saying the meaning in English ----------
@@ -387,8 +406,27 @@ pub fn judge_text(conn: &Connection, plan: &ListenPlan, text: &str) -> AppResult
 }
 
 /// Which engine spoken answers use, from the "speech_engine" setting and what is
-/// installed.
+/// installed. (On an iPhone: Apple's recognizer, always.)
 pub fn engine_status(conn: &Connection, app_data: &std::path::Path) -> SpeechStatus {
+    #[cfg(target_os = "ios")]
+    {
+        let _ = (conn, app_data);
+        let reason = crate::apple_speech::unavailable();
+        SpeechStatus {
+            available: reason.is_none(),
+            engine: reason.is_none().then(|| "apple".to_string()),
+            reason,
+            windows: false,
+            whisper_models: vec![],
+            whisper_model: None,
+        }
+    }
+    #[cfg(not(target_os = "ios"))]
+    computer_engine_status(conn, app_data)
+}
+
+#[cfg(not(target_os = "ios"))]
+fn computer_engine_status(conn: &Connection, app_data: &std::path::Path) -> SpeechStatus {
     let windows = platform::status();
     let installed: Vec<String> = crate::whisper::list(app_data).into_iter().filter(|m| m.installed).map(|m| m.name).collect();
     let wanted_model = crate::db::get_setting(conn, "whisper_model").ok().flatten().unwrap_or_else(|| "base".into());

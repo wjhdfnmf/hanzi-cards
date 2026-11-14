@@ -876,4 +876,22 @@
       margin-left: 0;
     }
   }
+  /* a phone: two tiles a row, and the choices wrap rather than run off the side */
+  @media (max-width: 640px) {
+    .tiles {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .seg {
+      flex-wrap: wrap;
+      max-width: 100%;
+    }
+    .panel-head {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .figs {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
 </style>

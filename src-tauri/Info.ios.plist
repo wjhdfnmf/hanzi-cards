@@ -4,5 +4,7 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>Hanzi Cards listens when you say an answer in Chinese, to check your pronunciation. Audio stays on this device.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Hanzi Cards uses Apple's speech recognition, on this iPhone, to check the answers you say aloud.</string>
 </dict>
 </plist>

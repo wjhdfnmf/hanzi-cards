@@ -34,6 +34,8 @@ mod tts;
 mod tutor;
 mod whisper;
 mod whisper_net;
+#[cfg(target_os = "ios")]
+mod apple_speech;
 
 use std::sync::Mutex;
 use tauri::Manager;

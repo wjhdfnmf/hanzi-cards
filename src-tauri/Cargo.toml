@@ -31,8 +31,6 @@ candle-transformers = "0.11"
 # Downloading NVIDIA's GPU libraries (Settings): zip archives with SHA-256 checks.
 zip = { version = "2", default-features = false, features = ["deflate"] }
 sha2 = "0.10"
-tar = "0.4.46"
-bzip2 = "0.6.1"
 hanzi-sync = { path = "../sync" }
 if-addrs = "0.15.0"
 
@@ -47,6 +45,9 @@ gpu = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
 tauri-plugin-single-instance = "2"
 # The built-in voice (kokoro.rs). A phone has Chinese system voices of its own.
 sherpa-onnx = "2.0.1"
+# (unpacking its download)
+tar = "0.4.46"
+bzip2 = "0.6.1"
 
 # Spoken answers use the built-in Windows speech recognizer.
 [target.'cfg(windows)'.dependencies]
@@ -58,6 +59,13 @@ keyring = { version = "3", features = ["windows-native"] }
 # The Claude API key is kept in the system keychain.
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }
+
+# Spoken answers on an iPhone: Apple's speech recognition (apple_speech.rs).
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSError", "NSLocale", "NSOperation", "NSString", "NSURL"] }
+objc2-speech = { version = "0.3", default-features = false, features = ["std", "block2", "SFSpeechRecognizer", "SFSpeechRecognitionRequest", "SFSpeechRecognitionResult", "SFSpeechRecognitionTask", "SFTranscription"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }

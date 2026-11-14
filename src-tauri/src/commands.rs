@@ -527,6 +527,16 @@ pub async fn speech_check_audio(
         }
     })
     .await?;
+    #[cfg(target_os = "ios")]
+    if status.engine.as_deref() == Some("apple") {
+        let mut hints = plan.accepted.clone();
+        hints.extend(others.iter().take(30).cloned());
+        let text = run_apple(&app, pcm, "zh-CN", hints).await?;
+        if text.trim().is_empty() {
+            return Ok(speech::SpokenAnswer::silence());
+        }
+        return blocking(app, move |conn| speech::judge_text(conn, &plan, &text)).await;
+    }
     let model = status.whisper_model.ok_or_else(|| AppError::msg("No Whisper model is downloaded."))?;
     // Hint Whisper with the words being studied (the answer among them, not first).
     let mut words: Vec<String> = others.iter().take(30).cloned().collect();
@@ -746,6 +756,15 @@ pub async fn speech_check_english(app: AppHandle, card_id: i64, pcm: Vec<f32>) -
         move |conn| Ok((cards::get_card(conn, card_id)?, speech::engine_status(conn, &dir), debug_mode(conn)?))
     })
     .await?;
+    #[cfg(target_os = "ios")]
+    if status.engine.as_deref() == Some("apple") {
+        let _ = keep_recording;
+        let text = run_apple(&app, pcm, "en-US", speech::meaning_senses(&card.meaning)).await?;
+        if text.trim().is_empty() {
+            return Ok(speech::SpokenAnswer::silence());
+        }
+        return Ok(speech::judge_meaning(&card.meaning, &text));
+    }
     let model = status.whisper_model.ok_or_else(|| AppError::msg("No Whisper model is downloaded."))?;
     let text = tauri::async_runtime::spawn_blocking(move || {
         if keep_recording {
@@ -802,6 +821,17 @@ async fn run_whisper(
     .map_err(|e| AppError::msg(e.to_string()))?
 }
 
+/// On an iPhone: what was said, by Apple's recognizer (apple_speech.rs), with `hints` (words
+/// likely to be said). Empty when nothing was.
+#[cfg(target_os = "ios")]
+async fn run_apple(app: &AppHandle, pcm: Vec<f32>, lang: &'static str, hints: Vec<String>) -> AppResult<String> {
+    let tmp = app.path().temp_dir().map_err(|e| AppError::msg(e.to_string()))?.join("answers");
+    tauri::async_runtime::spawn_blocking(move || crate::apple_speech::transcribe(&tmp, &pcm, lang, &hints))
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))?
+        .map_err(AppError::msg)
+}
+
 /// Transcribe recorded Mandarin (16 kHz mono samples) with Whisper.
 #[tauri::command]
 pub async fn speech_transcribe(app: AppHandle, pcm: Vec<f32>, prompt: Option<String>) -> AppResult<String> {
@@ -812,6 +842,12 @@ pub async fn speech_transcribe(app: AppHandle, pcm: Vec<f32>, prompt: Option<Str
         move |conn| Ok(speech::engine_status(conn, &dir))
     })
     .await?;
+    #[cfg(target_os = "ios")]
+    if status.engine.as_deref() == Some("apple") {
+        let hints = blocking(app.clone(), |conn| card_words(conn)).await?;
+        let text = run_apple(&app, pcm, "zh-CN", hints).await?;
+        return blocking(app, move |conn| speech::to_simplified(conn, &text)).await;
+    }
     let model = status.whisper_model.ok_or_else(|| AppError::msg("No Whisper model is downloaded."))?;
     // free speech (the tutor, the microphone test): English is kept
     let text = run_whisper(&app, dir, model, pcm, prompt.unwrap_or_default(), false).await?;

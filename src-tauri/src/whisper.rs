@@ -546,6 +546,7 @@ pub fn keeps_english(name: &str) -> bool {
 }
 
 /// Models too slow to use without a graphics card.
+#[cfg_attr(target_os = "ios", allow(dead_code))] // (the iPhone uses Apple's recognizer)
 pub fn needs_gpu(name: &str) -> bool {
     GPU_MODELS.contains(&name)
 }
