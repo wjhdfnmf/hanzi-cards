@@ -125,15 +125,6 @@ S = ':root[data-theme="sakura"]'
 SAKURA_CSS = f"""
 /* Sakura: the parts of the notebook that aren't colours (see SAKURA_ART in gen_themes.py) */
 
-/* page titles under a stroke of highlighter */
-{S} h1 {{
-  text-decoration: underline;
-  text-decoration-color: rgb(255 202 92 / 0.62);
-  text-decoration-thickness: 0.4em;
-  text-underline-offset: -0.16em;
-  text-decoration-skip-ink: none;
-}}
-
 /* buttons you can press: a pill with an edge that gives way */
 {S} .btn.primary {{
   border-radius: 999px;
@@ -645,7 +636,8 @@ def kit(key, title=None, button=None, logo=None, flash=None, corner=None, bar=No
             "rule": {"text-decoration-thickness": "0.09em", "text-underline-offset": "0.3em"},
             "double": {"text-decoration-style": "double", "text-decoration-thickness": "0.05em", "text-underline-offset": "0.3em"},
         }[kind]
-        out.append(rule(f"{S} h1", {"text-decoration": "underline", "text-decoration-color": color, "text-decoration-skip-ink": "none", **marks}))
+        # (page titles are bold only: the mark under them was dropped, and with it this rule)
+        _ = (color, marks)
     if button == "pill":
         out.append(rule(f"{S} .btn.primary", {"border-radius": "999px", "box-shadow": "0 2px 0 var(--accent-hover)",
                                               "transition": "background 0.12s, transform 0.06s, box-shadow 0.06s"}))

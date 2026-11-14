@@ -475,6 +475,17 @@ pub fn log_study_time(state: State<AppState>, kind: String, seconds: i64) -> App
     stats::log_time(&lock(&state), &kind, seconds)
 }
 
+/// Settings › Your data: start the statistics over (after a backup). Returns how many
+/// answers were removed.
+#[tauri::command]
+pub fn reset_statistics(app: AppHandle, state: State<AppState>) -> AppResult<usize> {
+    let dir = app_data(&app)?;
+    let mut conn = lock(&state);
+    crate::data::check(&conn)?;
+    crate::data::backup(&conn, &dir, crate::data::Kind::Cards, crate::data::Made::Reset)?;
+    stats::reset(&mut conn)
+}
+
 // ---------- speaking ----------
 
 fn app_data(app: &AppHandle) -> AppResult<PathBuf> {

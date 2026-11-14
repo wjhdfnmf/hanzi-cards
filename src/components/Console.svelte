@@ -148,10 +148,18 @@
         await say("asking the network ... (the public address comes from asking an outside service what address this computer appears from)", "dim");
         const a = await api.syncAddresses();
         const port = a.port === 47810 ? "" : `:${a.port}`;
-        await say(`  local    ${a.local ?? "not on a network"}`, a.local ? "ok" : "err");
+        if (!a.local.length) await say("  local    not on a network", "err");
+        const wide = Math.max(0, ...a.local.map((x) => x.address.length));
+        for (const x of a.local) {
+          const note = x.kind === "vpn" ? "   (looks like a VPN: your other devices can't reach this one)" : x.kind === "other" ? "   (a virtual adapter)" : "";
+          await say(`  local    ${x.address.padEnd(wide)}   ${x.name}${note}`, x.kind === "home" ? "ok" : "dim");
+        }
         await say(`  public   ${a.public ?? `unknown (${a.publicError})`}`, a.public ? "ok" : "err");
         await say("");
-        if (a.local) await say(`  same network:  join ${a.local}${port} <the code>`, "dim");
+        const home = a.local.filter((x) => x.kind === "home");
+        // (several, or none that is clearly the house's network: all of them, to try in turn)
+        for (const x of home.length ? home : a.local) await say(`  same network:  join ${x.address}${port} <the code>`, "dim");
+        if (a.local.length > 1 && home.length !== 1) await say("                 (if one doesn't answer, try the next)", "dim");
         if (a.public) await say([`  from outside:  join ${a.public}${port} <the code>`, `                 (your router must forward port ${a.port} to this computer)`], "dim");
         return;
       }

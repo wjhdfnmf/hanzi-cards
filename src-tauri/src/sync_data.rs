@@ -561,6 +561,36 @@ mod tests {
         assert_eq!(count(&b.0, "SELECT COUNT(*) FROM review_log"), 0);
     }
 
+    /// Statistics reset on one device: the answers and the time go, the schedules stay, and
+    /// a device that still has the old history doesn't hand it back.
+    #[test]
+    fn a_reset_of_the_statistics_reaches_the_other_devices() {
+        let (mut a, mut b) = (device(), device());
+        let mut boxed = Snapshot::default();
+        let word = count(&a.0, "SELECT id FROM cards WHERE hanzi = '你好'");
+        crate::study::answer_at(&mut a.0, word, "recognition", 3, 1500, db::now() - 3 * 86_400).unwrap();
+        a.0.execute("INSERT INTO study_time (day, kind, device, seconds) VALUES (?1, 'reading', 'x', 600)", [db::now() / 86_400 - 5]).unwrap();
+        sync(&mut a, &mut boxed);
+        sync(&mut b, &mut boxed);
+        assert_eq!(count(&b.0, "SELECT COUNT(*) FROM review_log"), 1);
+
+        assert_eq!(crate::stats::reset(&mut b.0).unwrap(), 1);
+        assert_eq!(count(&b.0, "SELECT COUNT(*) FROM review_log") + count(&b.0, "SELECT COUNT(*) FROM study_time"), 0);
+        assert_eq!(count(&b.0, "SELECT COUNT(*) FROM progress"), 1, "when the word is due is not statistics");
+        assert_eq!(count(&b.0, "SELECT COUNT(*) FROM sync_deleted"), 1, "one record of the reset, not one per answer");
+        // an answer after the reset is kept
+        crate::study::answer(&mut b.0, word, "recognition", 3, 900).unwrap();
+
+        sync(&mut b, &mut boxed);
+        sync(&mut a, &mut boxed);
+        sync(&mut b, &mut boxed);
+        for d in [&a, &b] {
+            assert_eq!(count(&d.0, "SELECT COUNT(*) FROM review_log"), 1);
+            assert_eq!(count(&d.0, "SELECT COUNT(*) FROM study_time"), 0);
+            assert_eq!(count(&d.0, "SELECT COUNT(*) FROM progress"), 1);
+        }
+    }
+
     #[test]
     fn a_snapshot_that_doesnt_fit_changes_nothing() {
         let (mut c, s) = device();

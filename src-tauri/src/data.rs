@@ -81,6 +81,8 @@ pub enum Made<'a> {
     Switch,
     /// Before data from another device is merged in.
     Sync,
+    /// Before the statistics are reset.
+    Reset,
 }
 
 pub const KEEP_DAILY: usize = 7;
@@ -88,6 +90,7 @@ pub const KEEP_WEEKLY: usize = 4;
 pub const KEEP_VERSION: usize = 3;
 pub const KEEP_SWITCH: usize = 3;
 pub const KEEP_SYNC: usize = 3;
+pub const KEEP_RESET: usize = 3;
 
 impl Made<'_> {
     /// What the file name ends with (nothing for the learner's own).
@@ -98,6 +101,7 @@ impl Made<'_> {
             Made::Version(v) => format!("before-{v}"),
             Made::Switch => "before-switch".into(),
             Made::Sync => "before-sync".into(),
+            Made::Reset => "before-reset".into(),
         }
     }
 
@@ -111,6 +115,8 @@ impl Made<'_> {
             Some("switch")
         } else if ends("-before-sync") {
             Some("sync")
+        } else if ends("-before-reset") {
+            Some("reset")
         } else if name.split_once("-before-").is_some_and(|(_, v)| v.starts_with(|c: char| c.is_ascii_digit())) {
             Some("version")
         } else {
@@ -461,6 +467,7 @@ fn clean_up(app_data: &Path, kind: Kind) {
     gone.extend(of("version").skip(KEEP_VERSION).map(|(_, p)| p));
     gone.extend(of("switch").skip(KEEP_SWITCH).map(|(_, p)| p));
     gone.extend(of("sync").skip(KEEP_SYNC).map(|(_, p)| p));
+    gone.extend(of("reset").skip(KEEP_RESET).map(|(_, p)| p));
     // daily: the newest few, then the newest one of each of a few weeks before the week
     // those reach back into
     use chrono::Datelike;

@@ -313,13 +313,77 @@ pub fn start(runtime: &Runtime, app_data: &Path) {
     }
 }
 
-/// This computer's address on the local network, to tell the other devices (found by asking
-/// the system which of its addresses it would use to reach outside: nothing is sent).
+/// One of this computer's addresses, and what sort of network it is on.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalAddress {
+    pub address: String,
+    /// The network adapter's name ("Wi-Fi", "Ethernet", "NordLynx").
+    pub name: String,
+    /// "home": an ordinary network other devices in the house are on. "vpn": a tunnel (the
+    /// other devices can't reach this address). "other": a virtual or unusual adapter.
+    pub kind: &'static str,
+}
+
+/// What sort of network an adapter is on, from its name, its address and whether it is a
+/// point-to-point link. A guess: the system doesn't say "this one is a VPN".
+fn kind_of(name: &str, ip: std::net::Ipv4Addr, point_to_point: bool) -> &'static str {
+    let n = name.to_lowercase();
+    let o = ip.octets();
+    let tunnel_names = [
+        "vpn", "wireguard", "nordlynx", "nord", "proton", "tailscale", "zerotier", "mullvad", "expressvpn", "surfshark", "wintun", "hamachi", "anyconnect", "globalprotect",
+        "fortinet", "forticlient", "ipsec", "pptp", "l2tp", "tunnel", "warp",
+    ];
+    let tunnel_starts = ["tun", "tap", "wg", "utun", "ppp", "ipsec"];
+    // 100.64.0.0/10 is what Tailscale and carrier networks hand out: not the house's network
+    if point_to_point || tunnel_names.iter().any(|t| n.contains(t)) || tunnel_starts.iter().any(|t| n.starts_with(t)) || (o[0] == 100 && (64..128).contains(&o[1])) {
+        return "vpn";
+    }
+    let virtual_names = ["vethernet", "virtualbox", "vmware", "docker", "wsl", "hyper-v", "vboxnet", "veth", "virbr", "bluetooth", "loopback"];
+    if virtual_names.iter().any(|v| n.contains(v)) || n.starts_with("br-") || !ip.is_private() {
+        return "other";
+    }
+    "home"
+}
+
+/// The addresses in the order to try them: the house's network first (192.168 before the
+/// rest), then anything unusual, then tunnels.
+fn in_order(mut found: Vec<LocalAddress>) -> Vec<LocalAddress> {
+    let rank = |a: &LocalAddress| {
+        let kind = match a.kind {
+            "home" => 0,
+            "other" => 1,
+            _ => 2,
+        };
+        let range = if a.address.starts_with("192.168.") { 0 } else if a.address.starts_with("10.") { 1 } else { 2 };
+        (kind, range, a.address.clone())
+    };
+    found.sort_by_key(rank);
+    found.dedup_by(|b, a| a.address == b.address);
+    found
+}
+
+/// Every address this computer has on a network that is up (IPv4; not the loopback, not the
+/// self-assigned 169.254 ones). The system's list of its adapters: nothing is sent anywhere.
+fn local_addresses() -> Vec<LocalAddress> {
+    let found = if_addrs::get_if_addrs()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|i| !i.is_loopback() && i.is_oper_up())
+        .filter_map(|i| match i.ip() {
+            std::net::IpAddr::V4(ip) if !ip.is_link_local() && !ip.is_unspecified() => {
+                Some(LocalAddress { address: ip.to_string(), kind: kind_of(&i.name, ip, i.is_p2p()), name: i.name })
+            }
+            _ => None,
+        })
+        .collect();
+    in_order(found)
+}
+
+/// The address to tell the other devices in the house: the first one that looks like the
+/// house's network, else whatever there is.
 fn local_address() -> Option<String> {
-    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
-    socket.connect("192.0.2.1:9").ok()?;
-    let ip = socket.local_addr().ok()?.ip();
-    (!ip.is_unspecified() && !ip.is_loopback()).then(|| ip.to_string())
+    local_addresses().into_iter().next().map(|a| a.address)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -456,8 +520,9 @@ pub async fn sync_code(app: AppHandle) -> AppResult<String> {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Addresses {
-    /// On the local network (what devices at home use).
-    pub local: Option<String>,
+    /// On the local network (what devices at home use): every address this computer has,
+    /// the likeliest first, each with its adapter's name and whether it looks like a VPN.
+    pub local: Vec<LocalAddress>,
     /// As seen from the internet (what a device away from home would use, with the port
     /// forwarded to this computer).
     pub public: Option<String>,
@@ -494,7 +559,7 @@ pub async fn sync_addresses(app: AppHandle) -> AppResult<Addresses> {
             Ok(ip) => (Some(ip), String::new()),
             Err(e) => (None, e),
         };
-        Ok(Addresses { local: local_address(), public, public_error, port: if config.port == 0 { hanzi_sync::DEFAULT_PORT } else { config.port } })
+        Ok(Addresses { local: local_addresses(), public, public_error, port: if config.port == 0 { hanzi_sync::DEFAULT_PORT } else { config.port } })
     })
     .await
 }
@@ -691,6 +756,38 @@ mod tests {
         drop(server);
         assert!(b.sync(&remote, &key).is_err(), "no server: an error, not a hang");
         assert_eq!(b.everything(), before);
+    }
+
+    /// With a VPN on, the address to give the other devices is still the house network's.
+    #[test]
+    fn the_house_network_comes_before_a_vpn() {
+        let a = |name: &str, ip: [u8; 4], p2p: bool| {
+            let ip = std::net::Ipv4Addr::from(ip);
+            LocalAddress { address: ip.to_string(), name: name.into(), kind: kind_of(name, ip, p2p) }
+        };
+        let found = in_order(vec![
+            a("NordLynx", [10, 5, 0, 2], false),
+            a("vEthernet (WSL)", [172, 29, 64, 1], false),
+            a("Wi-Fi", [192, 168, 1, 7], false),
+            a("Tailscale", [100, 101, 102, 103], false),
+            a("Ethernet 2", [10, 0, 0, 14], false),
+            a("OpenVPN TAP-Windows6", [10, 8, 0, 6], false),
+            a("ppp0", [10, 64, 0, 3], true),
+        ]);
+        let list: Vec<(&str, &str)> = found.iter().map(|x| (x.address.as_str(), x.kind)).collect();
+        assert_eq!(
+            list,
+            [("192.168.1.7", "home"), ("10.0.0.14", "home"), ("172.29.64.1", "other"), ("10.5.0.2", "vpn"), ("10.64.0.3", "vpn"), ("10.8.0.6", "vpn"), ("100.101.102.103", "vpn")]
+        );
+        // an adapter with an everyday name is taken at its word
+        assert_eq!(kind_of("en0", [192, 168, 0, 20].into(), false), "home");
+        assert_eq!(kind_of("wlan0", [10, 0, 0, 5].into(), false), "home");
+        assert_eq!(kind_of("utun3", [10, 7, 0, 2].into(), false), "vpn");
+        // and what this computer really has can at least be listed
+        for x in local_addresses() {
+            println!("{:<16} {:<6} {}", x.address, x.kind, x.name);
+            assert!(x.address.parse::<std::net::Ipv4Addr>().is_ok());
+        }
     }
 
     /// The box was written by a newer version of the app: this device leaves everything alone.

@@ -228,6 +228,7 @@ pub fn run() {
             commands::undo_answer,
             commands::bookmark_story,
             commands::log_study_time,
+            commands::reset_statistics,
             sync::sync_status,
             sync::sync_host,
             sync::sync_join,

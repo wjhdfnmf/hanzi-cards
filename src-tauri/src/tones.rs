@@ -1656,4 +1656,85 @@ mod tests {
             println!("range from {name:7} recordings: {:.1}% right | ranges (semitones, median±spread) {}", 100.0 * right[k] as f32 / total as f32, ranges[k].join(" "));
         }
     }
+
+    /// What a late rise is worth, in words. A speaker's 2nd tones inside words often sit at
+    /// the bottom of the voice and only rise at the end; the low "half third" tone never
+    /// rises there. This tries telling them apart by how far the last fifth of the syllable
+    /// climbs above its lowest earlier point, at several strengths, on each folder of
+    /// recordings in SPEAKER_DIRS (comma-separated; meta.tsv and clean/N.wav in each).
+    /// SPEAKER_DIRS=../tone-data/speaker1,../tone-data/speaker1-pass2 cargo test --release --lib late_rise_bench -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn late_rise_bench() {
+        let Ok(dirs) = std::env::var("SPEAKER_DIRS") else { return };
+        for dir in dirs.split(',') {
+            let dir = std::path::Path::new(dir);
+            let items: Vec<(usize, String, String, Vec<u8>, Vec<u8>)> = std::fs::read_to_string(dir.join("meta.tsv"))
+                .unwrap()
+                .lines()
+                .skip(1)
+                .map(|l| {
+                    let f: Vec<&str> = l.split('\t').collect();
+                    let digits = |s: &str| s.bytes().map(|b| b - b'0').collect();
+                    (f[0].parse().unwrap(), f[5].to_string(), f[6].to_string(), digits(f[7]), digits(f[8]))
+                })
+                .collect();
+            let tracks: Vec<Vec<Frame>> = items.iter().map(|it| pitch_track(&read_wav(&dir.join("clean").join(format!("{}.wav", it.0))))).collect();
+            let voice = Voice::from_frames(tracks.iter().flatten()).unwrap();
+            println!("{}", dir.display());
+
+            // Part C first: did the speaker say the wrong tone that was asked for? For each
+            // syllable meant as a 2nd tone, how far its end rises above its lowest earlier point.
+            let mut asked = Vec::new();
+            for (it, f) in items.iter().zip(&tracks).filter(|(it, _)| it.1 == "C") {
+                let syl = syllables(f, it.3.len());
+                for (k, (&said, &right)) in it.3.iter().zip(&it.4).enumerate() {
+                    if said != right {
+                        if let Some(c) = syl.get(k).and_then(|&s| contour(f, s, voice)) {
+                            let rise = c[4] - c[0].min(c[1]).min(c[2]);
+                            let fall = c[0] - c[4];
+                            asked.push(format!("{}:T{said} mean {:+.1} rise {:+.1} fall {:+.1}", it.2, c.iter().sum::<f32>() / 5.0, rise, fall));
+                        }
+                    }
+                }
+            }
+            if !asked.is_empty() {
+                println!("  the syllables said wrong on purpose (the tone asked for, and what the pitch did):");
+                for a in &asked {
+                    println!("    {a}");
+                }
+            }
+
+            for (strength, at) in [(0.0f32, 0.0f32), (1.0, 0.5), (2.0, 0.5), (4.0, 0.5), (2.0, 0.8), (4.0, 0.8), (8.0, 0.8)] {
+                let mut by_part: std::collections::BTreeMap<String, (u32, u32)> = Default::default();
+                let mut conf = [[0u32; 5]; 5];
+                for (it, f) in items.iter().zip(&tracks) {
+                    let n = it.3.len();
+                    if n == 1 {
+                        continue;
+                    }
+                    let syl = syllables(f, n);
+                    for (k, &want) in it.3.iter().enumerate() {
+                        if want == 5 {
+                            continue;
+                        }
+                        let Some(c) = syl.get(k).and_then(|&s| contour(f, s, voice)) else { continue };
+                        let mut d = distances_at(&c, SHAPE_WEIGHT, fall_weight(), Place::of(k, n));
+                        // the end climbing above the lowest earlier point: for a 2nd tone, against a 3rd
+                        let rise = c[4] - c[0].min(c[1]).min(c[2]);
+                        d[2] += strength * (rise - at).max(0.0);
+                        d[1] += strength * (at - rise).clamp(0.0, 1.0) * 0.5;
+                        let got = 1 + (0..4).min_by(|&a, &b| d[a].total_cmp(&d[b])).unwrap();
+                        let e = by_part.entry(it.1.clone()).or_default();
+                        e.1 += 1;
+                        e.0 += (got as u8 == want) as u32;
+                        conf[want as usize][got] += 1;
+                    }
+                }
+                let parts: Vec<String> = by_part.iter().map(|(p, (ok, n))| format!("{p} {ok}/{n}")).collect();
+                let by_t: Vec<String> = (1..5).map(|t| format!("T{t} {}/{}", conf[t][t], conf[t].iter().sum::<u32>())).collect();
+                println!("  late rise ×{strength} from {at}: {} | {} | 2→3 {} 3→2 {} 4→3 {}", parts.join("  "), by_t.join(" "), conf[2][3], conf[3][2], conf[4][3]);
+            }
+        }
+    }
 }

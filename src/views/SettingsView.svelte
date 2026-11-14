@@ -323,6 +323,23 @@
         ? t("settings.dataSummaryReading", { stories: fmtNum(c.stories), collections: fmtNum(c.collections) })
         : t(c.decks === 1 ? "settings.dataSummaryOne" : "settings.dataSummary", { cards: fmtNum(c.cards), decks: fmtNum(c.decks), reviews: fmtNum(c.reviews) });
 
+  // ---------- starting the statistics over ----------
+  let resetting = $state(false);
+  async function resetStatistics() {
+    if (!(await ask(t("settings.resetStatsConfirm"), { title: t("settings.resetStats"), kind: "warning" }))) return;
+    resetting = true;
+    try {
+      const n = await api.resetStatistics();
+      showToast(t("settings.resetStatsDone", { n }));
+      sync.epoch++; // (the Study page's counts start afresh too)
+      await refreshData().catch(() => {});
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      resetting = false;
+    }
+  }
+
   async function backupNow(kind: DbKind) {
     dataBusy = true;
     try {
@@ -1082,6 +1099,28 @@
         <button class="btn" onclick={() => speak("你好，欢迎学习中文。")}>{t("settings.test")}</button>
       </div>
     </div>
+    <div class="row">
+      <span>
+        {t("settings.volume")}
+        <small class="faint block">{t("settings.volumeHint")}</small>
+      </span>
+      <div class="line">
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          value={settings.speechVolume}
+          aria-label={t("settings.volume")}
+          oninput={(e) => (settings.speechVolume = Number(e.currentTarget.value))}
+          onchange={(e) => {
+            saveSetting("speechVolume", Number(e.currentTarget.value));
+            speak("你好");
+          }}
+        />
+        <strong class="vol">{Math.round(settings.speechVolume * 100)}%</strong>
+      </div>
+    </div>
     {#if voicesChecked && !voices.length}
       <div class="notice small">{t("settings.noVoice")}</div>
     {/if}
@@ -1427,6 +1466,16 @@
   </section>
   {@render dbBlock("cards")}
   {@render dbBlock("reading")}
+  <h2>{t("settings.statsData")}</h2>
+  <section class="group card-surface">
+    <div class="row">
+      <span>
+        {t("settings.resetStats")}
+        <small class="faint block">{t("settings.resetStatsHint")}</small>
+      </span>
+      <button class="btn danger" disabled={resetting} onclick={resetStatistics}>{t("settings.resetStatsButton")}</button>
+    </div>
+  </section>
   {/if}
 
   {#if section === "dictionary"}
@@ -1780,6 +1829,11 @@
   .sec.on {
     background: var(--surface-3);
     font-weight: 600;
+  }
+  .vol {
+    min-width: 44px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
   .secmain {
     overflow-y: auto;

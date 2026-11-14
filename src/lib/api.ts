@@ -710,12 +710,17 @@ export const api = {
   /** Time spent on the Reading or AI Tutor page, reported a little at a time. */
   logStudyTime: (kind: "reading" | "tutor", seconds: number) => invoke<void>("log_study_time", { kind, seconds }),
 
+  /** Start the statistics over (a backup is made first). Returns how many answers went. */
+  resetStatistics: () => invoke<number>("reset_statistics"),
+
   syncStatus: () => invoke<SyncStatus>("sync_status"),
   syncHost: (port: number | null) => invoke<string>("sync_host", { port }),
   syncJoin: (address: string, code: string) => invoke<SyncStatus>("sync_join", { address, code }),
   syncCode: () => invoke<string>("sync_code"),
   syncPing: () => invoke<{ ok: boolean; ms: number; generation: number; error: string }>("sync_ping"),
-  syncAddresses: () => invoke<{ local: string | null; public: string | null; publicError: string; port: number }>("sync_addresses"),
+  syncAddresses: () => invoke<{ local: { address: string; name: string; kind: "home" | "vpn" | "other" }[]; public: string | null; publicError: string; port: number }>(
+      "sync_addresses",
+    ),
   syncNow: () => invoke<SyncReport>("sync_now"),
   syncOnline: (on: boolean) => invoke<SyncStatus>("sync_online", { on }),
   syncForget: () => invoke<void>("sync_forget"),

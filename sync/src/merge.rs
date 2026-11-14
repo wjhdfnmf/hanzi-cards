@@ -12,6 +12,8 @@
 //! - **A word's schedule**: from wherever it was reviewed last, for every copy of the word.
 //! - **Reading and tutor time**: each device's own total for a day, the larger figure of the two
 //!   (a device only ever adds to its own).
+//! - **Statistics that were reset** stay reset: answers from before the reset, and study
+//!   time from days before it, are dropped wherever they come from.
 //! - **The same thing made separately on two devices** (the starter deck, a file imported
 //!   on both) becomes one thing: same place, same content, one id from then on.
 //!
@@ -329,11 +331,14 @@ pub fn merge(a: &Snapshot, b: &Snapshot) -> Snapshot {
         _ => true,
     });
 
+    // ---- the statistics were started over: nothing from before that comes back ----
+    let reset = deleted.get(&("reset".to_string(), "statistics".to_string())).copied();
+
     // ---- answers: all of them, except the ones taken back ----
     let mut log: BTreeMap<String, Review> = BTreeMap::new();
     for r in a.log.iter().chain(&b.log) {
         let r = Review { uid: id(&r.uid), card: id(&r.card), ..r.clone() };
-        if cards.contains_key(&r.card) && !log_gone.contains_key(&r.uid) {
+        if cards.contains_key(&r.card) && !log_gone.contains_key(&r.uid) && reset.is_none_or(|at| r.reviewed_at >= at) {
             put(&mut log, r.uid.clone(), r, |r| r.reviewed_at);
         }
     }
@@ -368,7 +373,8 @@ pub fn merge(a: &Snapshot, b: &Snapshot) -> Snapshot {
 
     // ---- reading and tutor time: each device's own total for a day ----
     let mut time: BTreeMap<(i64, String, String), i64> = BTreeMap::new();
-    for t in a.time.iter().chain(&b.time) {
+    // (days are counted from 1970; the day of the reset itself is kept: time since counts)
+    for t in a.time.iter().chain(&b.time).filter(|t| reset.is_none_or(|at| t.day >= at / 86_400)) {
         let s = time.entry((t.day, t.kind.clone(), t.device.clone())).or_insert(0);
         *s = (*s).max(t.seconds);
     }
@@ -519,6 +525,27 @@ mod tests {
         let m = both_ways(&a, &b);
         assert!(m.log.is_empty());
         assert_eq!(m.deleted.len(), 1);
+    }
+
+    #[test]
+    fn statistics_that_were_reset_stay_reset() {
+        let t = |day, seconds| Time { day, kind: "reading".into(), device: "A".into(), seconds };
+        let mut a = base();
+        a.log = vec![review("r1", "c1", 86_400 * 10), review("r2", "c1", 86_400 * 20)];
+        a.progress = vec![prog("c1", "recognition", 86_400 * 20, 2)];
+        a.time = vec![t(10, 600), t(20, 300)];
+        // b started its statistics over on day 15, and has studied since
+        let mut b = base();
+        b.deleted = vec![tomb("reset", "statistics", 86_400 * 15 + 100)];
+        b.log = vec![review("r3", "c2", 86_400 * 16)];
+        b.time = vec![t(16, 60)];
+        let m = both_ways(&a, &b);
+        assert_eq!(m.log.iter().map(|r| r.uid.as_str()).collect::<Vec<_>>(), ["r2", "r3"], "answers from before the reset are gone");
+        assert_eq!(m.time, vec![t(16, 60), t(20, 300)]);
+        assert_eq!(m.progress.len(), 1, "what the scheduler remembers stays");
+        assert_eq!(m.deleted, b.deleted, "the reset is remembered");
+        // a third device with the old history doesn't bring it back
+        assert_eq!(both_ways(&m, &a), m);
     }
 
     #[test]

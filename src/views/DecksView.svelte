@@ -257,6 +257,17 @@
     }
   }
 
+  // every deck that has subdecks closed at once, or (when they all are) opened again
+  const parents = $derived(decks.filter((d) => d.childCount > 0).map((d) => d.id));
+  const allCollapsed = $derived(parents.length > 0 && parents.every((id) => collapsed.includes(id)));
+  function toggleAllDecks() {
+    collapsed = allCollapsed ? [] : [...parents];
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify(collapsed));
+    } catch {
+      /* not essential */
+    }
+  }
   function toggleCollapsed(id: number) {
     collapsed = collapsed.includes(id) ? collapsed.filter((x) => x !== id) : [...collapsed, id];
     try {
@@ -527,6 +538,16 @@
   <aside class="decklist">
     <div class="dl-head">
       <h2>{t("decks.title")}</h2>
+      {#if parents.length}
+        <button
+          class="btn ghost icon all"
+          title={t(allCollapsed ? "decks.expandAll" : "decks.collapseAll")}
+          aria-label={t(allCollapsed ? "decks.expandAll" : "decks.collapseAll")}
+          onclick={toggleAllDecks}
+        >
+          <Icon name={allCollapsed ? "expand-all" : "collapse-all"} />
+        </button>
+      {/if}
       <button
         class="btn ghost icon"
         title={t("decks.newDeck")}
@@ -823,6 +844,9 @@
 {/if}
 
 <style>
+  .dl-head .all {
+    margin-left: auto;
+  }
   .layout {
     display: grid;
     grid-template-columns: var(--side) minmax(0, 1fr);
