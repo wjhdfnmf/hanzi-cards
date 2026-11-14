@@ -4,7 +4,7 @@ A desktop app for learning Mandarin Chinese (Simplified): flash cards with space
 answers checked on your own computer, graded reading, a dictionary and statistics. Free and open
 source, for Windows, macOS and Linux. Your cards, recordings and study history stay on your computer.
 
-![Studying: a card's answer, with each character and its pinyin coloured by tone, and the Wrong / Right buttons](docs/images/study.png)
+![Studying in the Indigo theme: a card's answer, with each character and its pinyin coloured by tone, and the Wrong / Right buttons](docs/images/study.png)
 
 ## Download
 
@@ -19,24 +19,25 @@ source, for Windows, macOS and Linux. Your cards, recordings and study history s
 | Arch | [`packaging/arch`](packaging/arch) | `makepkg -si` |
 | Any Linux | `…_amd64.AppImage` | `chmod +x`, then run it |
 
-Nothing else is needed to start: the dictionary ships with the app, and a small sample deck is made on
-first start. Speech models, the built-in voice and extra fonts are downloaded from inside the app if
+Nothing else is needed to start: the dictionary ships with the app, and the first start makes a small
+sample deck and a short story written with its words. Speech models, the built-in voice and extra fonts are downloaded from inside the app if
 and when you want them. The AI tutor is optional and needs your own Anthropic API key.
 
 ## A look around
 
 <p>
-  <img src="docs/images/decks.png" width="49%" alt="Decks &amp; Cards in the Ink &amp; paper theme: nested decks with due and new counts, and a deck's cards with tone-coloured characters">
-  <img src="docs/images/study-question.png" width="49%" alt="A card's question in the Indigo theme">
-  <img src="docs/images/reading-library.png" width="49%" alt="The Reading library as cloth-bound book covers, in the Lantern theme">
-  <img src="docs/images/reading-story.png" width="49%" alt="An open story with its key vocabulary, in the Celadon theme with a thread-bound banner">
-  <img src="docs/images/dictionary.png" width="49%" alt="Dictionary search results in the Matcha theme">
+  <img src="docs/images/study-setup.png" width="49%" alt="The Study page before a session, in the Imperial theme: what to study, decks, tags, card directions and session size">
+  <img src="docs/images/study-question.png" width="49%" alt="A card's question in the Lantern theme">
+  <img src="docs/images/decks.png" width="49%" alt="Decks &amp; Cards in the Slate theme: the starter deck's twelve words with tone-coloured characters, tags, status and next review">
+  <img src="docs/images/reading-story.png" width="49%" alt="The starter story open in the Pine Forest theme, with a cloth-and-gilt banner and its key vocabulary">
+  <img src="docs/images/dictionary.png" width="49%" alt="Dictionary search results in the Moon Night theme">
   <img src="docs/images/themes.png" width="49%" alt="The theme picker: sixteen themes in three groups">
 </p>
 
-![Statistics: what the figures mean in a few sentences, the headline numbers, time studied by day, card progress and activity](docs/images/statistics.png)
+![Statistics in the Indigo theme: what the figures mean in a few sentences, the headline numbers, time studied by day, card progress and activity](docs/images/statistics.png)
 
-<sub>Screenshots use sample data.</sub>
+<sub>The screenshots show a new install with what it comes with (the twelve-word starter deck and one
+short story), after two short study sessions.</sub>
 
 ## Contents
 
@@ -290,7 +291,8 @@ scripts\dev-gpu.ps1 build    # -> src-tauri\target\release\bundle\nsis\Hanzi Car
 
 The installer (NSIS, per-user, English or Simplified Chinese) contains the app and CC-CEDICT, which is
 imported on first start (into `dictionary.db`). Nothing personal is in it: a new install starts with
-the 12-word sample deck "Getting Started", made by the app itself, and an empty Reading page. It is
+the 12-word sample deck "Getting Started" and one short story written with those words (新朋友), both
+made by the app itself. It is
 built with GPU support but runs on the processor by default; nothing large is bundled:
 
 - **Whisper models** are downloaded from Hugging Face in Settings › Speech recognition. The Study page
