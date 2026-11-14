@@ -83,4 +83,19 @@ npx tauri ios build --debug --target aarch64-sim   # an .app for the simulator
 npx tauri ios dev                                  # the simulator, with the pages reloading live
 ```
 
+On your own iPhone (team `3VRF7M4STV` is set in `tauri.conf.json` › `bundle.iOS`): plug it in,
+turn on Developer Mode (Settings › Privacy & Security; the switch only appears after Xcode or
+`devicectl` has tried to use the phone), add the Apple ID in Xcode › Settings › Accounts, then
+
+```sh
+npx tauri ios build --debug --target aarch64
+xcrun devicectl device install app --device <UDID> "<DerivedData>/Build/Products/debug-iphoneos/Hanzi Cards.app"
+xcrun devicectl device process launch --device <UDID> com.hanzicards.app
+```
+
+(`xcrun devicectl list devices` shows the UDID.) The very first signed build needs the phone
+registered with the team: one `xcodebuild … -destination id=<UDID>
+-allowProvisioningUpdates -allowProvisioningDeviceRegistration build` does it (its Rust step
+fails outside Tauri; that's fine, the registration and profile are what it's for).
+
 The first build takes several minutes (all the crates); later ones only rebuild what changed.
