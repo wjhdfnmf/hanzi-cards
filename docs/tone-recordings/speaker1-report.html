@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>How your recordings helped Hanzi Cards</title>
+<style>
+  @page { size: A4; margin: 0; }
+  :root {
+    --ink: #1f2328; --ink-2: #4b5563; --ink-3: #7b8490;
+    --paper: #ffffff; --soft: #f5f2ec; --line: #e4dfd5;
+    --accent: #b3262e; --bar: #2f6f8f; --bar-soft: #c9d9e1;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    width: 210mm; height: 297mm; padding: 10mm 14mm 9mm; overflow: hidden;
+    font: 8.7pt/1.36 "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    color: var(--ink); background: var(--paper);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .zh { color: var(--ink-2); font-size: 8.4pt; }
+  header { display: flex; align-items: center; gap: 12px; padding-bottom: 9px; border-bottom: 2px solid var(--accent); }
+  .logo { width: 44px; height: 44px; border-radius: 11px; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 25px; flex: none; }
+  h1 { margin: 0; font-size: 16.5pt; white-space: nowrap; line-height: 1.15; font-weight: 700; }
+  header .zh { font-size: 10.5pt; margin-top: 1px; }
+  header .tag { margin-left: auto; text-align: right; white-space: nowrap; font-size: 7.8pt; color: var(--ink-3); line-height: 1.35; }
+  h2 { margin: 9px 0 4px; font-size: 10pt; font-weight: 700; display: flex; align-items: baseline; gap: 8px; }
+  h2 .zh { font-weight: 600; font-size: 9.6pt; }
+  p { margin: 0 0 4px; }
+  .lead { margin-top: 8px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tile { background: var(--soft); border-radius: 8px; padding: 5px 10px 6px; }
+  .tile b { display: block; font-size: 17pt; line-height: 1.1; font-weight: 700; }
+  .tile span { display: block; font-size: 8.4pt; color: var(--ink-2); line-height: 1.3; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; }
+  .card h3 { margin: 0 0 1px; font-size: 9.4pt; font-weight: 700; }
+  .card .sub { font-size: 8.3pt; color: var(--ink-2); margin-bottom: 7px; line-height: 1.3; }
+  .bars { display: grid; grid-template-columns: 62px 1fr; row-gap: 4px; column-gap: 8px; align-items: center; font-size: 8.6pt; }
+  .bars .lab { color: var(--ink-2); text-align: right; line-height: 1.15; }
+  .track { position: relative; height: 15px; }
+  .bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; background: var(--bar); }
+  .bar.before { background: var(--bar-soft); }
+  .val { position: absolute; top: 50%; transform: translateY(-50%); margin-left: 6px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .note { font-size: 7.9pt; color: var(--ink-3); margin-top: 6px; line-height: 1.3; }
+  ol, ul { margin: 0; padding-left: 16px; }
+  li { margin-bottom: 3px; }
+  li .zh { display: block; }
+  .next { background: var(--soft); border-radius: 8px; padding: 6px 12px 4px; }
+  footer { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); font-size: 8.3pt; color: var(--ink-2); display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: end; }
+  footer b { color: var(--ink); }
+  .thanks { font-size: 13pt; font-weight: 700; color: var(--accent); white-space: nowrap; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="logo">文</div>
+    <div>
+      <h1>How your recordings helped Hanzi Cards</h1>
+      <div class="zh">你的录音是怎样帮助“汉字卡”的</div>
+    </div>
+    <div class="tag">Hanzi Cards 汉字卡<br>a free app for learning Mandarin<br>github.com/wjhdfnmf/hanzi-cards</div>
+  </header>
+
+  <p class="lead">Hanzi Cards is a flash card app for people learning Chinese. A learner says a word out loud and the app checks it, and the hardest part to check is the <b>tone</b>. Speech recognition hears <i>mǎ</i> and <i>mā</i> as the same word, so the app also follows the pitch of the voice. To know whether that works, it had to be tested on a real person speaking naturally. That was you.</p>
+  <p class="zh">汉字卡是一个帮助外国人学中文的单词卡应用。学习者把词读出来，应用来判断读得对不对，其中最难判断的是<b>声调</b>。语音识别会把“马”和“妈”听成同一个词，所以应用还会跟踪声音的音高。要知道这个方法行不行，必须用真人自然说话的录音来检验——这就是你的录音。</p>
+
+  <h2>What you recorded <span class="zh">你录了什么</span></h2>
+  <div class="tiles">
+    <div class="tile"><b>29</b><span>recordings, every one usable<br>段录音，全部可用</span></div>
+    <div class="tile"><b>284</b><span>clips cut from them<br>个切分出来的片段</span></div>
+    <div class="tile"><b>160</b><span>single syllables · 94 words<br>个单音节 · 94 个双音节词</span></div>
+    <div class="tile"><b>2</b><span>speeds: careful and everyday<br>种语速：认真读和平常说</span></div>
+  </div>
+
+  <h2>What your voice changed in the app <span class="zh">你的声音给应用带来的改进</span></h2>
+  <div class="two">
+    <div class="card">
+      <h3>Tones inside words, your voice</h3>
+      <div class="sub">Syllables whose tone the app got right · 词语中声调判断正确的比例（你的录音）</div>
+      <div class="bars">
+        <div class="lab">before<br>改进前</div><div class="track"><div class="bar before" style="width:48.8%"></div><span class="val" style="left:48.8%">61%</span></div>
+        <div class="lab">after<br>改进后</div><div class="track"><div class="bar" style="width:60%"></div><span class="val" style="left:60%">75%</span></div>
+      </div>
+      <h3 style="margin-top:9px">Six other speakers, with background noise</h3>
+      <div class="sub">The same fixes, checked on studio recordings · 同样的改进，用另外六位发音人的录音（加噪音）检验</div>
+      <div class="bars">
+        <div class="lab">before<br>改进前</div><div class="track"><div class="bar before" style="width:69.9%"></div><span class="val" style="left:69.9%">87%</span></div>
+        <div class="lab">after<br>改进后</div><div class="track"><div class="bar" style="width:73%"></div><span class="val" style="left:73%">91%</span></div>
+      </div>
+      <div class="note">Words: 52 of 85 → 66 of 88 syllables (first 13 recordings, 10 Nov 2026). Studio set: Tone Perfect, Michigan State University, 9,815 clips.</div>
+    </div>
+    <div class="card">
+      <h3>Three things only a real voice could show</h3>
+      <div class="sub">Each was found in your recordings, then fixed · 这三个问题都是从你的录音里发现并修好的</div>
+      <ol>
+        <li><b>Creaky voice.</b> Low tones often turn into a creak with no clear pitch, and the app lost those syllables entirely. It now treats creak as the bottom of the voice.
+          <span class="zh">低调常常带“气泡音”，没有清楚的音高，应用原来会把整个音节漏掉。现在把它当作最低音来处理。</span></li>
+        <li><b>The half third tone.</b> Before another syllable, a 3rd tone stays low and doesn't rise. The app expected a dip and a rise everywhere.
+          <span class="zh">三声在别的音节前面只降不升（半三声），而应用原来以为它总是先降后升。</span></li>
+        <li><b>Pitch drifts down in a phrase.</b> A 2nd tone late in a word starts lower than one said alone, so height now counts for less inside words.
+          <span class="zh">一句话里音高会慢慢下降，词里的二声起点比单独读时低，所以词语中“高低”的比重减小了。</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>What else it taught us <span class="zh">还学到了什么</span></h2>
+  <div class="two">
+    <ul>
+      <li><b>It kept the app honest.</b> A model trained on studio voices scored 97% there but did worse on your everyday voice, so the app uses it only as a second opinion on single syllables.
+        <span class="zh">一个用录音棚数据训练的模型在那里得了 97%，可是对你平常的声音反而更差，所以应用只在单音节上把它当作参考。</span></li>
+      <li><b>Single syllables are solid:</b> 9 in 10 right, at careful and at everyday speed alike.
+        <span class="zh">单音节很稳：认真读和平常说都是十个对九个。</span></li>
+    </ul>
+    <ul>
+      <li><b>Words at everyday speed are harder:</b> 66% right. Most misses are 2nd tones heard as 3rd, because a quick 2nd tone inside a word barely rises.
+        <span class="zh">平常语速的词语更难：66%。错的大多是把二声听成三声，因为说得快时词里的二声几乎不往上升。</span></li>
+      <li><b>Sentences</b> showed that the app can't yet find where each syllable begins in running speech.
+        <span class="zh">句子的录音说明：连续说话时，应用还找不准每个音节从哪里开始。</span></li>
+    </ul>
+  </div>
+
+  <h2>What comes next <span class="zh">下一步</span></h2>
+  <div class="next">
+    <ul>
+      <li>Telling 2nd and 3rd tones apart inside words, using the syllables on either side. <span class="zh">利用前后音节，把词里的二声和三声分清楚。</span></li>
+      <li>The 20 words read with a wrong tone on purpose: these are hard for a native speaker to say "wrong", so each one will be listened to and labelled before it is used. <span class="zh">故意读错声调的 20 个词：母语者很难真的读“错”，所以要先逐个听、标注实际读的声调，再使用。</span></li>
+      <li>More voices. One speaker can't show what is personal and what is Mandarin. <span class="zh">需要更多人的声音：只有一位发音人，分不清哪些是个人习惯，哪些是普通话的规律。</span></li>
+    </ul>
+  </div>
+
+  <footer>
+    <div><b>Your recordings stay private.</b> They are kept on one computer, used only to test and adjust the app, and are not in the app or on the internet. The app contains no recording of you and no model trained on your voice.<br>
+      <span class="zh"><b>你的录音不会公开。</b>录音只保存在一台电脑上，只用来测试和调整应用，不在应用里，也不在网上。应用里没有你的录音，也没有用你的声音训练的模型。</span></div>
+    <div class="thanks">Thank you · 谢谢你！</div>
+  </footer>
+</body>
+</html>
