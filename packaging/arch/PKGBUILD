@@ -10,7 +10,7 @@
 
 pkgname=hanzi-cards-bin
 _appname=hanzi-cards
-pkgver=0.4.0
+pkgver=0.4.1
 pkgrel=1
 pkgdesc="Mandarin Chinese flash cards with spaced repetition and a built-in dictionary"
 arch=('x86_64')
@@ -41,7 +41,7 @@ conflicts=("$_appname")
 options=('!strip' '!debug')
 # GitHub turns the space in "Hanzi Cards_…" into a dot
 source=("$_appname-$pkgver.deb::$url/releases/download/v$pkgver/Hanzi.Cards_${pkgver}_amd64.deb")
-sha256sums=('bf1566a1f2eedaf1a807c414151f184a4209c0ed3cdc24b4dcb357327e4df0c7')
+sha256sums=('cf1acf62fa774f66f2b7b55d3b73f3ec24ae9077ecd92efd2fd8a33afc920fc7')
 
 package() {
   # makepkg has already unpacked the .deb into control.tar.* and data.tar.*
