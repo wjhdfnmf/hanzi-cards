@@ -114,13 +114,14 @@ pub fn build_session(conn: &Connection, f: &StudyFilter) -> AppResult<SessionInf
             due.sort_by(|a, b| recall_chance(a, t).total_cmp(&recall_chance(b, t)));
             let mut new: Vec<StudyItem> = items.iter().filter(|i| i.progress.is_none()).cloned().collect();
             order_new(&mut new, &new_order(conn));
+            let mut new = spread_directions(new);
             new.truncate(new_remaining_today as usize);
             due.into_iter().chain(new).collect()
         }
         "new" => {
             let mut new: Vec<StudyItem> = items.into_iter().filter(|i| i.progress.is_none()).collect();
             order_new(&mut new, &new_order(conn));
-            new
+            spread_directions(new)
         }
         "difficult" => {
             let mut hard: Vec<StudyItem> = items
@@ -164,6 +165,31 @@ fn recall_chance(i: &StudyItem, now: i64) -> f64 {
         let elapsed = (now - p.last_review).max(0) as f64 / db::DAY as f64;
         scheduler::retrievability(elapsed, p.stability.max(0.01))
     })
+}
+
+/// With several directions chosen, the new cards arrive a direction at a time, so a session
+/// (which takes the first so many) would be all in the first direction. Here each word comes
+/// once before any word comes twice, and the words take turns starting with each direction.
+fn spread_directions(new: Vec<StudyItem>) -> Vec<StudyItem> {
+    let mut words: Vec<String> = Vec::new();
+    let mut by_word: std::collections::HashMap<String, Vec<StudyItem>> = std::collections::HashMap::new();
+    for item in new {
+        if !by_word.contains_key(&item.card.hanzi) {
+            words.push(item.card.hanzi.clone());
+        }
+        by_word.entry(item.card.hanzi.clone()).or_default().push(item);
+    }
+    let rounds = by_word.values().map(Vec::len).max().unwrap_or(0);
+    let mut out = Vec::new();
+    for round in 0..rounds {
+        for (k, word) in words.iter().enumerate() {
+            let items = &by_word[word];
+            if round < items.len() {
+                out.push(items[(k + round) % items.len()].clone());
+            }
+        }
+    }
+    out
 }
 
 /// How new words are introduced (Settings › Studying › Advanced): "hsk" (default: HSK1
@@ -424,11 +450,16 @@ pub fn answer_at(
             m.due - t
         ],
     )?;
+    let log_id = tx.last_insert_rowid();
     // a leech that's been remembered at review several times in a row has been learned:
     // the tag comes off
     let passed_review = rating > 1 && mem.as_ref().is_some_and(|old| old.state == scheduler::REVIEW);
     let unleeched = passed_review && !leech && recent_review_passes(&tx, card_id, direction)? >= LEECH_CURE_PASSES
         && set_leech_tag(&tx, card_id, false)?;
+    // what it takes to take this answer back (the Study page's Back button): only the latest one
+    let before = mem.as_ref().map(|o| (o.state, o.stability, o.difficulty, o.due, o.last_review, o.reps, o.lapses, o.step));
+    let undo = serde_json::json!({ "card": card_id, "direction": direction, "before": before, "log": log_id, "leech": leech, "unleeched": unleeched });
+    db::set_setting(&tx, UNDO_KEY, &undo.to_string())?;
     tx.commit()?;
     Ok(AnswerResult {
         due: m.due,
@@ -438,6 +469,54 @@ pub fn answer_at(
         leech,
         unleeched,
     })
+}
+
+const UNDO_KEY: &str = "last_answer";
+
+/// Take back the latest answer, if it was to this card in this direction: the word's memory
+/// (and its copies') is as it was before, and the answer is gone from the review log.
+pub fn undo_answer(conn: &mut Connection, card_id: i64, direction: &str) -> AppResult<()> {
+    let gone = || AppError::msg("Only the last answer can be taken back");
+    let raw = db::get_setting(conn, UNDO_KEY)?.ok_or_else(gone)?;
+    let undo: serde_json::Value = serde_json::from_str(&raw).map_err(|_| gone())?;
+    if undo["card"].as_i64() != Some(card_id) || undo["direction"].as_str() != Some(direction) {
+        return Err(gone());
+    }
+    let tx = conn.transaction()?;
+    match undo["before"].as_array() {
+        Some(b) if b.len() == 8 => {
+            let int = |i: usize| b[i].as_i64().unwrap_or(0);
+            let real = |i: usize| b[i].as_f64().unwrap_or(0.0);
+            tx.execute(
+                "INSERT INTO progress (card_id, direction, state, stability, difficulty, due, last_review, reps, lapses, step)
+                 SELECT c.id, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10 FROM cards c
+                 WHERE c.hanzi = (SELECT hanzi FROM cards WHERE id = ?1)
+                 ON CONFLICT(card_id, direction) DO UPDATE SET
+                    state = excluded.state, stability = excluded.stability, difficulty = excluded.difficulty,
+                    due = excluded.due, last_review = excluded.last_review, reps = excluded.reps,
+                    lapses = excluded.lapses, step = excluded.step",
+                params![card_id, direction, int(0), real(1), real(2), int(3), int(4), int(5), int(6), int(7)],
+            )?;
+        }
+        // it was a new word: new again
+        _ => {
+            tx.execute(
+                "DELETE FROM progress WHERE direction = ?2
+                 AND card_id IN (SELECT id FROM cards WHERE hanzi = (SELECT hanzi FROM cards WHERE id = ?1))",
+                params![card_id, direction],
+            )?;
+        }
+    }
+    tx.execute("DELETE FROM review_log WHERE id = ?1", [undo["log"].as_i64().unwrap_or(-1)])?;
+    if undo["leech"].as_bool() == Some(true) {
+        set_leech_tag(&tx, card_id, false)?;
+    }
+    if undo["unleeched"].as_bool() == Some(true) {
+        set_leech_tag(&tx, card_id, true)?;
+    }
+    tx.execute("DELETE FROM settings WHERE key = ?1", [UNDO_KEY])?;
+    tx.commit()?;
+    Ok(())
 }
 
 /// Passes at review in a row that take the leech tag off again.
@@ -739,5 +818,45 @@ mod tests {
         conn.execute("UPDATE progress SET due = 0", []).unwrap();
         assert_eq!(crate::stats::get_stats(&conn, &Default::default()).unwrap().due_now, 2);
         assert_eq!(crate::decks::list_decks(&conn).unwrap().iter().find(|d| d.id == class).unwrap().total_due, 2);
+    }
+
+    #[test]
+    fn an_answer_can_be_taken_back() {
+        let mut conn = db::open_in_memory().unwrap();
+        let ids: Vec<i64> = conn.prepare("SELECT id FROM cards ORDER BY id").unwrap().query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
+        let (a, b) = (ids[0], ids[1]);
+        let logs = |c: &Connection| -> i64 { c.query_row("SELECT COUNT(*) FROM review_log", [], |r| r.get(0)).unwrap() };
+        // a new word answered, then taken back: new again, nothing in the log
+        answer(&mut conn, a, "recognition", 3, 1000).unwrap();
+        undo_answer(&mut conn, a, "recognition").unwrap();
+        assert!(load_memory(&conn, a, "recognition").unwrap().is_none());
+        assert_eq!(logs(&conn), 0);
+        assert!(undo_answer(&mut conn, a, "recognition").is_err(), "once only");
+        // a studied word: its memory goes back to what it was
+        answer(&mut conn, a, "recognition", 3, 1000).unwrap();
+        let before = load_memory(&conn, a, "recognition").unwrap();
+        answer(&mut conn, a, "recognition", 1, 1000).unwrap();
+        assert_ne!(load_memory(&conn, a, "recognition").unwrap(), before);
+        assert!(undo_answer(&mut conn, b, "recognition").is_err(), "another card's answer isn't the last one");
+        undo_answer(&mut conn, a, "recognition").unwrap();
+        assert_eq!(load_memory(&conn, a, "recognition").unwrap(), before);
+        assert_eq!(logs(&conn), 1);
+    }
+
+    #[test]
+    fn new_words_take_turns_between_directions() {
+        let conn = db::open_in_memory().unwrap();
+        let f = StudyFilter {
+            deck_ids: vec![],
+            tags: vec![],
+            directions: vec!["recognition".into(), "recall".into()],
+            mode: "new".into(),
+            limit: 6,
+        };
+        let s = build_session(&conn, &f).unwrap();
+        let words: std::collections::HashSet<&str> = s.items.iter().map(|i| i.card.hanzi.as_str()).collect();
+        assert_eq!(words.len(), 6, "six different words before any comes twice");
+        let recall = s.items.iter().filter(|i| i.direction == "recall").count();
+        assert_eq!(recall, 3, "half in each direction");
     }
 }

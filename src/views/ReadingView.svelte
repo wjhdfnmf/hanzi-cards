@@ -2,7 +2,11 @@
   import { onMount } from "svelte";
   import { trackStudyTime } from "../lib/studyTime";
   import { open, ask, save } from "@tauri-apps/plugin-dialog";
-  import { api, errorText, type Segment, type Story, type StoryFolder, type StoryInfo } from "../lib/api";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { api, errorText, type Deck, type DictEntry, type Segment, type Story, type StoryFolder, type StoryInfo } from "../lib/api";
+  import CardEditor from "../components/CardEditor.svelte";
+  import { readAloud, stopSpeaking } from "../lib/speech";
+  import { voice } from "../lib/voice.svelte";
   import { t } from "../lib/i18n.svelte";
   import { settings, saveSetting } from "../lib/settings.svelte";
   import { showToast } from "../lib/toast.svelte";
@@ -27,6 +31,7 @@
   let segments = $state.raw<Segment[] | null>(null);
 
   async function openStory(id: number) {
+    stopReading();
     try {
       story = await api.getStory(id);
       segments = null;
@@ -41,6 +46,8 @@
   }
 
   function closeStory() {
+    stopReading();
+    if (full) setFull(false);
     story = null;
     segments = null;
     hover = null;
@@ -70,16 +77,123 @@
   let hover = $state<{ i: number; x: number; top: number; bottom: number } | null>(null);
   const hoverSeg = $derived(hover && segments ? segments[hover.i] : null);
 
+  // The tooltip can hold a button (make a card of the word), so the pointer must be able to
+  // reach it: leaving the word doesn't close it at once, and being over it keeps it open.
+  let overTip = false;
+  let tipTimer: ReturnType<typeof setTimeout> | undefined;
   function over(e: MouseEvent) {
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-i]");
-    if (!el) {
-      hover = null;
-      return;
+    let next: typeof hover = null;
+    if (el) {
+      const i = Number(el.dataset.i);
+      if (hover?.i === i) {
+        clearTimeout(tipTimer);
+        return;
+      }
+      const r = el.getBoundingClientRect();
+      next = { i, x: r.left + r.width / 2, top: r.top, bottom: r.bottom };
     }
-    const i = Number(el.dataset.i);
-    if (hover?.i === i) return;
-    const r = el.getBoundingClientRect();
-    hover = { i, x: r.left + r.width / 2, top: r.top, bottom: r.bottom };
+    clearTimeout(tipTimer);
+    if (!hover) hover = next;
+    else tipTimer = setTimeout(() => !overTip && (hover = next), 160);
+  }
+  function leaveText() {
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => !overTip && (hover = null), 200);
+  }
+
+  // ---------- a card from a word in the text ----------
+  let decks = $state<Deck[]>([]);
+  let adding = $state<{ hanzi: string; pinyin: string; meaning: string } | null>(null);
+  async function addCard(e: DictEntry) {
+    overTip = false;
+    hover = null;
+    try {
+      decks = await api.listDecks();
+      if (!decks.length) return showToast(t("reading.noDecks"), "err");
+      adding = { hanzi: e.simplified, pinyin: e.pinyin, meaning: e.definitions.slice(0, 3).join("; ") };
+    } catch (err) {
+      showToast(errorText(err), "err");
+    }
+  }
+  /** The text again, so the new card's word shows as "in your cards". */
+  async function cardAdded() {
+    const id = story?.id;
+    if (id === undefined) return;
+    const segs = await api.storySegments(id).catch(() => null);
+    if (segs && story?.id === id) segments = segs;
+  }
+
+  // ---------- reading the story aloud ----------
+  // The text is read a sentence at a time. The sentence being read is marked, and the word
+  // too where the voice says which word it is on (the Windows voices do).
+  let playing = $state<{ from: number; to: number; word: number | null } | null>(null);
+  /** The story as sentences: the segments each one covers, and its text. */
+  function sentences(segs: Segment[]): { from: number; to: number; text: string }[] {
+    const out: { from: number; to: number; text: string }[] = [];
+    let from = 0;
+    segs.forEach((s, i) => {
+      if (/[。！？!?；;…\n]/.test(s.text) || i === segs.length - 1) {
+        const text = segs.slice(from, i + 1).map((x) => x.text).join("");
+        if (/\p{L}/u.test(text)) out.push({ from, to: i, text });
+        from = i + 1;
+      }
+    });
+    return out;
+  }
+  function play() {
+    if (!segments) return;
+    const segs = segments;
+    const parts = sentences(segs);
+    if (!parts.length) return;
+    readAloud(
+      parts.map((p) => p.text),
+      {
+        start: (i) => {
+          playing = { from: parts[i].from, to: parts[i].to, word: null };
+          document.querySelector(`article [data-i="${parts[i].from}"], article [data-s="${parts[i].from}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        },
+        word: (i, at) => {
+          // which segment holds the character the voice has reached
+          let seen = 0;
+          for (let k = parts[i].from; k <= parts[i].to; k++) {
+            seen += segs[k].text.length;
+            if (at < seen) {
+              playing = { from: parts[i].from, to: parts[i].to, word: k };
+              return;
+            }
+          }
+        },
+        done: () => (playing = null),
+      },
+    );
+  }
+  function stopReading() {
+    if (playing) stopSpeaking();
+    playing = null;
+  }
+
+  // ---------- bookmarks ----------
+  let onlyBookmarked = $state(false);
+  async function toggleBookmark() {
+    if (!story) return;
+    const id = story.id;
+    const on = !story.bookmarked;
+    try {
+      await api.bookmarkStory(id, on);
+      story = { ...story, bookmarked: on };
+      stories = stories.map((s) => (s.id === id ? { ...s, bookmarked: on } : s));
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+  }
+
+  // ---------- full screen: the story alone, over the whole screen ----------
+  let full = $state(false);
+  function setFull(on: boolean) {
+    full = on;
+    hover = null;
+    getCurrentWindow().setFullscreen(on).catch(() => {}); // (in a browser preview there is no window to change)
   }
 
   /** Keep the tooltip in the window: below the word, or above it when there's no room. */
@@ -383,7 +497,7 @@
   const folderName = (id: number | null) => (id === null ? "" : (folders.find((f) => f.id === id)?.path ?? ""));
 </script>
 
-<div class="layout" style="--side:{sideWidth}px">
+<div class="layout" class:full style="--side:{sideWidth}px">
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="side-handle"
@@ -482,6 +596,26 @@
         </div>
         <div class="tools">
           <button
+            class="btn ghost icon mark"
+            class:on={story.bookmarked}
+            title={t(story.bookmarked ? "reading.unbookmark" : "reading.bookmark")}
+            aria-label={t(story.bookmarked ? "reading.unbookmark" : "reading.bookmark")}
+            aria-pressed={story.bookmarked}
+            onclick={toggleBookmark}><span aria-hidden="true">{story.bookmarked ? "★" : "☆"}</span></button
+          >
+          <button
+            class="btn"
+            class:primary={!playing}
+            disabled={!segments || !voice.available}
+            title={voice.available ? t("reading.playHint") : t("speech.noVoice")}
+            onclick={() => (playing ? stopReading() : play())}
+          >
+            <Icon name={playing ? "close" : "speaker"} size={15} />{playing ? t("reading.stop") : t("reading.play")}
+          </button>
+          <button class="btn ghost" onclick={() => setFull(!full)} title={t("reading.fullScreenHint")}>
+            {full ? t("reading.exitFull") : t("reading.fullScreen")}
+          </button>
+          <button
             class="btn ghost icon"
             title={t("reading.editStory")}
             aria-label={t("reading.editStory")}
@@ -525,13 +659,19 @@
         lang="zh-CN"
         style="font-family:{fontFamily}; font-size:{settings.readingSize}px; line-height:{settings.readingLineHeight}"
         onmouseover={over}
-        onmouseleave={() => (hover = null)}
+        onmouseleave={leaveText}
       >
         {#if segments}
-          {#each segments as s, i (i)}{#if s.entry}<span class="w" class:on={hover?.i === i} data-i={i}
+          {#each segments as s, i (i)}{#if s.entry}<span
+                class="w"
+                class:on={hover?.i === i}
+                class:said={playing !== null && i >= playing.from && i <= playing.to}
+                class:now={playing?.word === i}
+                data-i={i}
                 >{#if toneText}{#each hanziTones(s.text, s.entry.pinyin) as c, k (k)}<span
                       class={c.tone ? `tone-${c.tone}` : ""}>{c.ch}</span
                     >{/each}{:else}{s.text}{/if}</span
+              >{:else if playing !== null && i >= playing.from && i <= playing.to}<span class="said" data-s={i}>{s.text}</span
               >{:else}{s.text}{/if}{/each}
         {:else}
           {story.body}
@@ -595,10 +735,16 @@
           <p class="muted">{t("reading.empty")}</p>
         </div>
       {:else}
+        {#if onlyBookmarked || stories.some((s) => s.bookmarked)}
+          <label class="only small muted">
+            <input type="checkbox" bind:checked={onlyBookmarked} />
+            {t("reading.onlyBookmarked", { n: stories.filter((s) => s.bookmarked).length })}
+          </label>
+        {/if}
         <div class="list">
-          {#each stories as s (s.id)}
+          {#each onlyBookmarked ? stories.filter((s) => s.bookmarked) : stories as s (s.id)}
             <button class="story card-surface" onclick={() => openStory(s.id)}>
-              <span class="st-title han">{s.title}</span>
+              <span class="st-title han">{#if s.bookmarked}<span class="star" title={t("reading.bookmarked")}>★</span> {/if}{s.title}</span>
               <span class="st-preview han muted">{s.preview}</span>
               <span class="st-meta small faint">
                 {t("reading.chars", { n: s.chars })}{#if s.folderId !== null && s.folderId !== selected}
@@ -614,7 +760,19 @@
 
 {#if hover && hoverSeg?.entry}
   {@const e = hoverSeg.entry}
-  <div class="tip" role="tooltip" use:place={hover}>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="tip"
+    use:place={hover}
+    onmouseenter={() => {
+      overTip = true;
+      clearTimeout(tipTimer);
+    }}
+    onmouseleave={() => {
+      overTip = false;
+      hover = null;
+    }}
+  >
     <div class="tip-head">
       <span class="tip-hz han" lang="zh-CN">{e.simplified}{#if e.traditional !== e.simplified}<span class="trad"
             >（{e.traditional}）</span
@@ -623,10 +781,20 @@
     </div>
     <div class="tip-py"><Pinyin text={e.pinyin} /></div>
     <div class="tip-defs">{e.definitions.slice(0, 5).join("; ")}</div>
+    {#if !e.inCards}
+      <button class="btn small tip-add" onclick={() => addCard(e)}><Icon name="plus" size={14} />{t("reading.addCard")}</button>
+    {/if}
   </div>
 {/if}
 
+{#if adding}
+  <CardEditor card={null} {decks} deckId={null} prefill={adding} onclose={() => (adding = null)} onsaved={cardAdded} />
+{/if}
+
 <svelte:window
+  onkeydown={(e) => {
+    if (e.key === "Escape" && full && !adding && !storyForm) setFull(false);
+  }}
   onscroll={() => (hover = null)}
   onresize={() => (hover = null)}
   onclick={(e) => {
@@ -1026,7 +1194,54 @@
     box-shadow: var(--shadow-lg);
     font-size: 14px;
     line-height: 1.4;
-    pointer-events: none;
+  }
+  /* what is being read aloud: the sentence, and the word within it */
+  .said {
+    background: var(--accent-soft);
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .w.now {
+    background: var(--accent);
+    color: var(--accent-text);
+    border-radius: 3px;
+  }
+  .w.now :global(span) {
+    color: inherit;
+  }
+  .tip-add {
+    align-self: flex-start;
+    margin-top: 4px;
+  }
+  .mark {
+    font-size: 19px;
+    line-height: 1;
+  }
+  .mark.on,
+  .star {
+    color: var(--warn);
+  }
+  .only {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+  .only input {
+    width: auto;
+  }
+  /* full screen: only the story, over everything else in the window */
+  .layout.full .folderlist,
+  .layout.full .side-handle {
+    display: none;
+  }
+  .layout.full .main {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: var(--bg);
+    padding: 0 max(28px, calc((100vw - 1000px) / 2)) 28px;
   }
   .tip-head {
     display: flex;

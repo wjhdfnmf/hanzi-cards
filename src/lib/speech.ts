@@ -58,6 +58,22 @@ export const routingReady: Promise<boolean> = api
 /** Whether a device other than the default is chosen (and can be used). */
 const routed = () => canRoute && settings.audioOutput !== "";
 
+// ---------- the built-in voice (Kokoro), made by the app as a sound ----------
+
+let haveSystem = true;
+let haveBuiltIn = false;
+/** Told by voice.svelte.ts once it knows which voices this computer has. */
+export function setVoices(system: boolean, builtIn: boolean) {
+  haveSystem = system;
+  haveBuiltIn = builtIn;
+}
+/** The built-in voice speaks when it is the one chosen, or the only one there is. */
+const builtIn = () => haveBuiltIn && (settings.voice === BUILT_IN || !haveSystem);
+/** The setting's value for the built-in voice. */
+export const BUILT_IN = "kokoro";
+/** Speech is made as a sound file (and played by the page) for the built-in voice and for a chosen output. */
+const asSound = () => builtIn() || routed();
+
 /** The output devices the system offers (names need microphone permission). */
 export async function outputDevices(): Promise<MediaDeviceInfo[]> {
   const all = (await navigator.mediaDevices?.enumerateDevices?.().catch(() => [])) ?? [];
@@ -75,7 +91,7 @@ async function chosenDevice(): Promise<string | null> {
 
 /** Waiting to be said; each one's WAV is being made from the moment it's queued, so the next
  * sentence is ready when the current one ends (making one takes about 0.1 s). */
-const queue: { text: string; rate: number; wav: Promise<ArrayBuffer> }[] = [];
+const queue: { text: string; rate: number; wav: Promise<ArrayBuffer>; engine?: "kokoro" }[] = [];
 let current: HTMLAudioElement | null = null;
 let playing = false;
 /** Bumped by stop: a running queue that sees a newer generation gives up. */
@@ -87,9 +103,9 @@ async function play() {
   const mine = generation;
   try {
     while (queue.length && mine === generation) {
-      const { text, rate, wav: making } = queue.shift()!;
-      const device = await chosenDevice();
-      if (device === null) {
+      const { text, rate, wav: making, engine } = queue.shift()!;
+      const device = routed() ? await chosenDevice() : null;
+      if (routed() && device === null && engine !== "kokoro") {
         // unplugged or renamed: the default output rather than silence
         webSpeak(text, rate, false);
         continue;
@@ -100,7 +116,7 @@ async function play() {
         const url = URL.createObjectURL(new Blob([wav], { type: "audio/wav" }));
         const audio = new Audio(url);
         current = audio;
-        await (audio as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(device);
+        if (device) await (audio as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(device);
         await new Promise<void>((done) => {
           audio.onended = () => done();
           audio.onerror = () => done();
@@ -109,7 +125,7 @@ async function play() {
         });
         URL.revokeObjectURL(url);
       } catch (e) {
-        console.warn("speech on the chosen output failed; using the default", e);
+        console.warn("speech as a sound failed; using the system voice", e);
         webSpeak(text, rate, false);
       }
     }
@@ -129,16 +145,21 @@ function stopRouted() {
   playing = false;
 }
 
-function routedSpeak(text: string, rate: number, interrupt: boolean) {
+function routedSpeak(text: string, rate: number, interrupt: boolean, engine = builtIn() ? ("kokoro" as const) : undefined) {
   if (!text.trim()) return;
   if (interrupt) {
     stopRouted();
     synth()?.cancel();
   }
-  const wav = api.ttsWav(text, settings.voice, rate);
+  const wav = api.ttsWav(text, settings.voice, rate, engine);
   wav.catch(() => {}); // a failure is handled where it's played
-  queue.push({ text, rate, wav });
+  queue.push({ text, rate, wav, engine });
   void play();
+}
+
+/** Say something in the built-in voice whatever voice is chosen (Settings' sample button). */
+export function sampleBuiltIn(text: string) {
+  routedSpeak(text, settings.speechRate, true, "kokoro");
 }
 
 // ---------- playing a recording (e.g. the learner's own answer) ----------
@@ -179,19 +200,98 @@ export function stopClip() {
 
 export function speak(text: string) {
   if (!text) return;
-  if (routed()) routedSpeak(text, settings.speechRate, true);
+  if (asSound()) routedSpeak(text, settings.speechRate, true);
   else webSpeak(text, settings.speechRate, true);
 }
 
 /** Add a sentence to the queue without interrupting what is being said. */
 export function speakQueued(text: string, rate = settings.speechRate) {
-  if (routed()) routedSpeak(text, rate, false);
+  if (asSound()) routedSpeak(text, rate, false);
   else webSpeak(text, rate, false);
 }
 
 export function stopSpeaking() {
+  reading++;
   stopRouted();
   synth()?.cancel();
+}
+
+// ---------- reading a text aloud, part by part ----------
+
+/** Bumped whenever speech is stopped or a new reading starts: a reading that sees a newer
+ * number gives up. */
+let reading = 0;
+
+/**
+ * Read `parts` (sentences) one after another and say where the reading is, so a page can
+ * show it: `start(i)` when part i begins, `word(i, at, length)` for each word as it is said
+ * (characters into the part; only where the voice reports it), `done()` at the end or when
+ * stopped. Stop it with `stopSpeaking()`.
+ */
+export function readAloud(
+  parts: string[],
+  on: { start: (i: number) => void; word?: (i: number, at: number, length: number) => void; done: () => void },
+  rate = settings.speechRate,
+) {
+  stopSpeaking();
+  const mine = ++reading;
+  const alive = () => mine === reading;
+
+  const sayOnWeb = (i: number) =>
+    new Promise<void>((next) => {
+      const s = synth();
+      if (!s) return next();
+      const u = new SpeechSynthesisUtterance(parts[i]);
+      u.lang = "zh-CN";
+      u.rate = rate;
+      const voices = chineseVoices();
+      const voice = voices.find((v) => v.name === settings.voice) ?? voices[0];
+      if (voice) u.voice = voice;
+      u.onboundary = (e) => {
+        if (alive() && e.name === "word") on.word?.(i, e.charIndex, e.charLength || 1);
+      };
+      u.onend = () => next();
+      u.onerror = () => next();
+      s.speak(u);
+    });
+
+  const sayAsSound = async (i: number, device: string | null) => {
+    const wav = await api.ttsWav(parts[i], settings.voice, rate, builtIn() ? "kokoro" : undefined);
+    if (!alive()) return;
+    const url = URL.createObjectURL(new Blob([wav], { type: "audio/wav" }));
+    const audio = new Audio(url);
+    current = audio; // so that stopping pauses it
+    try {
+      if (device) await (audio as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(device);
+      await new Promise<void>((done) => {
+        audio.onended = () => done();
+        audio.onerror = () => done();
+        audio.onpause = () => done();
+        audio.play().catch(() => done());
+      });
+    } finally {
+      URL.revokeObjectURL(url);
+      if (current === audio) current = null;
+    }
+  };
+
+  (async () => {
+    for (let i = 0; i < parts.length && alive(); i++) {
+      if (!parts[i].trim()) continue;
+      on.start(i);
+      const device = routed() ? await chosenDevice() : null;
+      if (!alive()) break;
+      try {
+        if (builtIn() || device) await sayAsSound(i, device);
+        else await sayOnWeb(i);
+      } catch (e) {
+        console.warn("reading aloud: a part failed", e);
+        if (alive()) await sayOnWeb(i);
+      }
+    }
+    if (alive()) reading++;
+    on.done();
+  })();
 }
 
 /** Whether anything is being said or is waiting to be said. */
@@ -200,4 +300,4 @@ export const isSpeaking = () => {
   return playing || queue.length > 0 || (!!s && (s.speaking || s.pending));
 };
 
-export const speechAvailable = () => synth() !== null || canRoute;
+export const speechAvailable = () => synth() !== null || canRoute || haveBuiltIn;

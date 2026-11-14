@@ -125,6 +125,8 @@ export interface StatsFilter {
   /** The last N days including today; null = all time. */
   days: number | null;
   direction: Direction | null;
+  /** The directions being studied (the Study page's choice): what is due counts these only. */
+  dueDirections?: string[];
 }
 
 /** Totals over a stretch of days. */
@@ -544,6 +546,7 @@ export interface StoryInfo {
   /** Chinese characters in the text. */
   chars: number;
   preview: string;
+  bookmarked: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -556,6 +559,7 @@ export interface Story {
   /** Key vocabulary, one "word – pinyin – meaning" per line ("" for none). */
   vocab: string;
   position: number;
+  bookmarked: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -634,7 +638,14 @@ export const api = {
   /** Whether the app can make speech itself, so it can go to a chosen output device. */
   ttsAvailable: () => invoke<boolean>("tts_available"),
   /** Speech for `text` as a WAV file (Windows' speech engine). */
-  ttsWav: (text: string, voice: string, rate: number) => invoke<ArrayBuffer>("tts_wav", { text, voice, rate }),
+  /** `engine` "kokoro": the built-in voice, else the system's. */
+  ttsWav: (text: string, voice: string, rate: number, engine?: "kokoro") =>
+    invoke<ArrayBuffer>("tts_wav", { text, voice, rate, engine }),
+  /** The built-in voice (Settings › Audio): whether it is installed, and its download size. */
+  kokoroStatus: () => invoke<{ installed: boolean; downloadMb: number }>("kokoro_status"),
+  /** Download and unpack it; progress arrives as "voice-download" events. */
+  kokoroDownload: () => invoke<void>("kokoro_download"),
+  kokoroRemove: () => invoke<void>("kokoro_remove"),
   pitchProfileInfo: () => invoke<PitchProfileInfo>("pitch_profile_info"),
   /** `tone`: the tone asked for (one syllable), or null for a sentence. `earlier`: the
    * calibration's earlier recordings' pitch tracks. Saves nothing. */
@@ -692,6 +703,9 @@ export const api = {
     invoke<IntervalPreview[]>("preview_intervals", { cardId, direction }),
   answerCard: (cardId: number, direction: Direction, rating: number, durationMs: number) =>
     invoke<AnswerResult>("answer_card", { cardId, direction, rating, durationMs }),
+  /** Take back the latest answer (only that one) so it can be answered again. */
+  undoAnswer: (cardId: number, direction: Direction) => invoke<void>("undo_answer", { cardId, direction }),
+  bookmarkStory: (id: number, on: boolean) => invoke<void>("bookmark_story", { id, on }),
   getStats: (filter: StatsFilter) => invoke<Stats>("get_stats", { filter }),
   /** Time spent on the Reading or AI Tutor page, reported a little at a time. */
   logStudyTime: (kind: "reading" | "tutor", seconds: number) => invoke<void>("log_study_time", { kind, seconds }),

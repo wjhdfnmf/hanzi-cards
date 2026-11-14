@@ -370,7 +370,7 @@ THEMES = {
         bg="#f3f0e8", surface="#fbfaf5", **{"surface-2": "#ebe7dc", "surface-3": "#dfdacb"}, sidebar="#eeeae0",
         border="#d9d3c4", text="#1b1a17", **{"text-2": "#4b473f", "text-3": "#77726a"},
         accent="#a82127", **{"accent-hover": "#8e1a20", "accent-soft": "#f2e0dd", "accent-text": "#ffffff"},
-        art=INK_ART, artsize="1600px auto", artpos="bottom center", artrepeat="no-repeat",
+        art=INK_ART, artsize="max(1600px, 100%) auto", artpos="bottom center", artrepeat="no-repeat",
         shadow="0 1px 2px rgb(40 30 10 / 0.06), 0 4px 16px rgb(40 30 10 / 0.05)",
         **{"seq-0": "#e8e4d9", "grid": "#e2ddd0"})),
     "jade": ("Celadon", "青瓷", "玉", light(
@@ -447,7 +447,7 @@ THEMES = {
         bg="#0e1612", surface="#15201a", **{"surface-2": "#1c2a22", "surface-3": "#26362d"}, sidebar="#0a110d",
         border="#27382e", text="#e9f2eb", **{"text-2": "#b6c8bb", "text-3": "#849b8a"},
         accent="#82d6a3", **{"accent-hover": "#9de2b8", "accent-soft": "#1d3a2a", "accent-text": "#0b1510"},
-        art=PINE_ART, artsize="1600px auto", artpos="bottom center", artrepeat="no-repeat",
+        art=PINE_ART, artsize="max(1600px, 100%) auto", artpos="bottom center", artrepeat="no-repeat",
         shadow="inset 0 1px 0 rgb(200 255 220 / 0.03), 0 1px 2px rgb(0 0 0 / 0.45), 0 6px 18px rgb(0 0 0 / 0.25)",
         **{"seq-0": "#1b2821", "grid": "#213027"})),
     "contrast": ("High Contrast", "高对比", "Aa", dark(
@@ -801,7 +801,7 @@ dress("matcha", ["#5d7d25", "#b5651d", "#3e8a8a", "#b08a18"], art=(MATCHA_ART, "
       extra={"radius": "12px", "radius-lg": "18px"},
       title=("highlight", "rgb(186 208 88 / 0.5)"), button="round", logo={"border-radius": "50% 50% 50% 12px", "background": "linear-gradient(145deg, #6f8f2c, #405818)"},
       corner=(TEA_CORNER, 70, 57, "bottom left"), bar=("#c4d88a", "#4f6b1f"))
-dress("lavender", ["#7256c4", "#5f9a6b", "#d0679a", "#b9871f"], art=(LAVENDER_ART, "1600px auto", "bottom center", "no-repeat"),
+dress("lavender", ["#7256c4", "#5f9a6b", "#d0679a", "#b9871f"], art=(LAVENDER_ART, "max(1600px, 100%) auto", "bottom center", "no-repeat"),
       extra={"radius": "14px", "radius-lg": "20px"},
       title=("highlight", "rgb(190 165 245 / 0.5)"), button="pill", logo={"border-radius": "14px", "background": "linear-gradient(145deg, #7e63cf, #4f3896)"},
       flash=("tape", "rgb(170 145 235 / 0.55)", "rgb(206 190 246 / 0.55)"), corner=(LAVENDER_CORNER, 60, 68, "bottom right"), bar=("#cbbdf3", "#5f45ad"), nav="#5f45ad")

@@ -38,6 +38,9 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
 - **HSK tags**: new cards are tagged with their HSK 3.0 level (2026 syllabus, with the 2021 lists filling gaps;
   combinations of list words get the highest level of their parts). The cards table sorts by any column
 - **Dictionary**: CC-CEDICT (~120k entries), searchable by characters, pinyin (with or without tones) or English; one click adds a word as a card. The card editor auto-fills pinyin and meaning from it
+- **Voices**: words, stories and the tutor are read aloud by the system's Chinese voice. Where there
+  is none (most Linux installs), or if you prefer it, Settings › Audio downloads a built-in voice
+  (Kokoro, 147 MB, Chinese and English) that runs on the computer itself
 - **Statistics** for all decks or one, over the last week, month, quarter, year or all time. The
   simple view has the headline figures (time studied, reviews, how much you remembered against your
   target, new words, streak, what is due), a few sentences on what they mean, time or reviews over
@@ -52,7 +55,8 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
 - **CSV/TSV import & export** (also works with Anki and Pleco text exports); a 6th `deck` column holds
   the subdeck path, e.g. `Class 9` or `Lesson 1/Food`. Every file format the app reads and writes is
   described in [docs/import-formats.md](docs/import-formats.md)
-- **Reading**: stories in nested collections (type them, or import text files or a whole folder); export a
+- **Reading**: stories in nested collections (type them, or import text files or a whole folder), with
+  bookmarks and a full-screen view; a word that isn't a card yet can be made one from its hover note; export a
   story or a whole collection as plain text files, to keep or to share with other learners (importing
   them gives the same stories back); hover a word for its pinyin and meaning; choose the typeface (free Chinese fonts can be downloaded), size and
   spacing. Stories are kept in a database of their own

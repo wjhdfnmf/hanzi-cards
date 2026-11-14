@@ -67,6 +67,15 @@ fn init(conn: Connection) -> rusqlite::Result<Connection> {
              COMMIT;",
         )?;
     }
+    if version < 3 {
+        // v3: stories can be bookmarked.
+        conn.execute_batch(
+            "BEGIN;
+             ALTER TABLE stories ADD COLUMN bookmarked INTEGER NOT NULL DEFAULT 0;
+             PRAGMA user_version = 3;
+             COMMIT;",
+        )?;
+    }
     Ok(conn)
 }
 
@@ -108,6 +117,7 @@ pub struct StoryInfo {
     pub preview: String,
     /// Sort order in its collection (then by title).
     pub position: i64,
+    pub bookmarked: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -122,6 +132,7 @@ pub struct Story {
     /// Key vocabulary, one "word – pinyin – meaning" per line ("" for none).
     pub vocab: String,
     pub position: i64,
+    pub bookmarked: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -278,13 +289,14 @@ pub fn list_stories(conn: &Connection, folder: Option<i64>) -> AppResult<Vec<Sto
                 created_at: r.get(4)?,
                 updated_at: r.get(5)?,
                 position: r.get(6)?,
+                bookmarked: r.get(7)?,
                 chars: 0,
                 preview: String::new(),
             },
             r.get(3)?,
         ))
     };
-    const COLS: &str = "SELECT id, folder_id, title, body, created_at, updated_at, position FROM stories";
+    const COLS: &str = "SELECT id, folder_id, title, body, created_at, updated_at, position, bookmarked FROM stories";
     let rows: Vec<(StoryInfo, String)> = match folder {
         None => conn.prepare(COLS)?.query_map([], map)?.collect::<Result<_, _>>()?,
         Some(f) => {
@@ -316,9 +328,18 @@ fn preview(body: &str) -> String {
     p
 }
 
+/// Bookmark a story, or take its bookmark off.
+pub fn set_bookmark(conn: &Connection, id: i64, on: bool) -> AppResult<()> {
+    let n = conn.execute("UPDATE stories SET bookmarked = ?2 WHERE id = ?1", rusqlite::params![id, on])?;
+    if n == 0 {
+        return Err(AppError::msg("That story doesn't exist"));
+    }
+    Ok(())
+}
+
 pub fn get_story(conn: &Connection, id: i64) -> AppResult<Story> {
     conn.query_row(
-        "SELECT id, folder_id, title, body, created_at, updated_at, vocab, position FROM stories WHERE id = ?1",
+        "SELECT id, folder_id, title, body, created_at, updated_at, vocab, position, bookmarked FROM stories WHERE id = ?1",
         [id],
         |r| {
             Ok(Story {
@@ -330,6 +351,7 @@ pub fn get_story(conn: &Connection, id: i64) -> AppResult<Story> {
                 updated_at: r.get(5)?,
                 vocab: r.get(6)?,
                 position: r.get(7)?,
+                bookmarked: r.get(8)?,
             })
         },
     )

@@ -11,6 +11,7 @@ mod error;
 mod fonts;
 mod gpu;
 mod hsk;
+mod kokoro;
 mod input;
 mod models;
 mod net;
@@ -213,6 +214,11 @@ pub fn run() {
             commands::ai_spending,
             commands::ai_spending_export,
             commands::get_stats,
+            commands::kokoro_status,
+            commands::kokoro_download,
+            commands::kokoro_remove,
+            commands::undo_answer,
+            commands::bookmark_story,
             commands::log_study_time,
             commands::dict_status,
             commands::dict_search,

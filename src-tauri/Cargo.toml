@@ -1,6 +1,6 @@
 [package]
 name = "hanzi-cards"
-version = "0.3.1"
+version = "0.3.2"
 description = "Mandarin Chinese flash cards with spaced repetition and a built-in dictionary"
 edition = "2021"
 license = "MIT"
@@ -33,6 +33,9 @@ candle-transformers = "0.11"
 # Downloading NVIDIA's GPU libraries (Settings): zip archives with SHA-256 checks.
 zip = { version = "2", default-features = false, features = ["deflate"] }
 sha2 = "0.10"
+sherpa-onnx = "2.0.1"
+tar = "0.4.46"
+bzip2 = "0.6.1"
 
 [features]
 # Run Whisper on an NVIDIA GPU (needs the CUDA Toolkit to build): cargo build --features gpu

@@ -10,6 +10,7 @@
   import { t } from "../lib/i18n.svelte";
   import { fmtNum } from "../lib/format";
   import { speak } from "../lib/speech";
+  import { voice } from "../lib/voice.svelte";
   import { showToast } from "../lib/toast.svelte";
   import Hanzi from "../components/Hanzi.svelte";
   import Pinyin from "../components/Pinyin.svelte";
@@ -139,7 +140,7 @@
             </ol>
           </div>
           <div class="acts">
-            <button class="btn ghost icon" onclick={() => speak(e.simplified)} aria-label={t("study.play")}>
+            <button class="btn ghost icon" onclick={() => speak(e.simplified)} aria-label={t("study.play")} disabled={!voice.available} title={voice.available ? undefined : t("speech.noVoice")}>
               <Icon name="speaker" />
             </button>
             {#if e.inCards}

@@ -17,6 +17,7 @@
   import { goto, nav } from "../lib/nav.svelte";
   import { settings, saveSetting } from "../lib/settings.svelte";
   import { playClip, speak, stopClip, stopSpeaking } from "../lib/speech";
+  import { voice } from "../lib/voice.svelte";
   import { showToast } from "../lib/toast.svelte";
   import Hanzi from "../components/Hanzi.svelte";
   import Pinyin from "../components/Pinyin.svelte";
@@ -59,6 +60,9 @@
   let again = $state(0);
   let answered = new Set<string>();
   const itemKey = (x: StudyItem) => `${x.card.id}:${x.direction}`;
+  // The session as it was before the latest answer, for the Back button (one step back).
+  type Step = { item: StudyItem; queue: StudyItem[]; done: number; again: number; answered: Set<string>; result: typeof result };
+  let last = $state.raw<Step | null>(null);
   let revealed = $state(false);
   let previews = $state<IntervalPreview[]>([]);
   let shownAt = 0;
@@ -315,6 +319,7 @@
       done = 0;
       again = 0;
       answered = new Set();
+      last = null;
       result = { reviewed: 0, correct: 0, ms: 0 };
       phase = "session";
       if (sel.directions.some((d) => (isSpoken(d) && speech.engine === "whisper") || d === "say_meaning"))
@@ -360,8 +365,10 @@
     busy = true;
     const item = current;
     const ms = Date.now() - shownAt;
+    const before: Step = { item, queue, done, again, answered: new Set(answered), result: { ...result } };
     try {
       const res = await api.answerCard(item.card.id, item.direction, rating, ms);
+      last = before;
       result.reviewed++;
       result.ms += Math.min(ms, 10 * 60 * 1000);
       if (rating > 1) result.correct++;
@@ -462,6 +469,29 @@
     else if (listening) api.speechCancel();
   }
 
+  /** Back to the card just answered, its answer taken back, to answer it again. */
+  async function back() {
+    if (!last || busy) return;
+    busy = true;
+    error = "";
+    try {
+      await api.undoAnswer(last.item.card.id, last.item.direction);
+      stopListening();
+      queue = last.queue;
+      done = last.done;
+      again = last.again;
+      answered = last.answered;
+      result = last.result;
+      last = null;
+      await show();
+      revealed = true; // the answer is what they came back to change
+    } catch (e) {
+      error = errorText(e);
+    } finally {
+      busy = false;
+    }
+  }
+
   function endSession() {
     stopListening();
     forgetMyAnswer();
@@ -489,10 +519,14 @@
       if (!revealed) {
         stopListening();
         reveal();
-      } else rate(shownSuggested ?? 3);
+      } else if (e.key === "Enter") rate(shownSuggested ?? 3);
+      else revealed = false; // Space again hides the answer, like the button
     } else if (revealed && ["1", "2", "3", "4"].includes(e.key)) {
       // Wrong / Right: 1 is Wrong, 2 (or 3, 4) is Right
       rate(twoButtons ? (e.key === "1" ? 1 : 3) : Number(e.key));
+    } else if (revealed && (e.key === "9" || e.key === "0")) {
+      // a second pair for the right hand, not shown on the buttons: 9 wrong, 0 right
+      rate(e.key === "9" ? 1 : 3);
     } else if (e.key.toLowerCase() === "r" && current) {
       speak(current.card.hanzi);
     }
@@ -644,6 +678,10 @@
         <Icon name="check" size={15} />
         {t("study.end")}
       </button>
+      <button class="btn" onclick={back} disabled={!last} title={t("study.backHint")}>
+        <span class="flip"><Icon name="arrow" size={15} /></span>
+        {t("study.lastCard")}
+      </button>
       <div class="bar" aria-hidden="true"><div style="width:{total ? ((done - again / 2) / total) * 100 : 0}%"></div></div>
       <span class="count small">{again ? t("study.progressAgain", { done, total, n: again }) : t("study.progress", { done, total })}</span>
     </div>
@@ -713,7 +751,7 @@
               {/if}
             {/if}
           {:else}
-            <button class="listen" onclick={() => speak(c.hanzi)} aria-label={t("study.play")}>
+            <button class="listen" onclick={() => speak(c.hanzi)} aria-label={t("study.play")} disabled={!voice.available} title={voice.available ? undefined : t("speech.noVoice")}>
               <Icon name="speaker" size={40} />
             </button>
           {/if}
@@ -747,7 +785,7 @@
             {/if}
             <div class="py-line">
               <span class="py-big"><Pinyin text={c.pinyin} /></span>
-              <button class="btn ghost icon" onclick={() => speak(c.hanzi)} aria-label={t("study.play")}>
+              <button class="btn ghost icon" onclick={() => speak(c.hanzi)} aria-label={t("study.play")} disabled={!voice.available} title={voice.available ? undefined : t("speech.noVoice")}>
                 <Icon name="speaker" />
               </button>
             </div>
@@ -758,9 +796,12 @@
       </div>
 
       <div class="actions">
-        {#if !revealed}
-          <button class="btn primary lg reveal" onclick={reveal}>{t("study.showAnswer")}</button>
-        {:else}
+        <!-- stays where it is and becomes Hide: the answer buttons come below it, so a second
+             click in the same place never answers the card -->
+        <button class="btn lg reveal" class:primary={!revealed} onclick={() => (revealed ? (revealed = false) : reveal())}>
+          {revealed ? t("study.hideAnswer") : t("study.showAnswer")}
+        </button>
+        {#if revealed}
           <div class="ratings" class:two={twoButtons}>
             {#each RATINGS as r (r.n)}
               <button class="rate {r.cls}" class:suggested={shownSuggested === r.n} onclick={() => rate(r.n)}>
@@ -1107,6 +1148,10 @@
   }
   .reveal {
     min-width: 260px;
+  }
+  .flip {
+    display: inline-flex;
+    transform: scaleX(-1);
   }
   .ratings {
     display: grid;

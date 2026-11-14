@@ -56,8 +56,17 @@
   onMount(async () => {
     decks = await api.listDecks().catch(() => []);
   });
+  // What is due is counted in the directions chosen on the Study page, so the two pages agree.
+  const studying: string[] = (() => {
+    try {
+      const sel = JSON.parse(localStorage.getItem("study-selection") ?? "null");
+      return Array.isArray(sel?.directions) ? sel.directions.filter((d: unknown) => typeof d === "string") : [];
+    } catch {
+      return [];
+    }
+  })();
   $effect(() => {
-    const filter = { deckId, days: period, direction: mode === "advanced" ? direction : null };
+    const filter = { deckId, days: period, direction: mode === "advanced" ? direction : null, dueDirections: studying };
     const mine = ++request;
     loading = true;
     api

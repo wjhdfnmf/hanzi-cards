@@ -34,6 +34,10 @@ pub struct StatsFilter {
     /// One study direction; none = all.
     #[serde(default)]
     pub direction: Option<String>,
+    /// The directions the learner studies (the Study page's choice): what is due and the
+    /// forecast count these only, so they agree with the Study page. Empty or none = all.
+    #[serde(default)]
+    pub due_directions: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -337,11 +341,14 @@ pub fn get_stats(conn: &Connection, filter: &StatsFilter) -> AppResult<Stats> {
                 r.get::<_, f64>(4)?,
                 r.get::<_, i64>(5)?,
                 r.get::<_, i64>(6)?,
+                r.get::<_, String>(1)?,
             ))
         })?;
+        let studying = filter.due_directions.as_ref().filter(|d| !d.is_empty() && direction.is_none());
         let mut recall_sum = 0.0;
         for row in rows {
-            let (hanzi, state, stability, difficulty, due, last_review) = row?;
+            let (hanzi, state, stability, difficulty, due, last_review, dir) = row?;
+            let waits = studying.is_none_or(|d| d.contains(&dir));
             let mature = state == scheduler::REVIEW && stability >= MATURE_DAYS;
             if let Some(w) = words.get_mut(&hanzi) {
                 w.studied = true;
@@ -353,11 +360,13 @@ pub fn get_stats(conn: &Connection, filter: &StatsFilter) -> AppResult<Stats> {
                 scheduler::REVIEW => st.young += 1,
                 _ => st.learning += 1,
             }
-            st.due_now += (due <= t) as i64;
             let due_in = (local_day(due, off) - today).max(0);
-            st.due_tomorrow += (due_in == 1 && due > t) as i64;
-            if due_in < 30 {
-                st.forecast[due_in as usize] += 1;
+            if waits {
+                st.due_now += (due <= t) as i64;
+                st.due_tomorrow += (due_in == 1 && due > t) as i64;
+                if due_in < 30 {
+                    st.forecast[due_in as usize] += 1;
+                }
             }
             let group = STABILITY_EDGES.iter().position(|&edge| stability < edge).unwrap_or(STABILITY_EDGES.len());
             st.stability[group] += 1;
@@ -365,7 +374,9 @@ pub fn get_stats(conn: &Connection, filter: &StatsFilter) -> AppResult<Stats> {
             let elapsed = (t - last_review).max(0) as f64 / DAY as f64;
             recall_sum += scheduler::retrievability(elapsed, stability.max(0.01)).clamp(0.0, 1.0);
             let interval = ((due - last_review) as f64 / DAY as f64).max(1.0);
-            st.daily_load += 1.0 / interval;
+            if waits {
+                st.daily_load += 1.0 / interval;
+            }
         }
         st.known_estimate = recall_sum;
         st.avg_retrievability = (st.studied_items > 0).then(|| recall_sum / st.studied_items as f64);
@@ -655,6 +666,13 @@ mod tests {
         assert_eq!((s.period.reviews, s.previous.is_none()), (3, true));
         let s = get_stats(&conn, &StatsFilter { direction: Some("recall".into()), ..Default::default() }).unwrap();
         assert_eq!((s.period.reviews, s.studied_items, s.unstudied_cards), (0, 0, 12));
+        // what is due counts only the directions being studied
+        conn.execute("UPDATE progress SET due = 0", []).unwrap();
+        let due = |dirs: &[&str]| {
+            let f = StatsFilter { due_directions: Some(dirs.iter().map(|d| d.to_string()).collect()), ..Default::default() };
+            get_stats(&conn, &f).unwrap().due_now
+        };
+        assert_eq!((due(&[]), due(&["recognition"]), due(&["recall"])), (2, 2, 0));
     }
 
     #[test]

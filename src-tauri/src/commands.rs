@@ -458,6 +458,12 @@ pub fn answer_card(
     study::answer(&mut lock(&state), card_id, &direction, rating, duration_ms)
 }
 
+/// Take back the latest answer (the Study page's Back button).
+#[tauri::command]
+pub fn undo_answer(state: State<AppState>, card_id: i64, direction: String) -> AppResult<()> {
+    study::undo_answer(&mut lock(&state), card_id, &direction)
+}
+
 #[tauri::command]
 pub async fn get_stats(app: AppHandle, filter: Option<stats::StatsFilter>) -> AppResult<Stats> {
     blocking(app, move |conn| stats::get_stats(conn, &filter.unwrap_or_default())).await
@@ -571,12 +577,46 @@ pub fn tts_available() -> bool {
 
 /// Speech for `text` as a WAV file (raw bytes, not JSON).
 #[tauri::command]
-pub async fn tts_wav(text: String, voice: String, rate: f64) -> AppResult<tauri::ipc::Response> {
-    let wav = tauri::async_runtime::spawn_blocking(move || crate::tts::synthesize(&text, &voice, rate))
+pub async fn tts_wav(app: AppHandle, text: String, voice: String, rate: f64, engine: Option<String>) -> AppResult<tauri::ipc::Response> {
+    let text = crate::input::clip(&text, 2000);
+    let dir = app_data(&app)?;
+    let wav = tauri::async_runtime::spawn_blocking(move || match engine.as_deref() {
+        // the built-in voice (Settings › Audio), else the system's
+        Some("kokoro") => crate::kokoro::synthesize(&dir, &text, rate),
+        _ => crate::tts::synthesize(&text, &voice, rate),
+    })
         .await
         .map_err(|e| AppError::msg(e.to_string()))?
         .map_err(AppError::msg)?;
     Ok(tauri::ipc::Response::new(wav))
+}
+
+// ---------- the built-in voice (Settings › Audio) ----------
+
+#[tauri::command]
+pub fn kokoro_status(app: AppHandle) -> AppResult<crate::kokoro::Status> {
+    Ok(crate::kokoro::status(&app_data(&app)?))
+}
+
+#[tauri::command]
+pub async fn kokoro_download(app: AppHandle) -> AppResult<()> {
+    let dir = app_data(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut last = std::time::Instant::now();
+        crate::kokoro::download(&dir, |received, total| {
+            if last.elapsed().as_millis() >= 200 || received == total {
+                last = std::time::Instant::now();
+                let _ = app.emit("voice-download", serde_json::json!({ "received": received, "total": total }));
+            }
+        })
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+#[tauri::command]
+pub fn kokoro_remove(app: AppHandle) -> AppResult<()> {
+    crate::kokoro::remove(&app_data(&app)?)
 }
 
 // ---------- tone calibration (Settings) ----------
@@ -1160,6 +1200,11 @@ pub fn delete_story_folder(state: State<AppState>, id: i64) -> AppResult<()> {
 #[tauri::command]
 pub fn list_stories(state: State<AppState>, folder_id: Option<i64>) -> AppResult<Vec<stories::StoryInfo>> {
     stories::list_stories(&lock_stories(&state), folder_id)
+}
+
+#[tauri::command]
+pub fn bookmark_story(state: State<AppState>, id: i64, on: bool) -> AppResult<()> {
+    stories::set_bookmark(&lock_stories(&state), id, on)
 }
 
 #[tauri::command]

@@ -16,6 +16,12 @@
     more?: string;
   } = $props();
   let hover = $state<{ date: string; value: number } | null>(null);
+  // When the weeks don't fit, show the latest ones: scrolled to the right.
+  let wrap: HTMLDivElement | undefined = $state();
+  $effect(() => {
+    void days;
+    if (wrap) wrap.scrollLeft = wrap.scrollWidth;
+  });
 
   const cell = 13;
   const gap = 3;
@@ -37,7 +43,7 @@
   }
 </script>
 
-<div class="wrap">
+<div class="wrap" bind:this={wrap}>
   <svg width={weeks * (cell + gap)} height={7 * (cell + gap)} role="img" aria-label={ariaLabel}>
     {#each cells as d, i (i)}
       {#if d}
@@ -71,6 +77,7 @@
 <style>
   .wrap {
     overflow-x: auto;
+    overflow-y: hidden; /* (a sideways scroll bar must not bring an up-and-down one with it) */
   }
   svg {
     display: block;

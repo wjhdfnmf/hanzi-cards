@@ -238,12 +238,63 @@ What one learner's 36 recordings showed:
 4. With the GPU build (`gpu-whisper-plan.md`), re-measure Whisper's tone scoring with
    large-v3-turbo: a bigger model may hear tones much better.
 
+## A learned model for single syllables, and how much calibration matters (2026-11-13)
+
+Three new measurements, all in `tones.rs` tests, all on the processor.
+
+**1. A classifier learned from Tone Perfect** (`tone_model_bench`). Softmax regression on a
+syllable's five contour points, how far each sits from their mean, its fall and rise, and its
+length against the speaker's usual. Each of the six speakers was judged by a model fitted to
+the other five (9,839 clean clips; the noisy set scored within a point of this).
+
+| Single syllables | Tone Perfect, unseen speaker | speaker1 clean (80) | speaker1 noisy (80) | speaker1, syllables in words (88) |
+|---|---|---|---|---|
+| Tone shapes + length (the app until now) | 91.5% (4th tones 79%) | 74 | 67 | 66 |
+| Learned model alone | **97.1%** (4th tones 98%) | 71 | 68 | 60 |
+| Both, model weight 1 / 2 / **3** / 4 | 93.4 / 94.5 / **95.4** / 95.9% | 74 / 75 / **74** / 74 | 68 / 68 / **68** / 69 | 63 / 63 / **62** / 62 |
+
+- The model alone is much better on Tone Perfect and worse on speaker1 (a native speaker
+  recorded at home): it has only heard careful studio tones. It takes speaker1's low 3rd tones
+  that never rise for 4th tones (4 of 20), which the app's "half third" shape gets right.
+- Blended with the shapes it keeps most of the gain and loses nothing on speaker1. **The app
+  now uses the blend at weight 3 for a syllable said alone** (`MODEL_WEIGHT`), with the weights
+  fitted to all six speakers (`TONE_MODEL`).
+- In words the model made things worse at every weight, so words keep the shapes alone.
+- Not measured: the effect on the combined Whisper + pitch judgement (`tone_select_bench`
+  takes about half an hour on the processor and was not finished).
+
+**2. speaker1's remaining misses** are mostly 2nd tones heard as 3rd (5 of 20 said alone, 15
+of 44 over all). Their 2nd tones start at the bottom of their range and rise late to the
+middle (for example chuáng: -1.9, -2.1, -2.0, -1.6, -0.5 on the -2 to +2 scale), which is
+where their 3rd tones sit. What separates them in the recordings is creak: the 3rd tones
+have stretches with no pitch at all, the 2nd tones are pitched throughout. A "share of the
+syllable that is creak" feature is the next thing to try; it needs the model refitted.
+
+**3. How many recordings calibration needs** (`calibration_size_bench`). Each Tone Perfect
+speaker's range and usual length were taken from only some of their recordings, then all
+their recordings were judged.
+
+| Range taken from | Right |
+|---|---|
+| the four tones of "ma" only | 94.1% |
+| 8 recordings | 93.4% |
+| 16 | 95.1% |
+| 40 | 96.0% |
+| all (about 1,640) | 96.6% |
+
+Calibration's four "ma" already get within 2.5 points of knowing the voice fully, and the
+profile keeps learning from answers afterwards. One speaker's median came out 6 semitones
+low from "ma" alone, so a few more varied syllables in calibration would be worth having.
+(These figures are for the speakers the model was fitted to, so they are a little flattering.)
+
 ## How to re-run the measurements
 
 ```bash
 cd src-tauri
 TONES_DIR=<folder with list.tsv, clean/, noisy/> cargo test --lib tone_bench -- --ignored --nocapture
 WHISPER_DIR="$APPDATA/com.hanzicards.app" TONES_DIR=<same> cargo test --lib whisper_tone_bench -- --ignored --nocapture
+TP_DIR=../tone-data/tp/all SPEAKER_DIR=../tone-data/speaker1 cargo test --release --lib tone_model_bench -- --ignored --nocapture
+TP_DIR=../tone-data/tp/all cargo test --release --lib calibration_size_bench -- --ignored --nocapture
 ```
 
 `list.tsv` lines are `text<TAB>tones as spoken` (sandhi applied, 5 = neutral, not graded),

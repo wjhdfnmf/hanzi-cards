@@ -65,7 +65,8 @@
       showToast(errorText(e), "err");
     }
   }
-  import { outputDevices, routingReady, speak, voicesReady } from "../lib/speech";
+  import { BUILT_IN, outputDevices, routingReady, sampleBuiltIn, speak, voicesReady } from "../lib/speech";
+  import { voice, checkVoices } from "../lib/voice.svelte";
 
   let voices = $state<SpeechSynthesisVoice[]>([]);
   let voicesChecked = $state(false);
@@ -140,6 +141,39 @@
       showToast(errorText(e), "err");
     }
     device = await api.whisperDeviceInfo().catch(() => null);
+  }
+
+  // The built-in voice (Kokoro): a download, the backup where the computer has no Chinese voice
+  let builtInMb = $state(147);
+  let voiceProgress = $state<number | null>(null);
+  onMount(() => {
+    api.kokoroStatus().then((s) => (builtInMb = s.downloadMb)).catch(() => {});
+    let unlisten: (() => void) | undefined;
+    listen<{ received: number; total: number }>("voice-download", (e) => {
+      voiceProgress = e.payload.total ? Math.floor((e.payload.received / e.payload.total) * 100) : 0;
+    }).then((f) => (unlisten = f));
+    return () => unlisten?.();
+  });
+  async function downloadVoice() {
+    voiceProgress = 0;
+    try {
+      await api.kokoroDownload();
+      await checkVoices();
+      sampleBuiltIn("你好，欢迎学习中文。");
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      voiceProgress = null;
+    }
+  }
+  async function removeVoice() {
+    try {
+      await api.kokoroRemove();
+      if (settings.voice === BUILT_IN) await saveSetting("voice", "");
+      await checkVoices();
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
   }
 
   // NVIDIA's libraries for the graphics card (downloaded on request)
@@ -973,10 +1007,28 @@
     </label>
     <label class="row">
       <span>{t("settings.voice")}</span>
-      <select value={settings.voice} onchange={(e) => saveSetting("voice", e.currentTarget.value)} disabled={!voices.length}>
+      <select value={settings.voice} onchange={(e) => saveSetting("voice", e.currentTarget.value)} disabled={!voices.length && !voice.builtIn}>
         {#each voices as v (v.name)}<option value={v.name}>{v.name}</option>{/each}
+        {#if voice.builtIn}<option value={BUILT_IN}>{t("settings.builtIn")}</option>{/if}
       </select>
     </label>
+    <div class="row">
+      <span>
+        {t("settings.builtIn")}
+        <small class="faint block">{t(voice.system ? "settings.builtIn.extra" : "settings.builtIn.need")}</small>
+      </span>
+      {#if voice.builtIn}
+        <span class="rowbtns">
+          <span class="badge review">{t("settings.builtIn.installed")}</span>
+          <button class="btn small" onclick={() => sampleBuiltIn("你好，欢迎学习中文。")}>{t("settings.builtIn.sample")}</button>
+          <button class="btn ghost small" onclick={removeVoice}>{t("settings.builtIn.remove")}</button>
+        </span>
+      {:else if voiceProgress !== null}
+        <span class="small muted">{t("settings.builtIn.downloading", { p: voiceProgress })}</span>
+      {:else}
+        <button class="btn small" class:primary={!voice.system} onclick={downloadVoice}>{t("settings.builtIn.download", { n: builtInMb })}</button>
+      {/if}
+    </div>
     {#if canChooseOutput}
       <label class="row">
         <span>
@@ -1969,5 +2021,12 @@
   }
   .mic-text {
     font-size: 16px;
+  }
+  .rowbtns {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 </style>

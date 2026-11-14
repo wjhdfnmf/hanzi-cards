@@ -629,6 +629,57 @@ pub fn length_distances(length: f32, typical: f32, weight: f32, by_tone: &[f32; 
     by_tone.map(|mu| weight * (x - mu).powi(2))
 }
 
+// ---------- a classifier learned from recordings, for a syllable said alone ----------
+
+/// What the learned model sees of a syllable: its five contour points, how far each is from
+/// their mean (squared), how far it falls and rises, and its length against the speaker's
+/// usual (as a logarithm; 0 when that isn't known).
+pub fn model_features(c: &[f32; 5], len_ratio_ln: f32) -> [f32; 19] {
+    let mean = c.iter().sum::<f32>() / 5.0;
+    let (fall, rise) = fall_rise(c);
+    let mut x = [0f32; 19];
+    x[0] = 1.0;
+    for i in 0..5 {
+        x[1 + i] = c[i];
+        x[6 + i] = (c[i] - mean) * (c[i] - mean);
+    }
+    x[11..].copy_from_slice(&[mean * mean, fall, rise, fall * fall, rise * rise, c[4] - c[0], len_ratio_ln, len_ratio_ln * len_ratio_ln]);
+    x
+}
+
+/// Softmax regression weights [tone][feature], fitted to Tone Perfect (six native speakers,
+/// 9,839 clean recordings of single syllables) by `tone_model_bench` (MODEL_PRINT=1).
+const TONE_MODEL: [[f32; 19]; 4] = [
+    [3.3109, 0.1748, 0.5459, 0.6249, 0.6436, 0.1337, 0.0566, 0.1884, 0.4958, 0.1032, -0.8252, -0.1509, -0.5997, -1.2339, 0.0031, -0.0021, -0.0342, 1.2503, -2.8819],
+    [0.2538, -0.3869, -0.5384, -0.3677, 0.3294, 0.2703, -0.0264, -0.0359, -0.6061, -0.0578, 0.5700, -0.6697, -0.1944, 0.8498, 0.0327, -0.1026, 0.3909, 0.2044, -4.5188],
+    [-2.0222, -0.1504, -0.4084, -0.2660, -0.6866, -0.3087, -0.0540, 0.0783, 0.2429, -0.0518, -0.0931, 0.6232, 0.2107, 0.2702, 0.0245, -0.0101, -0.0783, 4.6498, 4.9288],
+    [-1.5425, 0.3624, 0.4010, 0.0088, -0.2864, -0.0954, 0.0238, -0.2308, -0.1326, 0.0064, 0.3483, 0.1974, 0.5834, 0.1139, -0.0602, 0.1147, -0.2783, -6.1044, 2.4718],
+];
+
+/// The learned model's log-probability of each tone for a syllable said alone.
+pub fn model_logprobs(c: &[f32; 5], len_ratio_ln: f32) -> [f32; 4] {
+    let x = model_features(c, len_ratio_ln);
+    let s = TONE_MODEL.map(|w| w.iter().zip(&x).map(|(a, b)| a * b).sum::<f32>());
+    let m = s.iter().copied().fold(f32::MIN, f32::max);
+    let z = m + s.iter().map(|a| (a - m).exp()).sum::<f32>().ln();
+    s.map(|a| a - z)
+}
+
+/// How much the learned model counts beside the template distances for a syllable said alone
+/// (`MODEL_WEIGHT` to experiment; 0 = templates only).
+///
+/// Measured 2026-11-13, each Tone Perfect speaker judged by a model fitted to the other five:
+/// templates and length 91.5%; the model alone 97.1%; blended at 1, 2, 3, 4: 93.4, 94.5,
+/// 95.4, 95.9% (4th tones 79% → 90% at 3). On a native speaker recorded at home (speaker1:
+/// 80 single syllables), the model alone was worse than the templates (71 against 74 right:
+/// it knows only careful studio tones, and takes a low 3rd tone without its rise for a 4th);
+/// blended at 3 it was level (74 clean, 68 against 67 with noise). In words the model made
+/// things worse at every weight (66 of 88 → 62), so words keep the templates alone.
+pub fn model_weight() -> f32 {
+    std::env::var("MODEL_WEIGHT").ok().and_then(|v| v.parse().ok()).unwrap_or(MODEL_WEIGHT)
+}
+const MODEL_WEIGHT: f32 = 3.0;
+
 /// The nearest tone (1-4) for a contour, with the distance to it and to the runner-up.
 pub fn classify(c: &[f32; 5], shape_weight: f32) -> (u8, f32, f32) {
     let d = distances(c, shape_weight);
@@ -653,9 +704,17 @@ pub fn tone_logprobs(frames: &[Frame], n: usize, voice: Voice, typical_length: O
             let seg = *syl.get(k)?;
             let c = contour(frames, seg, voice)?;
             let mut d = distances_at(&c, SHAPE_WEIGHT, fall_weight(), Place::of(k, n));
-            if let (1, Some(typical)) = (n, typical_length) {
-                let extra = length_distances(syllable_length(frames, seg) as f32, typical, length_weight(), &LENGTH_BY_TONE);
-                (0..4).for_each(|t| d[t] += extra[t]);
+            if n == 1 {
+                let length = syllable_length(frames, seg) as f32;
+                if let Some(typical) = typical_length {
+                    let extra = length_distances(length, typical, length_weight(), &LENGTH_BY_TONE);
+                    (0..4).for_each(|t| d[t] += extra[t]);
+                }
+                // what a model learned from recordings makes of it (see `model_weight`)
+                let len_ln = typical_length.map_or(0.0, |typical| (length.max(1.0) / typical.max(1.0)).ln());
+                let learned = model_logprobs(&c, len_ln);
+                let weight = model_weight();
+                (0..4).for_each(|t| d[t] -= weight * learned[t]);
             }
             let d = d.map(|x| -x / TONE_TEMPERATURE);
             let max = d.iter().copied().fold(f32::MIN, f32::max);
@@ -1297,6 +1356,304 @@ mod tests {
                     println!("  misses: {}", misses.join("  "));
                 }
             }
+        }
+    }
+
+    // ---------- a learned classifier, measured against the template one ----------
+
+    /// Softmax regression by gradient descent on standardised features; returns weights
+    /// [tone][feature] for the raw features (the scaling folded in).
+    fn fit_softmax(xs: &[Vec<f32>], ys: &[usize], l2: f32) -> Vec<Vec<f32>> {
+        let (n, d) = (xs.len(), xs[0].len());
+        let mut mu = vec![0f32; d];
+        let mut sd = vec![0f32; d];
+        for x in xs {
+            for j in 0..d {
+                mu[j] += x[j] / n as f32;
+            }
+        }
+        for x in xs {
+            for j in 0..d {
+                sd[j] += (x[j] - mu[j]).powi(2) / n as f32;
+            }
+        }
+        for j in 0..d {
+            sd[j] = sd[j].sqrt().max(1e-6);
+        }
+        mu[0] = 0.0;
+        sd[0] = 1.0; // the constant
+        let z: Vec<Vec<f32>> = xs.iter().map(|x| (0..d).map(|j| (x[j] - mu[j]) / sd[j]).collect()).collect();
+        let mut w = vec![vec![0f32; d]; 4];
+        let mut v = vec![vec![0f32; d]; 4];
+        for _ in 0..600 {
+            let mut g = vec![vec![0f32; d]; 4];
+            for (x, &y) in z.iter().zip(ys) {
+                let s: Vec<f32> = w.iter().map(|wk| wk.iter().zip(x).map(|(a, b)| a * b).sum()).collect();
+                let m = s.iter().copied().fold(f32::MIN, f32::max);
+                let e: Vec<f32> = s.iter().map(|a| (a - m).exp()).collect();
+                let t: f32 = e.iter().sum();
+                for k in 0..4 {
+                    let p = e[k] / t - (k == y) as u8 as f32;
+                    for j in 0..d {
+                        g[k][j] += p * x[j] / n as f32;
+                    }
+                }
+            }
+            for k in 0..4 {
+                for j in 0..d {
+                    v[k][j] = 0.9 * v[k][j] - 0.5 * (g[k][j] + l2 * w[k][j] * (j > 0) as u8 as f32);
+                    w[k][j] += v[k][j];
+                }
+            }
+        }
+        // back to raw features
+        w.iter()
+            .map(|wk| {
+                let mut raw: Vec<f32> = (0..d).map(|j| wk[j] / sd[j]).collect();
+                raw[0] = wk[0] - (1..d).map(|j| wk[j] * mu[j] / sd[j]).sum::<f32>();
+                raw
+            })
+            .collect()
+    }
+
+    /// The learned model and the template distances together: MODEL_ALPHA × the model's
+    /// log-probabilities minus the distances (unset = the model alone).
+    fn blended_tone(w: &[Vec<f32>], x: &[f32], d: &[f32; 4]) -> usize {
+        let Some(alpha) = std::env::var("MODEL_ALPHA").ok().and_then(|v| v.parse::<f32>().ok()) else { return model_tone(w, x) };
+        let s: Vec<f32> = (0..4).map(|k| w[k].iter().zip(x).map(|(p, q)| p * q).sum::<f32>()).collect();
+        let m = s.iter().copied().fold(f32::MIN, f32::max);
+        let z = m + s.iter().map(|a| (a - m).exp()).sum::<f32>().ln();
+        (0..4).max_by(|&a, &b| (alpha * (s[a] - z) - d[a]).total_cmp(&(alpha * (s[b] - z) - d[b]))).unwrap()
+    }
+
+    fn model_tone(w: &[Vec<f32>], x: &[f32]) -> usize {
+        (0..4)
+            .max_by(|&a, &b| {
+                let s = |k: usize| w[k].iter().zip(x).map(|(p, q)| p * q).sum::<f32>();
+                s(a).total_cmp(&s(b))
+            })
+            .unwrap()
+    }
+
+    /// Would a classifier learned from Tone Perfect beat the fixed shapes? Each speaker is
+    /// tested with a model trained on the other five; then a model trained on all six is
+    /// tried on a learner-like speaker (SPEAKER_DIR), single syllables and words.
+    /// TP_DIR=../tone-data/tp/all SPEAKER_DIR=../tone-data/speaker1 cargo test --release --lib tone_model_bench -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn tone_model_bench() {
+        let Ok(dir) = std::env::var("TP_DIR") else { return };
+        let dir = std::path::Path::new(&dir);
+        let meta: Vec<(u8, String)> = std::fs::read_to_string(dir.join("meta.tsv"))
+            .unwrap()
+            .lines()
+            .map(|l| {
+                let f: Vec<&str> = l.split('\t').collect();
+                (f[2].parse().unwrap(), f[3].to_string())
+            })
+            .collect();
+        let mut speakers: Vec<String> = meta.iter().map(|m| m.1.clone()).collect();
+        speakers.sort();
+        speakers.dedup();
+        let l2: f32 = std::env::var("MODEL_L2").ok().and_then(|v| v.parse().ok()).unwrap_or(1e-3);
+        let mut final_model: Option<Vec<Vec<f32>>> = None;
+        for set in ["clean", "noisy"] {
+            let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+            let mut tracks: Vec<Vec<Frame>> = vec![Vec::new(); meta.len()];
+            std::thread::scope(|s| {
+                for (k, chunk) in tracks.chunks_mut(meta.len().div_ceil(threads)).enumerate() {
+                    let base = k * meta.len().div_ceil(threads);
+                    s.spawn(move || {
+                        for (j, t) in chunk.iter_mut().enumerate() {
+                            *t = pitch_track(&read_wav(&dir.join(set).join(format!("{}.wav", base + j))));
+                        }
+                    });
+                }
+            });
+            // per speaker: the voice from all their clips and their usual syllable length
+            struct Row {
+                tone: usize,
+                spk: usize,
+                c: [f32; 5],
+                len: f32,
+            }
+            let mut rows: Vec<Row> = Vec::new();
+            for (si, spk) in speakers.iter().enumerate() {
+                let mine: Vec<usize> = (0..meta.len()).filter(|&i| &meta[i].1 == spk).collect();
+                let voice = Voice::from_frames(mine.iter().flat_map(|&i| tracks[i].iter())).unwrap();
+                let mut got: Vec<(usize, [f32; 5], f32)> = Vec::new();
+                for &i in &mine {
+                    let Some(&seg) = syllables(&tracks[i], 1).first() else { continue };
+                    let Some(c) = contour(&tracks[i], seg, voice) else { continue };
+                    got.push((meta[i].0 as usize - 1, c, syllable_length(&tracks[i], seg) as f32));
+                }
+                let mut lens: Vec<f32> = got.iter().map(|g| g.2).collect();
+                lens.sort_by(f32::total_cmp);
+                let typical = lens[lens.len() / 2];
+                rows.extend(got.into_iter().map(|(tone, c, len)| Row { tone, spk: si, c, len: (len / typical).ln() }));
+            }
+            let feats: Vec<Vec<f32>> = rows.iter().map(|r| model_features(&r.c, r.len).to_vec()).collect();
+            // the app's way, on the same clips
+            // (the templates and the length cue alone: what the app did before the model)
+            let app_d = |r: &Row| {
+                let mut d = distances_at(&r.c, SHAPE_WEIGHT, fall_weight(), Place::Alone);
+                let extra = length_distances(r.len.exp(), 1.0, length_weight(), &LENGTH_BY_TONE);
+                (0..4).for_each(|t| d[t] += extra[t]);
+                d
+            };
+            let app = |r: &Row| {
+                let d = app_d(r);
+                (0..4).min_by(|&a, &b| d[a].total_cmp(&d[b])).unwrap()
+            };
+            let mut conf_app = [[0u32; 4]; 4];
+            let mut conf_model = [[0u32; 4]; 4];
+            let mut per: Vec<(u32, u32, u32)> = vec![(0, 0, 0); speakers.len()];
+            for si in 0..speakers.len() {
+                let (xs, ys): (Vec<Vec<f32>>, Vec<usize>) = rows.iter().zip(&feats).filter(|(r, _)| r.spk != si).map(|(r, x)| (x.clone(), r.tone)).unzip();
+                let w = fit_softmax(&xs, &ys, l2);
+                for (r, x) in rows.iter().zip(&feats).filter(|(r, _)| r.spk == si) {
+                    let (a, m) = (app(r), blended_tone(&w, x, &app_d(r)));
+                    conf_app[r.tone][a] += 1;
+                    conf_model[r.tone][m] += 1;
+                    per[si].0 += (a == r.tone) as u32;
+                    per[si].1 += (m == r.tone) as u32;
+                    per[si].2 += 1;
+                }
+            }
+            let total = rows.len() as f32;
+            let ok = |c: &[[u32; 4]; 4]| (0..4).map(|t| c[t][t]).sum::<u32>() as f32;
+            let by_tone = |c: &[[u32; 4]; 4]| (0..4).map(|t| format!("T{} {:.0}%", t + 1, 100.0 * c[t][t] as f32 / c[t].iter().sum::<u32>() as f32)).collect::<Vec<_>>().join(" ");
+            println!("== {set}: {} clips", rows.len());
+            println!("  app (fixed shapes + length)   {:.1}% | {} | {:?}", 100.0 * ok(&conf_app) / total, by_tone(&conf_app), conf_app);
+            println!("  learned (other five speakers) {:.1}% | {} | {:?}", 100.0 * ok(&conf_model) / total, by_tone(&conf_model), conf_model);
+            println!("  by speaker (app → learned): {}", speakers.iter().zip(&per).map(|(s, p)| format!("{s} {:.0}→{:.0}%", 100.0 * p.0 as f32 / p.2 as f32, 100.0 * p.1 as f32 / p.2 as f32)).collect::<Vec<_>>().join("  "));
+            if set == "clean" {
+                let ys: Vec<usize> = rows.iter().map(|r| r.tone).collect();
+                final_model = Some(fit_softmax(&feats, &ys, l2));
+            }
+        }
+        let w = final_model.unwrap();
+        if std::env::var_os("MODEL_PRINT").is_some() {
+            for wk in &w {
+                println!("    [{}],", wk.iter().map(|v| format!("{v:.4}")).collect::<Vec<_>>().join(", "));
+            }
+        }
+        // a learner-like speaker the model has never heard
+        let Ok(sdir) = std::env::var("SPEAKER_DIR") else { return };
+        let sdir = std::path::Path::new(&sdir);
+        let items: Vec<(usize, Vec<u8>)> = std::fs::read_to_string(sdir.join("meta.tsv"))
+            .unwrap()
+            .lines()
+            .skip(1)
+            .map(|l| {
+                let f: Vec<&str> = l.split('\t').collect();
+                (f[0].parse().unwrap(), f[7].bytes().map(|b| b - b'0').collect())
+            })
+            .collect();
+        for set in ["clean", "noisy"] {
+            let tracks: Vec<Vec<Frame>> = items.iter().map(|it| pitch_track(&read_wav(&sdir.join(set).join(format!("{}.wav", it.0))))).collect();
+            let voice = Voice::from_frames(tracks.iter().flatten()).unwrap();
+            let mut lens: Vec<f32> = items.iter().zip(&tracks).filter(|(it, _)| it.1.len() == 1).filter_map(|(_, f)| syllables(f, 1).first().map(|&s| syllable_length(f, s) as f32)).collect();
+            lens.sort_by(f32::total_cmp);
+            let typical = lens[lens.len() / 2];
+            // [single | word][app | learned] = (right, judged)
+            let mut score = [[(0u32, 0u32); 2]; 2];
+            let mut conf = [[0u32; 4]; 4];
+            for (it, f) in items.iter().zip(&tracks) {
+                let n = it.1.len();
+                let syl = syllables(f, n);
+                let probs = tone_logprobs(f, n, voice, Some(typical));
+                for (k, &want) in it.1.iter().enumerate() {
+                    if want == 5 {
+                        continue;
+                    }
+                    let part = (n > 1) as usize;
+                    let app = probs.get(k).copied().flatten().map(|p| (0..4).max_by(|&a, &b| p[a].total_cmp(&p[b])).unwrap());
+                    let learned = syl.get(k).and_then(|&seg| contour(f, seg, voice).map(|c| (c, seg))).map(|(c, seg)| {
+                        // in a word the length follows the rhythm, not the tone: leave it out (0 = usual)
+                        let len = if n == 1 { (syllable_length(f, seg) as f32 / typical).ln() } else { 0.0 };
+                        let mut d = distances_at(&c, SHAPE_WEIGHT, fall_weight(), Place::of(k, n));
+                        if n == 1 {
+                            let extra = length_distances(len.exp(), 1.0, length_weight(), &LENGTH_BY_TONE);
+                            (0..4).for_each(|t| d[t] += extra[t]);
+                        }
+                        blended_tone(&w, &model_features(&c, len), &d)
+                    });
+                    for (m, got) in [app, learned].into_iter().enumerate() {
+                        score[part][m].1 += 1;
+                        score[part][m].0 += (got == Some(want as usize - 1)) as u32;
+                    }
+                    if let (0, Some(g)) = (part, learned) {
+                        conf[want as usize - 1][g] += 1;
+                    }
+                }
+            }
+            let pct = |s: (u32, u32)| format!("{}/{} {:.0}%", s.0, s.1, 100.0 * s.0 as f32 / s.1.max(1) as f32);
+            println!("{} {set}: single syllables app {} → learned {} | in words app {} → learned {} | learned singles {:?}", sdir.display(), pct(score[0][0]), pct(score[0][1]), pct(score[1][0]), pct(score[1][1]), conf);
+        }
+    }
+
+    /// How much does calibration matter? Each Tone Perfect speaker's range (and usual syllable
+    /// length) is taken from only some of their recordings, as calibration would: the four
+    /// tones of "ma" alone, then 8, 16 and 40 recordings spread through their list, then all.
+    /// Every recording of theirs is then judged the way the app does it.
+    /// TP_DIR=../tone-data/tp/all cargo test --release --lib calibration_size_bench -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn calibration_size_bench() {
+        let Ok(dir) = std::env::var("TP_DIR") else { return };
+        let dir = std::path::Path::new(&dir);
+        let meta: Vec<(String, u8, String)> = std::fs::read_to_string(dir.join("meta.tsv"))
+            .unwrap()
+            .lines()
+            .map(|l| {
+                let f: Vec<&str> = l.split('\t').collect();
+                (f[1].to_string(), f[2].parse().unwrap(), f[3].to_string())
+            })
+            .collect();
+        let mut speakers: Vec<String> = meta.iter().map(|m| m.2.clone()).collect();
+        speakers.sort();
+        speakers.dedup();
+        let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+        let mut tracks: Vec<Vec<Frame>> = vec![Vec::new(); meta.len()];
+        std::thread::scope(|s| {
+            for (k, chunk) in tracks.chunks_mut(meta.len().div_ceil(threads)).enumerate() {
+                let base = k * meta.len().div_ceil(threads);
+                s.spawn(move || {
+                    for (j, t) in chunk.iter_mut().enumerate() {
+                        *t = pitch_track(&read_wav(&dir.join("clean").join(format!("{}.wav", base + j))));
+                    }
+                });
+            }
+        });
+        let sets: [(&str, usize); 5] = [("ma × 4", 0), ("8", 8), ("16", 16), ("40", 40), ("all", usize::MAX)];
+        let mut right = vec![0u32; sets.len()];
+        let mut total = 0u32;
+        let mut ranges: Vec<Vec<String>> = vec![Vec::new(); sets.len()];
+        for spk in &speakers {
+            let mine: Vec<usize> = (0..meta.len()).filter(|&i| &meta[i].2 == spk).collect();
+            for (k, (_, n)) in sets.iter().enumerate() {
+                let chosen: Vec<usize> = match *n {
+                    0 => mine.iter().copied().filter(|&i| meta[i].0 == "ma").collect(),
+                    usize::MAX => mine.clone(),
+                    n => (0..n).map(|j| mine[(j * mine.len() / n + 7) % mine.len()]).collect(),
+                };
+                let Some(voice) = Voice::from_frames(chosen.iter().flat_map(|&i| tracks[i].iter())) else { continue };
+                let mut lens: Vec<f32> = chosen.iter().filter_map(|&i| syllables(&tracks[i], 1).first().map(|&s| syllable_length(&tracks[i], s) as f32)).collect();
+                lens.sort_by(f32::total_cmp);
+                let typical = lens.get(lens.len() / 2).copied();
+                ranges[k].push(format!("{:.0}±{:.0}", voice.median, voice.spread));
+                for &i in &mine {
+                    let got = tone_logprobs(&tracks[i], 1, voice, typical).first().copied().flatten().map(|p| 1 + (0..4).max_by(|&a, &b| p[a].total_cmp(&p[b])).unwrap() as u8);
+                    right[k] += (got == Some(meta[i].1)) as u32;
+                    if k == 0 {
+                        total += 1;
+                    }
+                }
+            }
+        }
+        for (k, (name, _)) in sets.iter().enumerate() {
+            println!("range from {name:7} recordings: {:.1}% right | ranges (semitones, median±spread) {}", 100.0 * right[k] as f32 / total as f32, ranges[k].join(" "));
         }
     }
 }
