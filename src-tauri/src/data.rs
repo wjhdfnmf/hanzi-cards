@@ -577,6 +577,7 @@ pub fn open_for_version(app_data: &Path, version: &str) -> AppResult<Connection>
 
 /// Open (creating if needed) the reading database, after today's backup of it.
 pub fn open_reading(app_data: &Path) -> AppResult<Connection> {
+    let new = !db_path(app_data, Kind::Reading).exists();
     if let Some(raw) = look(app_data, Kind::Reading)? {
         sort_out_backups(app_data, Kind::Reading);
         clean_up(app_data, Kind::Reading);
@@ -593,7 +594,12 @@ pub fn open_reading(app_data: &Path) -> AppResult<Connection> {
             }
         }
     }
-    stories::open(&db_path(app_data, Kind::Reading)).map_err(|e| if is_busy(&e) { in_use(Kind::Reading) } else { e.into() })
+    let conn = stories::open(&db_path(app_data, Kind::Reading)).map_err(|e| if is_busy(&e) { in_use(Kind::Reading) } else { e.into() })?;
+    // a new install starts with one short story, as it starts with one small deck
+    if new {
+        stories::seed(&conn)?;
+    }
+    Ok(conn)
 }
 
 fn what(kind: Kind) -> &'static str {
@@ -962,6 +968,7 @@ mod tests {
     fn reading_database() {
         let a = temp_dir("ra");
         let other = temp_dir("rb");
+        // (a new reading database starts with the starter story: one more than is made here)
         let mut conn = open_reading(&a).unwrap();
         stories::create_story(&conn, None, "One", "你好").unwrap();
         // a cards database isn't a reading database, and the other way round
@@ -973,11 +980,11 @@ mod tests {
         let copy = other.join("reading.db");
         save_copy(&conn, &a, Kind::Reading, &copy).unwrap();
         stories::create_story(&conn, None, "Two", "再见").unwrap();
-        assert_eq!(info(&conn, &a, Kind::Reading).unwrap().current.contents.unwrap().stories, 2);
+        assert_eq!(info(&conn, &a, Kind::Reading).unwrap().current.contents.unwrap().stories, 3);
         let saved = use_file(&mut conn, &a, Kind::Reading, &copy).unwrap();
-        assert_eq!(contents(&conn, Kind::Reading).unwrap().stories, 1);
+        assert_eq!(contents(&conn, Kind::Reading).unwrap().stories, 2);
         assert!(saved.starts_with(backup_dir(&a, Kind::Reading)));
-        assert_eq!(inspect(&saved, Kind::Reading).unwrap().contents.unwrap().stories, 2);
+        assert_eq!(inspect(&saved, Kind::Reading).unwrap().contents.unwrap().stories, 3);
         assert_eq!(info(&conn, &a, Kind::Reading).unwrap().auto_backups.len(), 1);
         drop(conn);
         let _ = std::fs::remove_dir_all(&a);
@@ -1149,6 +1156,32 @@ mod tests {
         drop(conn);
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&other);
+    }
+
+    /// A new install has one story to read, written with the starter deck's words; an existing
+    /// library is left as it is, and so is one the learner has emptied.
+    #[test]
+    fn a_new_install_starts_with_one_story() {
+        let dir = std::env::temp_dir().join(format!("hanzi-data-starter-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cards = open_for_version(&dir, "9.0.0").unwrap();
+        let reading = open_reading(&dir).unwrap();
+        let (title, body, vocab): (String, String, String) = reading.query_row("SELECT title, body, vocab FROM stories", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
+        assert_eq!(title, stories::STARTER_TITLE);
+        assert_eq!(vocab.lines().count(), 4);
+        // every word of the starter deck is in it
+        let words: Vec<String> = cards.prepare("SELECT hanzi FROM cards").unwrap().query_map([], |r| r.get(0)).unwrap().collect::<Result<_, _>>().unwrap();
+        assert_eq!(words.len(), 12);
+        for w in &words {
+            assert!(body.contains(w.as_str()), "{w} is not in the story");
+        }
+        // deleted, it doesn't come back at the next start
+        stories::delete_story(&reading, 1).unwrap();
+        drop(reading);
+        assert_eq!(open_reading(&dir).unwrap().query_row::<i64, _, _>("SELECT COUNT(*) FROM stories", [], |r| r.get(0)).unwrap(), 0);
+        drop(cards);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Data from a newer version of the app: this version leaves it alone, and so does a

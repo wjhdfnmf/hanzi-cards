@@ -93,6 +93,42 @@ fn init(conn: Connection) -> rusqlite::Result<Connection> {
     Ok(conn)
 }
 
+/// The story a new install starts with: short, and written with the twelve words of the
+/// starter deck ("Getting Started"), so the first thing to read uses the first words studied.
+pub const STARTER_TITLE: &str = "新朋友";
+pub const STARTER_BODY: &str = "你好！我是大明。我是中国人。
+
+今天我有一个新朋友。她叫安娜，她不是中国人。她学习汉语。
+
+我说：“你好，安娜！你喝水吗？”
+安娜说：“谢谢！我喝水。你吃什么？”
+我说：“我吃饺子。你吃吗？”
+安娜说：“我吃！谢谢你。”
+
+我们吃饺子，喝水，说汉语。安娜的汉语很好。
+
+安娜说：“大明，你是我的中国朋友。”
+我说：“你是我的好朋友。”
+
+我们都很高兴。";
+pub const STARTER_VOCAB: &str = "新 – xīn – new
+今天 – jīn tiān – today
+饺子 – jiǎo zi – dumpling
+高兴 – gāo xìng – happy; glad";
+
+/// Put the starter story into a reading database that has nothing in it (a new install).
+pub fn seed(conn: &Connection) -> AppResult<()> {
+    let empty: bool = conn.query_row("SELECT NOT EXISTS(SELECT 1 FROM stories) AND NOT EXISTS(SELECT 1 FROM story_folders)", [], |r| r.get(0))?;
+    if empty {
+        let t = now();
+        conn.execute(
+            "INSERT INTO stories (folder_id, title, body, vocab, position, created_at, updated_at) VALUES (NULL, ?1, ?2, ?3, 0, ?4, ?4)",
+            params![STARTER_TITLE, STARTER_BODY, STARTER_VOCAB, t],
+        )?;
+    }
+    Ok(())
+}
+
 /// How many stories there are in all.
 pub fn total(conn: &Connection) -> AppResult<i64> {
     Ok(conn.query_row("SELECT COUNT(*) FROM stories", [], |r| r.get(0))?)
