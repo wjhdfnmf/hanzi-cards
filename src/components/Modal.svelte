@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import Icon from "./Icon.svelte";
+  import { device } from "../lib/device.svelte";
 
   let {
     title,
@@ -20,11 +21,17 @@
 
 <svelte:window {onkeydown} />
 
-<div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && onclose()}>
-  <div class="modal card-surface" role="dialog" aria-modal="true" aria-label={title} style="max-width:{width}px">
+<!-- (on a phone it's a page of its own, over everything, with the way back on the left) -->
+<div class="backdrop" class:page={device.phone} role="presentation" onclick={(e) => e.target === e.currentTarget && onclose()}>
+  <div class="modal card-surface" role="dialog" aria-modal="true" aria-label={title} style="max-width:{device.phone ? "none" : `${width}px`}">
     <header>
+      {#if device.phone}
+        <button class="btn ghost icon back" onclick={onclose} aria-label="Close"><Icon name="chevron-left" size={22} /></button>
+      {/if}
       <h2>{title}</h2>
-      <button class="btn ghost icon" onclick={onclose} aria-label="Close"><Icon name="close" /></button>
+      {#if !device.phone}
+        <button class="btn ghost icon" onclick={onclose} aria-label="Close"><Icon name="close" /></button>
+      {/if}
     </header>
     <div class="body">{@render children()}</div>
     {#if footer}<footer>{@render footer()}</footer>{/if}
@@ -66,6 +73,38 @@
     gap: 8px;
     padding: 14px 22px;
     border-top: 1px solid var(--border);
+  }
+  .page {
+    padding: 0;
+    place-items: stretch;
+    /* (exactly the screen's width, however wide the content would like to be) */
+    grid-template-columns: minmax(0, 1fr);
+    background: var(--bg);
+  }
+  .page .modal {
+    min-width: 0;
+    max-height: none;
+    height: 100dvh;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  }
+  .page header {
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 12px 16px 8px 8px;
+  }
+  .page .back {
+    color: var(--accent);
+  }
+  .page .body {
+    flex: 1;
+    padding: 8px 16px 18px;
+    overflow-x: hidden;
+  }
+  .page footer {
+    padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px);
   }
   @keyframes fade {
     from {

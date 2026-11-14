@@ -2139,6 +2139,20 @@ button.chip.on {
   p.keys {
     display: none;
   }
+  /* iOS zooms into any field with text under 16 px when it's tapped (and the page then hangs
+     off the side); at 16 px it doesn't. The page itself never scrolls or zooms: only the panes
+     inside it do. */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+  html,
+  body {
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: pan-x pan-y;
+  }
   /* no grey flash over whatever is tapped */
   button,
   a,

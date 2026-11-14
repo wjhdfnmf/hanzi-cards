@@ -31,9 +31,12 @@ Device sync stays where it is on every platform: behind the hidden door in Setti
 
 ## Layout on a phone (narrower than 640 px)
 
-- The side bar is the icon column. It slides away while a page scrolls down, during a study
-  session and while a story is read; scrolling up, a swipe in from the left edge or the tab at
-  the edge brings it back.
+- The side bar is the icon column. It shows only when a page is pulled down past its top; a
+  tap anywhere on the page, scrolling down, a study session or opening a story hides it.
+- Popups (editing a card or a deck, adding a story...) are pages of their own, with the way back
+  on the left.
+- The page never zooms: fields are 16 px (iOS zooms into smaller ones when tapped) and the
+  viewport doesn't scale.
 - One pane at a time: Settings (sections, then one section), Decks (decks, then one deck),
   Reading (collections, then stories, then a story), each with a back control.
 - Fewer words: the subtitles under page titles are left out.

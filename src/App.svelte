@@ -114,9 +114,9 @@
     }
   }
 
-  // ---------- on a phone: the side bar slides away while reading down, and comes back ----------
-  // Scrolling down a page hides it; scrolling back up, a swipe in from the left edge or a tap
-  // on the tab at the edge shows it again. (Pages that want the whole screen call hideRail.)
+  // ---------- on a phone: the side bar comes only when it's asked for ----------
+  // Pulling a page down past its top shows it; scrolling down or tapping anything on the page
+  // hides it again. (Pages that want the whole screen call hideRail.)
   const lastTop = new WeakMap<EventTarget, number>();
   // For a moment after the bar comes or goes, scrolling doesn't move it: the page reflows to
   // the new width, and a flick may still be gliding.
@@ -131,24 +131,35 @@
     const before = lastTop.get(e.target) ?? 0;
     lastTop.set(e.target, top);
     if (performance.now() < settleUntil) return;
-    // (the bounce at the end of the page scrolls back a little: that isn't scrolling up)
-    const end = e.target.scrollHeight - e.target.clientHeight;
-    if (top > end - 4 || before > end - 4) return;
-    if (top > before + 10 && top > 40) device.railOpen = false;
-    else if (top < before - 10 || top <= 0) device.railOpen = true;
+    if (top < -40) showRail(); // (iOS lets a page be pulled past its top)
+    else if (top > before + 10 && top > 40) device.railOpen = false;
   }
-  let swipeFrom: { x: number; y: number } | null = null;
+  /** The scrolling pane a touch is in. */
+  function paneOf(el: EventTarget | null): HTMLElement | null {
+    for (let n = el instanceof HTMLElement ? el : null; n; n = n.parentElement) {
+      const y = getComputedStyle(n).overflowY;
+      if ((y === "auto" || y === "scroll") && n.scrollHeight > n.clientHeight) return n;
+    }
+    return null;
+  }
+  // A page that doesn't scroll (or is already at its top) can't be pulled past it the usual
+  // way, so a downward drag that starts at the top counts too.
+  let pullFrom: { x: number; y: number } | null = null;
   function touchStart(e: TouchEvent) {
     const p = e.touches[0];
-    swipeFrom = device.phone && !device.railOpen && p.clientX < 24 ? { x: p.clientX, y: p.clientY } : null;
+    const pane = paneOf(e.target);
+    pullFrom = device.phone && !device.railOpen && (!pane || pane.scrollTop <= 0) ? { x: p.clientX, y: p.clientY } : null;
   }
   function touchMove(e: TouchEvent) {
-    if (!swipeFrom) return;
+    if (!pullFrom) return;
     const p = e.touches[0];
-    if (p.clientX - swipeFrom.x > 36 && Math.abs(p.clientY - swipeFrom.y) < 40) {
+    if (p.clientY - pullFrom.y > 70 && Math.abs(p.clientX - pullFrom.x) < 50) {
       showRail();
-      swipeFrom = null;
+      pullFrom = null;
     }
+  }
+  function tapped() {
+    if (device.phone && device.railOpen) device.railOpen = false;
   }
 
   const items: { view: View; icon: string; key: Parameters<typeof t>[0] }[] = [
@@ -173,9 +184,6 @@
   class:phone={device.phone}
   class:railhidden={device.phone && !device.railOpen}
 >
-  {#if device.phone && !device.railOpen}
-    <button class="peek" aria-label={t("nav.expand")} onclick={showRail}></button>
-  {/if}
   <nav class="sidebar" aria-hidden={device.phone && !device.railOpen ? "true" : undefined}>
     <div class="brand" title={compact ? t("app.name") : undefined}>
       <div class="logo han">文</div>
@@ -254,7 +262,7 @@
     </div>
   </nav>
 
-  <main onscrollcapture={scrolled}>
+  <main onscrollcapture={scrolled} onclickcapture={tapped}>
     {#if startupError}
       <div class="page"><div class="notice err">{startupError}</div></div>
     {:else if settings.loaded}
@@ -544,30 +552,6 @@
   }
   .phone.railhidden main {
     padding-left: env(safe-area-inset-left);
-  }
-  /* the tab at the left edge that brings the bar back */
-  .peek {
-    position: fixed;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 22px;
-    height: 72px;
-    padding: 0;
-    border: none;
-    background: transparent;
-    z-index: 40;
-  }
-  .peek::before {
-    content: "";
-    position: absolute;
-    left: 3px;
-    top: 16px;
-    bottom: 16px;
-    width: 4px;
-    border-radius: 2px;
-    background: var(--accent);
-    opacity: 0.55;
   }
   .toast.phone {
     bottom: calc(env(safe-area-inset-bottom) + 16px);

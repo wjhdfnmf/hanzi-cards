@@ -681,13 +681,13 @@
   {@const dir = current.direction}
   <div class="session">
     <div class="topbar">
-      <button class="btn" onclick={endSession} title={t("study.endHint")}>
+      <button class="btn" onclick={endSession} title={t("study.endHint")} aria-label={t("study.end")}>
         <Icon name="check" size={15} />
-        {t("study.end")}
+        <span class="lbl">{t("study.end")}</span>
       </button>
-      <button class="btn" onclick={back} disabled={!last} title={t("study.backHint")}>
+      <button class="btn" onclick={back} disabled={!last} title={t("study.backHint")} aria-label={t("study.lastCard")}>
         <span class="flip"><Icon name="arrow" size={15} /></span>
-        {t("study.lastCard")}
+        <span class="lbl">{t("study.lastCard")}</span>
       </button>
       <div class="bar" aria-hidden="true"><div style="width:{total ? ((done - again / 2) / total) * 100 : 0}%"></div></div>
       <span class="count small">{again ? t("study.progressAgain", { done, total, n: again }) : t("study.progress", { done, total })}</span>
@@ -1244,10 +1244,18 @@
     right: 8px;
     font-size: 11px;
   }
-  /* (keyboard shortcuts: not on a phone) */
+  /* a phone: no keyboard shortcuts; the session's buttons as icons, so the count always fits */
   @media (max-width: 640px) {
-    .key {
+    .key,
+    .topbar .lbl {
       display: none;
+    }
+    .topbar {
+      gap: 10px;
+      padding: 12px 16px;
+    }
+    .bar {
+      min-width: 24px;
     }
   }
   .keys {

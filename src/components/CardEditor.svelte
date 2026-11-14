@@ -499,6 +499,12 @@
     display: flex;
     gap: 14px;
   }
+  /* a phone: the characters and the pinyin one above the other */
+  @media (max-width: 640px) {
+    .row {
+      flex-direction: column;
+    }
+  }
   .grow {
     flex: 1;
     min-width: 0;
@@ -591,6 +597,7 @@
   }
   .defs {
     flex: 1;
+    min-width: 0; /* (a long meaning is cut short, not the form pushed wider) */
     color: var(--text-2);
     overflow: hidden;
     text-overflow: ellipsis;
