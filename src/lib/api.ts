@@ -633,6 +633,8 @@ export const api = {
   speechStatus: () => invoke<SpeechStatus>("speech_status"),
   speechListen: (cardId: number, others: string[]) => invoke<SpokenAnswer>("speech_listen", { cardId, others }),
   speechCancel: () => invoke<void>("speech_cancel"),
+  /** What Siri / Shortcuts asked for ("study"), once. */
+  pendingAction: () => invoke<string | null>("pending_action"),
   speechCheckAudio: (cardId: number, others: string[], pcm: Float32Array) =>
     invoke<SpokenAnswer>("speech_check_audio", { cardId, others, pcm: Array.from(pcm) }),
   /** Whether the app can make speech itself, so it can go to a chosen output device. */

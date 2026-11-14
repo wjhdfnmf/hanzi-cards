@@ -33,6 +33,8 @@ Device sync stays where it is on every platform: behind the hidden door in Setti
 
 - The side bar is the icon column. It shows only when a page is pulled down past its top; a
   tap anywhere on the page, scrolling down, a study session or opening a story hides it.
+- Settings, Decks and Reading: at the list, the side bar always shows; inside an item it
+  stays away until you go back.
 - Popups (editing a card or a deck, adding a story...) are pages of their own, with the way back
   on the left.
 - The page never zooms: fields are 16 px (iOS zooms into smaller ones when tapped) and the
@@ -42,6 +44,16 @@ Device sync stays where it is on every platform: behind the hidden door in Setti
 - Fewer words: the subtitles under page titles are left out.
 - The page reaches under the notch and home bar (`viewport-fit=cover`) and keeps clear of them
   with the safe-area insets.
+
+## Siri and Shortcuts
+
+"Start studying in Hanzi Cards" (and "Study Chinese with Hanzi Cards", "Study my cards in
+Hanzi Cards") is an App Shortcut: `gen/apple/Sources/hanzi-cards/StudyIntent.swift`. It opens
+the app and leaves the word `study` in `siri-action` in the app's data folder; the page looks
+for it every 1.5 s while open (`commands::pending_action`; iOS doesn't tell the web view when
+the app returns to the front) and starts a session with the learner's usual choices. After
+adding a Swift file, run `xcodegen generate` in `gen/apple` and keep `Info.plist` as it was
+(Tauri fills it in at build time).
 
 ## Setting up a Mac
 

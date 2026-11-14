@@ -18,7 +18,8 @@
   import Console from "./components/Console.svelte";
   import { sync, refreshStatus, ping, syncNow, summary } from "./lib/sync.svelte";
   import { showToast } from "./lib/toast.svelte";
-  import { device, showRail } from "./lib/device.svelte";
+  import { device, showRail, railShown, ios } from "./lib/device.svelte";
+  const shown = $derived(railShown());
 
   let startupError = $state("");
   /** A database that couldn't be opened (damaged): the recovery page shows instead of the app. */
@@ -40,9 +41,29 @@
       await loadSettings();
       await refreshFonts();
       watchSync();
+      checkSiri();
     } catch (e) {
       startupError = errorText(e);
     }
+  });
+
+  // ---------- Siri / Shortcuts ("Start studying in Hanzi Cards") ----------
+  // The request is left in a file when the app opens or comes back to the front. iOS's web
+  // view isn't told when that happens, so the page looks every moment while it runs (timers
+  // stop while the app is in the background, so this costs nothing there).
+  async function checkSiri() {
+    if (problem) return;
+    const action = await api.pendingAction().catch(() => null);
+    if (action === "study") {
+      nav.autoStart = true;
+      goto("study");
+      if (device.phone) device.railOpen = false;
+    }
+  }
+  onMount(() => {
+    if (!ios) return;
+    const timer = setInterval(checkSiri, 1500);
+    return () => clearInterval(timer);
   });
 
   // ---------- keeping devices the same: the button above "Collapse", once it is set up ----------
@@ -122,7 +143,7 @@
   // the new width, and a flick may still be gliding.
   let settleUntil = 0;
   $effect(() => {
-    void device.railOpen;
+    void shown;
     settleUntil = performance.now() + 500;
   });
   function scrolled(e: Event) {
@@ -131,6 +152,7 @@
     const before = lastTop.get(e.target) ?? 0;
     lastTop.set(e.target, top);
     if (performance.now() < settleUntil) return;
+    if (device.level !== null) return; // (a list keeps the bar; an item inside one never has it)
     if (top < -40) showRail(); // (iOS lets a page be pulled past its top)
     else if (top > before + 10 && top > 40) device.railOpen = false;
   }
@@ -148,7 +170,7 @@
   function touchStart(e: TouchEvent) {
     const p = e.touches[0];
     const pane = paneOf(e.target);
-    pullFrom = device.phone && !device.railOpen && (!pane || pane.scrollTop <= 0) ? { x: p.clientX, y: p.clientY } : null;
+    pullFrom = device.phone && !shown && device.level === null && (!pane || pane.scrollTop <= 0) ? { x: p.clientX, y: p.clientY } : null;
   }
   function touchMove(e: TouchEvent) {
     if (!pullFrom) return;
@@ -182,9 +204,9 @@
   class="shell"
   class:compact
   class:phone={device.phone}
-  class:railhidden={device.phone && !device.railOpen}
+  class:railhidden={!shown}
 >
-  <nav class="sidebar" aria-hidden={device.phone && !device.railOpen ? "true" : undefined}>
+  <nav class="sidebar" aria-hidden={!shown ? "true" : undefined}>
     <div class="brand" title={compact ? t("app.name") : undefined}>
       <div class="logo han">文</div>
       {#if !compact}

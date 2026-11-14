@@ -15,7 +15,30 @@ export const device = $state({
   phone: phoneQuery?.matches ?? false,
   /** The side bar, on a phone: shown, or slid away to give the page the whole width. */
   railOpen: true,
+  /** Where a page with a list and its items is (Settings, Decks, Reading): at the list, the
+   *  side bar always shows; inside an item it stays away, whatever the scrolling. Other pages
+   *  (null) show it on a pull past the top. */
+  level: null as "list" | "detail" | null,
 });
+
+/** Whether the side bar shows (on a phone). */
+export function railShown(): boolean {
+  if (!device.phone) return true;
+  if (device.level === "list") return true;
+  if (device.level === "detail") return false;
+  return device.railOpen;
+}
+
+/** For a page with a list and its items: which of the two is showing. (Call while the
+ *  component is being set up.) */
+export function trackLevel(level: () => "list" | "detail") {
+  $effect(() => {
+    device.level = device.phone ? level() : null;
+    return () => {
+      device.level = null;
+    };
+  });
+}
 
 phoneQuery?.addEventListener("change", (e) => {
   device.phone = e.matches;

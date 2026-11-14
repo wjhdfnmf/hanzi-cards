@@ -12,7 +12,7 @@
   import { goto, nav } from "../lib/nav.svelte";
   import { settings, saveSetting } from "../lib/settings.svelte";
   import { sync } from "../lib/sync.svelte";
-  import { device as layout, ios } from "../lib/device.svelte";
+  import { device as layout, ios, trackLevel } from "../lib/device.svelte";
   import Back from "../components/Back.svelte";
   import { SIZE_MIN, SIZE_MAX, LINE_MIN, LINE_MAX, readingFont, clampSize } from "../lib/reading";
   import FontSelect from "../components/FontSelect.svelte";
@@ -557,6 +557,7 @@
   // On a phone the list of sections and a section are two screens: a section opened from
   // another page shows straight away, otherwise the list comes first.
   let sectionOpen = $state(isSection(nav.settingsSection));
+  trackLevel(() => (sectionOpen ? "detail" : "list"));
   let section = $state<Section>(
     (() => {
       if (isSection(nav.settingsSection)) return nav.settingsSection; // opened from another page
@@ -1977,8 +1978,12 @@
     top: 0;
     z-index: 5;
     padding: 8px 16px 2px;
-    background: var(--bg);
-    border-bottom: 1px solid var(--border);
+    /* frosted, like an iPhone's own bars: the theme's picture shows through, softened, and
+       what scrolls under it stays readable */
+    background: color-mix(in srgb, var(--bg) 62%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    backdrop-filter: blur(14px) saturate(1.4);
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
   }
   /* as wide as the window allows, up to a comfortable reading width */
   .narrow {

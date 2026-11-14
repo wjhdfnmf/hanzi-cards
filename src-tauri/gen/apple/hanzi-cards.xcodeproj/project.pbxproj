@@ -11,6 +11,7 @@
 		133F2242591EBE7C5F9A23C9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B8DD72116385D9B05EB246F6 /* Assets.xcassets */; };
 		265184640C5435AAF555A23B /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = D0811C7369A3A28DDC5D3EBD /* main.mm */; };
 		38081DBBB8DDD8D1EC09252E /* assets in Resources */ = {isa = PBXBuildFile; fileRef = EE2716AAD06118E81F23B160 /* assets */; };
+		3819A3D8B27DA6EFA6A5928B /* StudyIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06786B2E943C6A0E7068BC88 /* StudyIntent.swift */; };
 		4370B1E0B0E8EA9568E2862B /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A7C75DC7F3D04452C422BD1 /* Security.framework */; };
 		4AEF429F8746B42CA98A5A99 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 609F3D4804AEAF651BB8EEE1 /* Metal.framework */; };
 		70760DEF8C8AF5CA1DE8322B /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BD54B4A1784D91766CA07476 /* LaunchScreen.storyboard */; };
@@ -23,11 +24,13 @@
 
 /* Begin PBXFileReference section */
 		055582D51374495C5E919394 /* models.rs */ = {isa = PBXFileReference; path = models.rs; sourceTree = "<group>"; };
+		06786B2E943C6A0E7068BC88 /* StudyIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyIntent.swift; sourceTree = "<group>"; };
 		0936D65F2A32F21790ABD1A8 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		0970A73AD4D9829F322BABAB /* commands.rs */ = {isa = PBXFileReference; path = commands.rs; sourceTree = "<group>"; };
 		1BA4004D0996B124EAEAC48B /* tutor.rs */ = {isa = PBXFileReference; path = tutor.rs; sourceTree = "<group>"; };
 		22764C0F073C1FE13F2FDFEB /* sync.rs */ = {isa = PBXFileReference; path = sync.rs; sourceTree = "<group>"; };
 		2DA5DA5B771A0B5ACEBD0F50 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		33F425290D7EBC891880DACD /* apple_speech.rs */ = {isa = PBXFileReference; path = apple_speech.rs; sourceTree = "<group>"; };
 		35C00A99CCA4CF758F5B95A8 /* kokoro_mobile.rs */ = {isa = PBXFileReference; path = kokoro_mobile.rs; sourceTree = "<group>"; };
 		39573E344FA105A490741C8B /* data.rs */ = {isa = PBXFileReference; path = data.rs; sourceTree = "<group>"; };
 		40481AF3309DFCADC0CA5629 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
@@ -106,6 +109,7 @@
 			isa = PBXGroup;
 			children = (
 				619A6B19437E4028156F5F8E /* ai.rs */,
+				33F425290D7EBC891880DACD /* apple_speech.rs */,
 				4F920C4DAF12C63BD15B8AA4 /* billing.rs */,
 				FC00EB81CB279115AC0A0030 /* calibration.rs */,
 				FA658E025F4B6B9919C70D0D /* cards.rs */,
@@ -149,6 +153,7 @@
 			isa = PBXGroup;
 			children = (
 				D0811C7369A3A28DDC5D3EBD /* main.mm */,
+				06786B2E943C6A0E7068BC88 /* StudyIntent.swift */,
 				0E9453DF81FD220B974BA2BA /* bindings */,
 			);
 			path = "hanzi-cards";
@@ -214,6 +219,20 @@
 				CFFBD3237CDBCC5A66068F58 /* Info.plist */,
 			);
 			path = "hanzi-cards_iOS";
+			sourceTree = "<group>";
+		};
+		"TEMP_321AD611-7FA8-466A-87EA-596622E2FF7A" /* x86_64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = x86_64;
+			sourceTree = "<group>";
+		};
+		"TEMP_382C73C5-7663-4EDB-B230-11C07A7B5F29" /* arm64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = arm64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -311,6 +330,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3819A3D8B27DA6EFA6A5928B /* StudyIntent.swift in Sources */,
 				265184640C5435AAF555A23B /* main.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

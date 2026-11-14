@@ -492,6 +492,16 @@ fn app_data(app: &AppHandle) -> AppResult<PathBuf> {
     app.path().app_data_dir().map_err(|e| AppError::msg(e.to_string()))
 }
 
+/// What Siri or the Shortcuts app asked for ("study"), handed over once: the iPhone's App
+/// Intent (gen/apple/Sources/hanzi-cards/StudyIntent.swift) leaves it in a file here.
+#[tauri::command]
+pub fn pending_action(app: AppHandle) -> AppResult<Option<String>> {
+    let path = app_data(&app)?.join("siri-action");
+    let Ok(text) = std::fs::read_to_string(&path) else { return Ok(None) };
+    let _ = std::fs::remove_file(&path);
+    Ok(Some(text.trim().to_string()).filter(|s| !s.is_empty()))
+}
+
 #[tauri::command]
 pub async fn speech_status(app: AppHandle) -> AppResult<speech::SpeechStatus> {
     let dir = app_data(&app)?;

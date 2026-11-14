@@ -232,6 +232,16 @@
     else if (phase === "session") shownAt = Date.now(); // time away doesn't count as answer time
   });
 
+  // Siri / Shortcuts: "Start studying" (the usual choices, once the page is ready). A session
+  // already under way just carries on.
+  $effect(() => {
+    if (!nav.autoStart || !shown) return;
+    nav.autoStart = false;
+    if (phase === "session") return;
+    phase = "setup";
+    loadSetup().then(start);
+  });
+
   // "Study this deck" from Decks & Cards
   $effect(() => {
     const ids = nav.studyDeckIds;
@@ -1292,8 +1302,10 @@
     .setup {
       grid-template-columns: 1fr;
     }
+    /* one column: the counts and Start first, the choices under them */
     .summary {
       position: static;
+      order: -1;
     }
     .ratings {
       grid-template-columns: repeat(2, 140px);

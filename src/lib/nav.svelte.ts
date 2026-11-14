@@ -6,6 +6,8 @@ export const nav = $state({
   studyDeckIds: null as number[] | null,
   /** Settings section to open (e.g. "speech" from the Study page); read once by Settings. */
   settingsSection: null as string | null,
+  /** Start a session with the usual choices as soon as the Study page can (Siri asked). */
+  autoStart: false,
 });
 
 export function goto(view: View, settingsSection: string | null = null) {

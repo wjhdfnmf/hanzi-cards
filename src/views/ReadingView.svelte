@@ -12,7 +12,7 @@
   import { showToast } from "../lib/toast.svelte";
   import Icon from "../components/Icon.svelte";
   import Back from "../components/Back.svelte";
-  import { device, hideRail, showRail } from "../lib/device.svelte";
+  import { device, hideRail, showRail, trackLevel } from "../lib/device.svelte";
   import Modal from "../components/Modal.svelte";
   import Pinyin from "../components/Pinyin.svelte";
   import { hanziTones } from "../lib/pinyin";
@@ -33,6 +33,7 @@
 
   // ---------- the open story ----------
   let story = $state<Story | null>(null);
+  trackLevel(() => (shelfOpen || story ? "detail" : "list"));
   // raw: a long story is thousands of segments, only ever replaced whole
   let segments = $state.raw<Segment[] | null>(null);
 

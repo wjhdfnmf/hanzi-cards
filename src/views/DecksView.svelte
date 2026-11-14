@@ -19,7 +19,7 @@
   import Pinyin from "../components/Pinyin.svelte";
   import Icon from "../components/Icon.svelte";
   import Back from "../components/Back.svelte";
-  import { device } from "../lib/device.svelte";
+  import { device, trackLevel } from "../lib/device.svelte";
   import Modal from "../components/Modal.svelte";
   import CardEditor from "../components/CardEditor.svelte";
   import { stripTones, syllables, toneOf } from "../lib/pinyin";
@@ -28,6 +28,7 @@
   let selectedDeck = $state<number | null>(null); // null = all cards
   /** On a phone: the deck list, or the chosen deck's cards (one at a time). */
   let deckOpen = $state(false);
+  trackLevel(() => (deckOpen ? "detail" : "list"));
   function openDeck(id: number | null) {
     selectedDeck = id;
     deckOpen = true;

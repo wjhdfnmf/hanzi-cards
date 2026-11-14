@@ -201,6 +201,7 @@ pub fn run() {
             commands::speech_status,
             commands::speech_listen,
             commands::speech_cancel,
+            commands::pending_action,
             commands::speech_check_audio,
             commands::tts_available,
             commands::tts_wav,
