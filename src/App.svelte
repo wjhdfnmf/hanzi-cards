@@ -15,6 +15,9 @@
   import StatsView from "./views/StatsView.svelte";
   import SettingsView from "./views/SettingsView.svelte";
   import TutorView from "./views/TutorView.svelte";
+  import Console from "./components/Console.svelte";
+  import { sync, refreshStatus, ping, syncNow, summary } from "./lib/sync.svelte";
+  import { showToast } from "./lib/toast.svelte";
 
   let startupError = $state("");
   /** A database that couldn't be opened (damaged): the recovery page shows instead of the app. */
@@ -35,10 +38,45 @@
       }
       await loadSettings();
       await refreshFonts();
+      watchSync();
     } catch (e) {
       startupError = errorText(e);
     }
   });
+
+  // ---------- keeping devices the same: the button above "Collapse", once it is set up ----------
+  let watching: ReturnType<typeof setInterval> | undefined;
+  async function watchSync() {
+    const s = await refreshStatus();
+    if (s?.role === "client") ping().catch(() => {});
+    clearInterval(watching);
+    let n = 0;
+    watching = setInterval(async () => {
+      if (!sync.status?.role || sync.busy) return;
+      const s = await refreshStatus(); // (server: has a device left changes?)
+      if (s?.role === "client" && ++n % 3 === 0) ping().catch(() => {});
+    }, 20_000);
+  }
+  async function syncClicked() {
+    try {
+      showToast(summary(await syncNow()));
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+  }
+  async function lightClicked() {
+    try {
+      if (sync.status?.role === "server") {
+        await api.syncOnline(!sync.status.online);
+        await refreshStatus();
+      } else {
+        const p = await ping();
+        showToast(p.ok ? sync.note : p.error, p.ok ? "ok" : "err");
+      }
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+  }
 
   // the Reading font, when it's one the app downloaded
   $effect(() => {
@@ -117,6 +155,32 @@
     </div>
 
     <div class="foot">
+      {#if sync.status?.role}
+        {@const server = sync.status.role === "server"}
+        <div class="syncbox">
+          <button
+            class="navlink light"
+            title={(server ? t(sync.status.online ? "sync.goOffline" : "sync.goOnline") : t("sync.check")) + (sync.note ? `\n${sync.note}` : "")}
+            aria-label={server ? t(sync.status.online ? "sync.online" : "sync.offline") : t("sync.server")}
+            onclick={lightClicked}
+          >
+            <span class="lamp" class:ok={sync.light === "ok"} class:bad={sync.light === "bad"}></span>
+            {#if !compact}<span>{server ? t(sync.status.online ? "sync.online" : "sync.offline") : t("sync.server")}</span>{/if}
+          </button>
+          <button
+            class="navlink go"
+            class:busy={sync.busy}
+            disabled={sync.busy}
+            title={sync.status.pending ? t("sync.pending") : t("sync.hint")}
+            aria-label={t("sync.sync")}
+            onclick={syncClicked}
+          >
+            <span class="turn"><Icon name="sync" size={compact ? 20 : 17} /></span>
+            {#if !compact}<span>{sync.busy ? t("sync.syncing") : t("sync.sync")}</span>{/if}
+            {#if sync.status.pending}<span class="waiting" aria-hidden="true"></span>{/if}
+          </button>
+        </div>
+      {/if}
       {#if !narrow}
         <button
           class="navlink toggle"
@@ -146,7 +210,7 @@
     {#if startupError}
       <div class="page"><div class="notice err">{startupError}</div></div>
     {:else if settings.loaded}
-      {#key nav.view}
+      {#key `${nav.view}:${sync.epoch}`}
         {#if nav.view === "study"}<!-- kept alive below -->
         {:else if nav.view === "tutor"}<!-- kept alive below -->
         {:else if nav.view === "decks"}<DecksView />
@@ -157,13 +221,25 @@
       {/key}
       <!-- Study and the tutor stay alive when you switch pages, so a study session or a
            conversation can be continued until it's ended or the app closes. -->
-      <div class="keep" class:hidden={nav.view !== "study"}><StudyView /></div>
+      <!-- (a sync that brought something in starts the Study page afresh, like the others) -->
+      {#key sync.epoch}
+        <div class="keep" class:hidden={nav.view !== "study"}><StudyView /></div>
+      {/key}
       {#if tutorOpened}
         <div class="keep" class:hidden={nav.view !== "tutor"}><TutorView /></div>
       {/if}
     {/if}
   </main>
 </div>
+{/if}
+
+{#if sync.consoleOpen}
+  <Console
+    onclose={() => {
+      sync.consoleOpen = false;
+      watchSync();
+    }}
+  />
 {/if}
 
 {#if toast.message}
@@ -265,6 +341,75 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+  .syncbox {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+  .syncbox .navlink {
+    padding: 6px 8px;
+    font-size: 13px;
+    position: relative;
+  }
+  .compact .syncbox .navlink {
+    padding: 8px 0;
+  }
+  .syncbox .light {
+    color: var(--text-3);
+    font-weight: 500;
+  }
+  .lamp {
+    width: 9px;
+    height: 9px;
+    margin: 0 4px;
+    border-radius: 50%;
+    background: var(--text-3);
+    flex-shrink: 0;
+  }
+  .compact .lamp {
+    margin: 0;
+  }
+  .lamp.ok {
+    background: #22b45a;
+    box-shadow: 0 0 0 3px rgb(34 180 90 / 0.2);
+  }
+  .lamp.bad {
+    background: #e0453a;
+    box-shadow: 0 0 0 3px rgb(224 69 58 / 0.2);
+  }
+  .turn {
+    display: inline-flex;
+  }
+  .go.busy .turn {
+    animation: turn 1s linear infinite;
+  }
+  .go:disabled {
+    cursor: default;
+    opacity: 0.75;
+  }
+  .waiting {
+    position: absolute;
+    top: 5px;
+    right: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  @keyframes turn {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .go.busy .turn {
+      animation: none;
+    }
   }
   .toggle {
     color: var(--text-3);

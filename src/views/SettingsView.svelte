@@ -11,6 +11,7 @@
   import { fmtNum } from "../lib/format";
   import { goto, nav } from "../lib/nav.svelte";
   import { settings, saveSetting } from "../lib/settings.svelte";
+  import { sync } from "../lib/sync.svelte";
   import { SIZE_MIN, SIZE_MAX, LINE_MIN, LINE_MAX, readingFont, clampSize } from "../lib/reading";
   import FontSelect from "../components/FontSelect.svelte";
   import { CUSTOM_THEMES, THEME_GROUPS, isCustomTheme } from "../lib/themes";
@@ -627,6 +628,8 @@
         {t(x.label)}
       </button>
     {/each}
+    <!-- (nothing to see here) -->
+    <button class="sec door" tabindex="-1" aria-hidden="true" onclick={() => (sync.consoleOpen = true)}>&nbsp;</button>
   </nav>
   <div class="secmain" bind:this={mainEl}>
   <div class="page narrow">
@@ -824,6 +827,19 @@
         checked={settings.readingToneColors}
         onchange={(e) => saveSetting("readingToneColors", e.currentTarget.checked)}
       />
+    </label>
+    <label class="row">
+      <span>
+        {t("settings.readingStyle")}
+        <small class="faint block">{t("settings.readingStyleHint")}</small>
+      </span>
+      <select value={settings.readingStyle} onchange={(e) => saveSetting("readingStyle", e.currentTarget.value)}>
+        <option value="plain">{t("settings.readingStyle.plain")}</option>
+        <option value="books">{t("settings.readingStyle.books")}</option>
+        <option value="cloth">{t("settings.readingStyle.cloth")}</option>
+        <option value="thread">{t("settings.readingStyle.thread")}</option>
+        <option value="poster">{t("settings.readingStyle.poster")}</option>
+      </select>
     </label>
   </section>
 
@@ -1754,6 +1770,12 @@
   }
   .sec:hover {
     background: var(--surface-2);
+  }
+  /* the last place in the list, the size of the others, with nothing to show */
+  .door {
+    margin-top: auto;
+    opacity: 0;
+    cursor: default;
   }
   .sec.on {
     background: var(--surface-3);

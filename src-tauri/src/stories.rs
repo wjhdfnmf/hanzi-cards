@@ -17,6 +17,9 @@ use std::path::{Path, PathBuf};
 
 pub const DB_FILE: &str = "stories.db";
 
+/// The version `init` brings a reading database to.
+pub const SCHEMA_VERSION: i64 = 4;
+
 const SCHEMA_V1: &str = "
 CREATE TABLE IF NOT EXISTS story_folders (
     id          INTEGER PRIMARY KEY,
@@ -52,6 +55,7 @@ fn init(conn: Connection) -> rusqlite::Result<Connection> {
     conn.busy_timeout(crate::db::OPEN_WAIT)?;
     crate::db::secure(&conn)?; // exclusive, every change straight into the main file
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    crate::db::refuse_newer(&conn, version, SCHEMA_VERSION, crate::db::READING_APP_VERSION)?;
     if version < 1 {
         conn.execute_batch(&format!("BEGIN; {SCHEMA_V1} PRAGMA user_version = 1; COMMIT;"))?;
     }
@@ -76,6 +80,16 @@ fn init(conn: Connection) -> rusqlite::Result<Connection> {
              COMMIT;",
         )?;
     }
+    if version < 4 {
+        // v4: permanent ids for collections and stories, a "changed" time for collections,
+        // and a record of deletions (see sync_data.rs).
+        let tx = conn.unchecked_transaction()?;
+        crate::sync_data::upgrade_stories(&tx)?;
+        tx.execute_batch("PRAGMA user_version = 4")?;
+        tx.commit()?;
+    }
+    // which version of the app last used it: what an older version is told if it meets it
+    conn.execute("INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('app_version', ?1)", [env!("CARGO_PKG_VERSION")])?;
     Ok(conn)
 }
 
@@ -271,7 +285,7 @@ pub fn delete_folder(conn: &mut Connection, id: i64) -> AppResult<()> {
     let ids = subtree_ids(conn, id)?;
     let tx = conn.transaction()?;
     for f in ids.iter().rev() {
-        tx.execute("DELETE FROM stories WHERE folder_id = ?1", [f])?;
+        // (its stories go with it: ON DELETE CASCADE)
         tx.execute("DELETE FROM story_folders WHERE id = ?1", [f])?;
     }
     tx.commit()?;

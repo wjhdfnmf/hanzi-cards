@@ -200,8 +200,9 @@ pub fn log_time(conn: &Connection, kind: &str, seconds: i64) -> AppResult<()> {
     }
     let day = local_day(now(), local_offset());
     conn.execute(
-        "INSERT INTO study_time (day, kind, seconds) VALUES (?1, ?2, ?3)
-         ON CONFLICT(day, kind) DO UPDATE SET seconds = seconds + excluded.seconds",
+        "INSERT INTO study_time (day, kind, device, seconds)
+         VALUES (?1, ?2, COALESCE((SELECT value FROM sync_meta WHERE key = 'device_id'), ''), ?3)
+         ON CONFLICT(day, kind, device) DO UPDATE SET seconds = seconds + excluded.seconds",
         rusqlite::params![day, kind, seconds],
     )?;
     Ok(())
@@ -505,7 +506,7 @@ pub fn get_stats(conn: &Connection, filter: &StatsFilter) -> AppResult<Stats> {
     // ---------- reading and tutor time (whole-app figures: left out when a deck or direction is chosen) ----------
     let mut other_days: Vec<i64> = Vec::new();
     {
-        let mut stmt = conn.prepare("SELECT day, kind, seconds FROM study_time ORDER BY day")?;
+        let mut stmt = conn.prepare("SELECT day, kind, SUM(seconds) FROM study_time GROUP BY day, kind ORDER BY day")?;
         for row in stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?)))? {
             let (day, kind, seconds) = row?;
             other_days.push(day);

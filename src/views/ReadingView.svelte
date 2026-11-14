@@ -16,6 +16,7 @@
   import { hanziTones } from "../lib/pinyin";
   import { SIZE_MIN, SIZE_MAX, readingFont, clampSize } from "../lib/reading";
   import FontSelect from "../components/FontSelect.svelte";
+  import StoryCover, { coverOf, LOOKS, type Look } from "../components/StoryCover.svelte";
 
   let folders = $state<StoryFolder[]>([]);
   let selected = $state<number | null>(null); // null = all stories
@@ -67,6 +68,9 @@
   // ---------- text settings ----------
   const fontFamily = $derived(readingFont(settings.readingFont));
   const toneText = $derived(settings.toneColors && settings.readingToneColors);
+  /** Settings › Reading: illustrated covers and a banner, or the plain list and title. */
+  const look = $derived<Look | null>((LOOKS as readonly string[]).includes(settings.readingStyle) ? (settings.readingStyle as Look) : null);
+  const books = $derived(look !== null);
   function setSize(n: number) {
     const v = clampSize(n);
     if (v !== settings.readingSize) saveSetting("readingSize", v);
@@ -141,11 +145,58 @@
     });
     return out;
   }
+  /** The segment where the learner's selection in the story starts, if they have selected text. */
+  function selectionStart(): number | null {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+    const r = sel.getRangeAt(0);
+    const art = document.querySelector("article.text");
+    if (!art || !art.contains(r.startContainer)) return null;
+    let n: Node | null = r.startContainer;
+    if (n === art) n = art.childNodes[r.startOffset] ?? null;
+    // a selection that starts at the very end of a word starts with what follows it
+    else if (n.nodeType === Node.TEXT_NODE && r.startOffset >= (n.textContent ?? "").length) {
+      let up: Node = n;
+      while (up.parentNode && up.parentNode !== art && !up.nextSibling) up = up.parentNode;
+      n = up.nextSibling ?? n;
+    }
+    if (!n) return null;
+    const index = (el: Element | null | undefined) => {
+      const hit = el?.closest<HTMLElement>("[data-i], [data-s]");
+      return hit && art.contains(hit) ? Number(hit.dataset.i ?? hit.dataset.s) : null;
+    };
+    const inWord = index(n instanceof Element ? n : n.parentElement);
+    if (inWord !== null) return inWord;
+    // between words (punctuation, spaces): the next word
+    for (let next = n.nextSibling; next; next = next.nextSibling) {
+      if (next instanceof HTMLElement && (next.dataset.i || next.dataset.s)) return Number(next.dataset.i ?? next.dataset.s);
+    }
+    return null;
+  }
+  // Pressing the button can clear the selection before the click arrives, so it is read as
+  // the press begins.
+  let pressedAt: number | null = null;
   function play() {
     if (!segments) return;
     const segs = segments;
-    const parts = sentences(segs);
+    let parts = sentences(segs);
     if (!parts.length) return;
+    // with text selected, reading begins where the selection does (mid-sentence if need be)
+    const from = pressedAt ?? selectionStart();
+    pressedAt = null;
+    if (from !== null) {
+      const p = parts.findIndex((x) => x.to >= from);
+      if (p >= 0) {
+        parts = parts.slice(p);
+        if (from > parts[0].from) {
+          const text = segs.slice(from, parts[0].to + 1).map((x) => x.text).join("");
+          if (/\p{L}/u.test(text)) parts[0] = { from, to: parts[0].to, text };
+          else parts = parts.slice(1);
+        }
+        if (!parts.length) return;
+        window.getSelection()?.removeAllRanges(); // (it would cover the marking of what is being read)
+      }
+    }
     readAloud(
       parts.map((p) => p.text),
       {
@@ -288,8 +339,9 @@
   }
   let allCount = $state(0); // every story, for "All stories"
 
-  // time here counts as study time on the Statistics page
-  onMount(() => trackStudyTime("reading", 180_000));
+  // time with a story open counts as study time on the Statistics page (not time spent
+  // looking through the library)
+  onMount(() => trackStudyTime("reading", 180_000, () => story !== null));
 
   // ---------- loading ----------
   onMount(async () => {
@@ -497,6 +549,48 @@
   const folderName = (id: number | null) => (id === null ? "" : (folders.find((f) => f.id === id)?.path ?? ""));
 </script>
 
+{#snippet storyTools(corner: boolean)}
+  {#if story}
+  <div class="tools" class:corner>
+    <button
+      class="btn ghost icon mark"
+      class:on={story.bookmarked}
+      title={t(story.bookmarked ? "reading.unbookmark" : "reading.bookmark")}
+      aria-label={t(story.bookmarked ? "reading.unbookmark" : "reading.bookmark")}
+      aria-pressed={story.bookmarked}
+      onclick={toggleBookmark}><span aria-hidden="true">{story.bookmarked ? "★" : "☆"}</span></button
+    >
+    <button
+      class="btn"
+      class:primary={!playing}
+      disabled={!segments || !voice.available}
+      onpointerdown={() => (pressedAt = playing ? null : selectionStart())}
+      title={voice.available ? t("reading.playHint") : t("speech.noVoice")}
+      onclick={() => (playing ? stopReading() : play())}
+    >
+      <Icon name={playing ? "close" : "speaker"} size={15} />{playing ? t("reading.stop") : t("reading.play")}
+    </button>
+    <button class="btn ghost" onclick={() => setFull(!full)} title={t("reading.fullScreenHint")}>
+      {full ? t("reading.exitFull") : t("reading.fullScreen")}
+    </button>
+    <button
+      class="btn ghost icon"
+      title={t("reading.editStory")}
+      aria-label={t("reading.editStory")}
+      onclick={() => story && (storyForm = { id: story.id, title: story.title, body: story.body, folderId: story.folderId })}
+    >
+      <Icon name="edit" />
+    </button>
+    <button class="btn ghost icon" title={t("reading.exportStory")} aria-label={t("reading.exportStory")} onclick={exportStory}>
+      <Icon name="download" />
+    </button>
+    <button class="btn ghost icon" title={t("reading.deleteStory")} aria-label={t("reading.deleteStory")} onclick={removeStory}>
+      <Icon name="trash" />
+    </button>
+  </div>
+  {/if}
+{/snippet}
+
 <div class="layout" class:full style="--side:{sideWidth}px">
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -581,6 +675,7 @@
         <span class="small muted num">{settings.readingSize}px</span>
       </div>
       <span class="sample han" style="font-family:{fontFamily}">汉字阅读</span>
+      {#if full && story}{@render storyTools(true)}{/if}
     </div>
 
     {#if story}
@@ -589,48 +684,23 @@
           <button class="btn ghost back" onclick={closeStory}>
             <span class="flip"><Icon name="arrow" size={16} /></span>{folder?.name ?? t("reading.allStories")}
           </button>
-          <h1 class="han">{story.title}</h1>
-          {#if story.folderId !== null && story.folderId !== selected}
-            <p class="small faint">{folderName(story.folderId)}</p>
-          {/if}
         </div>
-        <div class="tools">
-          <button
-            class="btn ghost icon mark"
-            class:on={story.bookmarked}
-            title={t(story.bookmarked ? "reading.unbookmark" : "reading.bookmark")}
-            aria-label={t(story.bookmarked ? "reading.unbookmark" : "reading.bookmark")}
-            aria-pressed={story.bookmarked}
-            onclick={toggleBookmark}><span aria-hidden="true">{story.bookmarked ? "★" : "☆"}</span></button
-          >
-          <button
-            class="btn"
-            class:primary={!playing}
-            disabled={!segments || !voice.available}
-            title={voice.available ? t("reading.playHint") : t("speech.noVoice")}
-            onclick={() => (playing ? stopReading() : play())}
-          >
-            <Icon name={playing ? "close" : "speaker"} size={15} />{playing ? t("reading.stop") : t("reading.play")}
-          </button>
-          <button class="btn ghost" onclick={() => setFull(!full)} title={t("reading.fullScreenHint")}>
-            {full ? t("reading.exitFull") : t("reading.fullScreen")}
-          </button>
-          <button
-            class="btn ghost icon"
-            title={t("reading.editStory")}
-            aria-label={t("reading.editStory")}
-            onclick={() => story && (storyForm = { id: story.id, title: story.title, body: story.body, folderId: story.folderId })}
-          >
-            <Icon name="edit" />
-          </button>
-          <button class="btn ghost icon" title={t("reading.exportStory")} aria-label={t("reading.exportStory")} onclick={exportStory}>
-            <Icon name="download" />
-          </button>
-          <button class="btn ghost icon" title={t("reading.deleteStory")} aria-label={t("reading.deleteStory")} onclick={removeStory}>
-            <Icon name="trash" />
-          </button>
-        </div>
+        {#if !full}{@render storyTools(false)}{/if}
       </div>
+      {#if look}
+        {@const about = stories.find((x) => x.id === story?.id)?.preview ?? story.body.slice(0, 160)}
+        {@const cv = coverOf(story.title, about, look)}
+        <header class="banner look-{look}" style="--rs:{settings.readingSize}px; --cv-hi:{cv.hi}; --cv-ink:{cv.ink}">
+          <StoryCover title={story.title} text={about} {look} band />
+          <h1 class="han story-title">{story.title}</h1>
+          {#if story.folderId !== null}<p class="small banner-sub">{folderName(story.folderId)}</p>{/if}
+        </header>
+        {:else}
+        <h1 class="han plain-title">{story.title}</h1>
+        {#if story.folderId !== null && story.folderId !== selected}
+          <p class="small faint plain-sub">{folderName(story.folderId)}</p>
+        {/if}
+      {/if}
 
       {#if vocab.length}
         <section class="vocab card-surface">
@@ -652,7 +722,6 @@
           {/if}
         </section>
       {/if}
-      <p class="small faint hint">{t("reading.hoverHint")}</p>
       <!-- svelte-ignore a11y_mouse_events_have_key_events -->
       <article
         class="text card-surface"
@@ -741,18 +810,39 @@
             {t("reading.onlyBookmarked", { n: stories.filter((s) => s.bookmarked).length })}
           </label>
         {/if}
-        <div class="list">
-          {#each onlyBookmarked ? stories.filter((s) => s.bookmarked) : stories as s (s.id)}
-            <button class="story card-surface" onclick={() => openStory(s.id)}>
-              <span class="st-title han">{#if s.bookmarked}<span class="star" title={t("reading.bookmarked")}>★</span> {/if}{s.title}</span>
-              <span class="st-preview han muted">{s.preview}</span>
-              <span class="st-meta small faint">
-                {t("reading.chars", { n: s.chars })}{#if s.folderId !== null && s.folderId !== selected}
-                  · {folderName(s.folderId)}{/if}
-              </span>
-            </button>
-          {/each}
-        </div>
+        {#if look}
+          <div class="shelf">
+            {#each onlyBookmarked ? stories.filter((s) => s.bookmarked) : stories as s (s.id)}
+              {@const cv = coverOf(s.title, s.preview, look)}
+              <button class="book" onclick={() => openStory(s.id)}>
+                <span class="cover look-{look}" style="--cv-hi:{cv.hi}; --cv-ink:{cv.ink}">
+                  <StoryCover title={s.title} text={s.preview} {look} />
+                  {#if s.bookmarked}<span class="ribbon" title={t("reading.bookmarked")}>★</span>{/if}
+                  <span class="plate han" class:t2={s.title.length > 4} class:t3={s.title.length > 8} class:t4={s.title.length > 16}
+                    >{s.title}</span
+                  >
+                </span>
+                <span class="st-meta small faint">
+                  {t("reading.chars", { n: s.chars })}{#if s.folderId !== null && s.folderId !== selected}
+                    · {folderName(s.folderId)}{/if}
+                </span>
+              </button>
+            {/each}
+          </div>
+        {:else}
+          <div class="list">
+            {#each onlyBookmarked ? stories.filter((s) => s.bookmarked) : stories as s (s.id)}
+              <button class="story card-surface" onclick={() => openStory(s.id)}>
+                <span class="st-title han">{#if s.bookmarked}<span class="star" title={t("reading.bookmarked")}>★</span> {/if}{s.title}</span>
+                <span class="st-preview han muted">{s.preview}</span>
+                <span class="small faint">
+                  {t("reading.chars", { n: s.chars })}{#if s.folderId !== null && s.folderId !== selected}
+                    · {folderName(s.folderId)}{/if}
+                </span>
+              </button>
+            {/each}
+          </div>
+        {/if}
       {/if}
     {/if}
   </section>
@@ -965,9 +1055,10 @@
   }
 
   .main {
+    --pad: 28px;
     overflow-y: auto;
     min-width: 0;
-    padding: 0 28px 28px;
+    padding: 0 var(--pad) 28px;
   }
   .textbar {
     position: sticky;
@@ -977,7 +1068,7 @@
     align-items: center;
     gap: 22px;
     flex-wrap: wrap;
-    margin: 0 -28px 18px;
+    margin: 0 calc(-1 * var(--pad)) 18px;
     padding: 10px 28px;
     background: var(--bg);
     border-bottom: 1px solid var(--border);
@@ -1022,7 +1113,7 @@
   .head {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 16px;
     margin-bottom: 14px;
     flex-wrap: wrap;
@@ -1114,9 +1205,6 @@
     font-weight: 600;
     white-space: nowrap;
   }
-  .hint {
-    margin: 0 0 10px;
-  }
   .text {
     padding: 28px 32px;
     white-space: pre-wrap;
@@ -1141,6 +1229,7 @@
     align-items: center;
     gap: 6px;
   }
+  /* the plain library: a list of titles with their opening lines */
   .list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -1176,6 +1265,242 @@
     overflow: hidden;
     font-size: 14px;
     line-height: 1.5;
+  }
+  .plain-title {
+    margin-bottom: 12px;
+    text-decoration: none !important; /* (themes underline page titles; a story's title is only bold) */
+  }
+  .plain-title:has(+ .plain-sub) {
+    margin-bottom: 2px;
+  }
+  .plain-sub {
+    margin: 0 0 12px;
+  }
+  /* the library: a shelf of book covers */
+  .shelf {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 26px 22px;
+    padding: 6px 2px 20px;
+  }
+  .book {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    min-width: 0;
+    max-width: 200px;
+  }
+  .cover {
+    position: relative;
+    display: block;
+    aspect-ratio: 3 / 4;
+    border-radius: 4px 10px 10px 4px;
+    overflow: hidden;
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.25),
+      0 8px 18px -8px rgb(0 0 0 / 0.45);
+    transition:
+      transform 0.16s ease,
+      box-shadow 0.16s ease;
+    transform-origin: 50% 100%;
+  }
+  /* the spine and the sheen of a bound book */
+  .cover::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(to right, rgb(0 0 0 / 0.28) 0, rgb(0 0 0 / 0.05) 5px, rgb(255 255 255 / 0.22) 7px, transparent 12px),
+      linear-gradient(115deg, rgb(255 255 255 / 0.14), transparent 40%);
+    pointer-events: none;
+  }
+  .book:hover .cover,
+  .book:focus-visible .cover {
+    transform: translateY(-5px) rotate(-1.2deg);
+    box-shadow:
+      0 2px 3px rgb(0 0 0 / 0.25),
+      0 18px 26px -10px rgb(0 0 0 / 0.5);
+  }
+  .book:focus-visible {
+    outline: none;
+  }
+  .book:focus-visible .cover {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .plate {
+    position: absolute;
+    inset: 9% 9% auto 13%;
+    max-height: 46%;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    -webkit-box-orient: vertical;
+    text-align: center;
+    text-wrap: balance;
+    color: #fff;
+    font-weight: 700;
+    font-size: 30px;
+    line-height: 1.25;
+    letter-spacing: 0.04em;
+    overflow-wrap: anywhere;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+  }
+  .plate.t2 {
+    font-size: 23px;
+  }
+  .plate.t3 {
+    font-size: 18px;
+    letter-spacing: 0.01em;
+  }
+  .plate.t4 {
+    font-size: 15px;
+  }
+  .ribbon {
+    position: absolute;
+    top: 0;
+    right: 12px;
+    z-index: 1;
+    width: 22px;
+    padding: 5px 0 11px;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1;
+    color: #7a4b00;
+    background: #ffd166;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+  }
+  .st-meta {
+    padding-left: 2px;
+  }
+  /* --- cloth & gilt: the title stamped in gold, in a book face --- */
+  .look-cloth .plate,
+  .look-cloth .story-title {
+    color: var(--cv-hi);
+    font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", "Noto Serif SC", SimSun, Georgia, serif;
+    text-shadow: 0 1px 0 rgb(0 0 0 / 0.45);
+    letter-spacing: 0.08em;
+  }
+  .look-cloth .plate {
+    inset: 15% 15% auto 17%;
+  }
+  .banner.look-cloth::after {
+    inset: 8px;
+    background: none;
+    border: 1px solid color-mix(in srgb, var(--cv-hi) 65%, transparent);
+    border-radius: 6px;
+  }
+  /* --- thread-bound: sewn on the right, the title on a paper slip, written downwards --- */
+  .cover.look-thread {
+    border-radius: 10px 4px 4px 10px;
+  }
+  .cover.look-thread::after {
+    background: linear-gradient(115deg, rgb(255 255 255 / 0.1), transparent 40%);
+  }
+  .look-thread .plate {
+    inset: 8% auto auto 11%;
+    max-height: 72%;
+    max-width: 52%;
+    display: block;
+    writing-mode: vertical-rl;
+    text-align: start;
+    padding: 9px 5px;
+    background: #f7f1e1;
+    color: #221a14;
+    border: 1px solid rgb(0 0 0 / 0.6);
+    box-shadow: 0 0 0 2px #f7f1e1, 0 0 0 3px rgb(0 0 0 / 0.35), 0 1px 3px 3px rgb(0 0 0 / 0.18);
+    text-shadow: none;
+    font-family: "Kaiti SC", STKaiti, KaiTi, "Songti SC", "Noto Serif CJK SC", SimSun, serif;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    line-height: 1.3;
+  }
+  .look-thread .plate.t2 {
+    font-size: 19px;
+  }
+  .look-thread .plate.t3 {
+    font-size: 15px;
+  }
+  .look-thread .plate.t4 {
+    font-size: 13px;
+  }
+  .look-thread .ribbon {
+    right: auto;
+    left: 62%;
+  }
+  .banner.look-thread .story-title,
+  .banner.look-thread .banner-sub {
+    color: var(--cv-ink);
+    text-shadow: none;
+    font-family: "Kaiti SC", STKaiti, KaiTi, "Songti SC", "Noto Serif CJK SC", SimSun, serif;
+  }
+  /* --- poster: flat colour, heavy type --- */
+  .look-poster .plate {
+    inset: 9% 9% auto 14%;
+    text-align: left;
+    text-wrap: wrap;
+    color: var(--cv-ink);
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.12;
+    text-shadow: none;
+  }
+  .banner.look-poster .story-title,
+  .banner.look-poster .banner-sub {
+    color: var(--cv-ink);
+    text-shadow: none;
+    font-weight: 800;
+  }
+  /* (only the illustrated covers need the title's side darkened) */
+  .banner.look-thread::after,
+  .banner.look-poster::after {
+    display: none;
+  }
+  /* the head of an open story: its cover, as a strip */
+  .banner {
+    position: relative;
+    max-width: calc(52 * var(--rs)); /* as wide as the text below it */
+    min-height: 118px;
+    margin-bottom: 14px;
+    padding: 22px 30% 22px 28px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+  }
+  .banner::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, rgb(0 0 0 / 0.22), transparent 70%);
+    pointer-events: none;
+  }
+  .story-title,
+  .banner-sub {
+    position: relative;
+    z-index: 1;
+  }
+  .story-title {
+    color: #fff;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.25;
+    text-decoration: none !important; /* (themes underline page titles; a story's title is only bold) */
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+    overflow-wrap: anywhere;
+  }
+  .banner-sub {
+    margin: 0;
+    color: rgb(255 255 255 / 0.82);
   }
 
   .tip {
@@ -1241,7 +1566,13 @@
     inset: 0;
     z-index: 40;
     background: var(--bg);
-    padding: 0 max(28px, calc((100vw - 1000px) / 2)) 28px;
+    --pad: max(28px, calc((100vw - 1000px) / 2));
+  }
+  /* full screen: the story's buttons sit in the bar's corner, under the sample text */
+  .tools.corner {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    margin-top: -6px;
   }
   .tip-head {
     display: flex;

@@ -62,6 +62,9 @@ export const settings = $state({
   readingLineHeight: 1.9,
   /** Colour the story's characters by tone (when tone colours are on). */
   readingToneColors: false,
+  /** How the Reading page looks: "plain" (a list and a title), or a kind of book cover, with a
+   * banner on the open story: "books" (illustrated), "cloth", "thread", "poster". */
+  readingStyle: "plain",
 });
 
 const KEYS: Record<string, keyof typeof settings> = {
@@ -99,6 +102,7 @@ const KEYS: Record<string, keyof typeof settings> = {
   reading_size: "readingSize",
   reading_line_height: "readingLineHeight",
   reading_tone_colors: "readingToneColors",
+  reading_style: "readingStyle",
 };
 
 function parse(field: keyof typeof settings, raw: string): unknown {

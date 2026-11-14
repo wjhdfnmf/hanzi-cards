@@ -879,6 +879,7 @@ mod tests {
                  CREATE TABLE cards (id INTEGER PRIMARY KEY, deck_id INTEGER NOT NULL, hanzi TEXT NOT NULL, pinyin TEXT NOT NULL DEFAULT '', meaning TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
                  CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                  CREATE TABLE progress (card_id INTEGER NOT NULL, direction TEXT NOT NULL, state INTEGER NOT NULL, stability REAL NOT NULL, difficulty REAL NOT NULL, due INTEGER NOT NULL, last_review INTEGER NOT NULL, reps INTEGER NOT NULL, lapses INTEGER NOT NULL, step INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (card_id, direction));
+                 CREATE TABLE review_log (id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL, direction TEXT NOT NULL, rating INTEGER NOT NULL, state_before INTEGER NOT NULL, reviewed_at INTEGER NOT NULL, duration_ms INTEGER NOT NULL, scheduled_secs INTEGER NOT NULL);
                  CREATE TABLE dictionary (id INTEGER PRIMARY KEY, traditional TEXT NOT NULL, simplified TEXT NOT NULL, pinyin_num TEXT NOT NULL, pinyin TEXT NOT NULL, pinyin_key TEXT NOT NULL, pinyin_key_tone TEXT NOT NULL, definitions TEXT NOT NULL, score INTEGER NOT NULL DEFAULT 0);
                  CREATE INDEX idx_dict_simp ON dictionary(simplified);
                  INSERT INTO dictionary (traditional, simplified, pinyin_num, pinyin, pinyin_key, pinyin_key_tone, definitions, score) VALUES ('你好', '你好', 'ni3 hao3', 'nǐ hǎo', 'nihao', 'ni3hao3', '/hello/', 5000);

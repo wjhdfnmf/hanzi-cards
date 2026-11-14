@@ -710,6 +710,16 @@ export const api = {
   /** Time spent on the Reading or AI Tutor page, reported a little at a time. */
   logStudyTime: (kind: "reading" | "tutor", seconds: number) => invoke<void>("log_study_time", { kind, seconds }),
 
+  syncStatus: () => invoke<SyncStatus>("sync_status"),
+  syncHost: (port: number | null) => invoke<string>("sync_host", { port }),
+  syncJoin: (address: string, code: string) => invoke<SyncStatus>("sync_join", { address, code }),
+  syncCode: () => invoke<string>("sync_code"),
+  syncPing: () => invoke<{ ok: boolean; ms: number; generation: number; error: string }>("sync_ping"),
+  syncAddresses: () => invoke<{ local: string | null; public: string | null; publicError: string; port: number }>("sync_addresses"),
+  syncNow: () => invoke<SyncReport>("sync_now"),
+  syncOnline: (on: boolean) => invoke<SyncStatus>("sync_online", { on }),
+  syncForget: () => invoke<void>("sync_forget"),
+
   dataInfo: (kind: DbKind) => invoke<DataInfo>("data_info", { kind }),
   /** Returns the backup's file name. */
   dataBackup: (kind: DbKind) => invoke<string>("data_backup", { kind }),
@@ -767,6 +777,35 @@ export const api = {
   /** A downloaded font file's bytes. */
   fontData: (key: string) => invoke<ArrayBuffer>("font_data", { key }),
 };
+
+/** Keeping devices the same (lib/sync.svelte.ts). */
+export interface SyncStatus {
+  /** "" (nothing set up) | "client" | "server" */
+  role: string;
+  address: string;
+  port: number;
+  online: boolean;
+  /** server: a device has left changes that haven't been taken in here */
+  pending: boolean;
+  lastSync: number;
+  generation: number;
+  localAddress: string | null;
+}
+export interface SyncChanges {
+  decks: number;
+  cards: number;
+  reviews: number;
+  stories: number;
+  removed: number;
+}
+export interface SyncReport {
+  received: SyncChanges;
+  sent: SyncChanges;
+  generation: number;
+  cards: number;
+  reviews: number;
+  stories: number;
+}
 
 export function errorText(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e);

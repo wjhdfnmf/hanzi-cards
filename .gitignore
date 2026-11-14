@@ -21,3 +21,6 @@ calibration-recordings/
 tone-data/
 TonePerfectDataset/
 tts-samples/
+
+# The sync crate builds in its own folder too
+sync/target/

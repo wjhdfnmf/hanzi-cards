@@ -141,8 +141,10 @@
     }
   }
 
-  // time here counts as study time on the Statistics page (listening and speaking need no clicks)
-  onMount(() => trackStudyTime("tutor", 300_000));
+  // time in a conversation counts as study time on the Statistics page (listening and
+  // speaking need no clicks). Not the setup or the summary, and not while another page is
+  // shown: this page stays alive behind the others once it has been opened.
+  onMount(() => trackStudyTime("tutor", 300_000, () => phase === "chat" && nav.view === "tutor"));
 
   onMount(() => {
     let unlisten: (() => void) | undefined;

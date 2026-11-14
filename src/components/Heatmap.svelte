@@ -16,13 +16,6 @@
     more?: string;
   } = $props();
   let hover = $state<{ date: string; value: number } | null>(null);
-  // When the weeks don't fit, show the latest ones: scrolled to the right.
-  let wrap: HTMLDivElement | undefined = $state();
-  $effect(() => {
-    void days;
-    if (wrap) wrap.scrollLeft = wrap.scrollWidth;
-  });
-
   const cell = 13;
   const gap = 3;
 
@@ -43,7 +36,8 @@
   }
 </script>
 
-<div class="wrap" bind:this={wrap}>
+<div>
+<div class="wrap">
   <svg width={weeks * (cell + gap)} height={7 * (cell + gap)} role="img" aria-label={ariaLabel}>
     {#each cells as d, i (i)}
       {#if d}
@@ -61,7 +55,8 @@
       {/if}
     {/each}
   </svg>
-  <div class="foot small faint">
+</div>
+<div class="foot small faint">
     {#if hover}
       {tooltip(hover)}
     {:else}
@@ -71,16 +66,22 @@
         {more}
       </span>
     {/if}
-  </div>
+</div>
 </div>
 
 <style>
   .wrap {
     overflow-x: auto;
     overflow-y: hidden; /* (a sideways scroll bar must not bring an up-and-down one with it) */
+    /* Right to left, so that when the weeks don't fit it is the newest that show, at any
+       window size, and the older ones are a scroll to the left. (Setting the scroll position
+       from a script only worked if the weeks already didn't fit when the page opened.) */
+    direction: rtl;
   }
   svg {
     display: block;
+    direction: ltr;
+    margin-right: auto; /* at the left when everything fits */
   }
   .foot {
     margin-top: 6px;

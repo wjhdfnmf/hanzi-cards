@@ -79,12 +79,15 @@ pub enum Made<'a> {
     /// The version about to run: "0.3.0".
     Version(&'a str),
     Switch,
+    /// Before data from another device is merged in.
+    Sync,
 }
 
 pub const KEEP_DAILY: usize = 7;
 pub const KEEP_WEEKLY: usize = 4;
 pub const KEEP_VERSION: usize = 3;
 pub const KEEP_SWITCH: usize = 3;
+pub const KEEP_SYNC: usize = 3;
 
 impl Made<'_> {
     /// What the file name ends with (nothing for the learner's own).
@@ -94,6 +97,7 @@ impl Made<'_> {
             Made::Daily => "daily".into(),
             Made::Version(v) => format!("before-{v}"),
             Made::Switch => "before-switch".into(),
+            Made::Sync => "before-sync".into(),
         }
     }
 
@@ -105,6 +109,8 @@ impl Made<'_> {
             Some("daily")
         } else if ends("-before-switch") {
             Some("switch")
+        } else if ends("-before-sync") {
+            Some("sync")
         } else if name.split_once("-before-").is_some_and(|(_, v)| v.starts_with(|c: char| c.is_ascii_digit())) {
             Some("version")
         } else {
@@ -316,6 +322,17 @@ fn is_busy(e: &rusqlite::Error) -> bool {
 pub fn inspect(path: &Path, kind: Kind) -> AppResult<FileInfo> {
     let conn = open_read_only(path).map_err(|e| AppError::msg(format!("Can't open {}: {e}", path.display())))?;
     check(&conn).map_err(|e| AppError::msg(format!("{} is damaged and can't be used ({e}).", path.display())))?;
+    // (a file to switch to, or a backup: not one from a newer version of the app)
+    let known = match kind {
+        Kind::Cards => db::SCHEMA_VERSION,
+        Kind::Reading => stories::SCHEMA_VERSION,
+    };
+    if conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0)).is_ok_and(|v| v > known) {
+        return Err(AppError::msg(match used_by(&conn, kind) {
+            Some(v) => format!("{} was last used by Hanzi Cards {v}, which is newer than this version ({}). Install version {v} or later to use it.", path.display(), env!("CARGO_PKG_VERSION")),
+            None => format!("{} was made by a newer version of Hanzi Cards than this one ({}). Install the latest version to use it.", path.display(), env!("CARGO_PKG_VERSION")),
+        }));
+    }
     let info = file_info(path, Some(&conn), kind);
     if info.contents.is_none() {
         return Err(AppError::msg(match kind {
@@ -443,6 +460,7 @@ fn clean_up(app_data: &Path, kind: Kind) {
     let mut gone: Vec<&PathBuf> = Vec::new();
     gone.extend(of("version").skip(KEEP_VERSION).map(|(_, p)| p));
     gone.extend(of("switch").skip(KEEP_SWITCH).map(|(_, p)| p));
+    gone.extend(of("sync").skip(KEEP_SYNC).map(|(_, p)| p));
     // daily: the newest few, then the newest one of each of a few weeks before the week
     // those reach back into
     use chrono::Datelike;
@@ -460,6 +478,15 @@ fn clean_up(app_data: &Path, kind: Kind) {
     }
 }
 
+/// The version of the app that last used a database, when it says.
+fn used_by(conn: &Connection, kind: Kind) -> Option<String> {
+    let sql = match kind {
+        Kind::Cards => db::CARDS_APP_VERSION,
+        Kind::Reading => db::READING_APP_VERSION,
+    };
+    conn.query_row(sql, [], |r| r.get(0)).ok()
+}
+
 /// A database's file, looked at before the app opens it for use: `None` when there isn't one
 /// yet. Fails when the file is damaged or someone else has it open; nothing is changed then.
 fn look(app_data: &Path, kind: Kind) -> AppResult<Option<Connection>> {
@@ -469,6 +496,14 @@ fn look(app_data: &Path, kind: Kind) -> AppResult<Option<Connection>> {
     }
     let raw = Connection::open(&path)?;
     raw.busy_timeout(db::OPEN_WAIT)?;
+    // one from a newer version of the app is left exactly as it is: no backup, no upgrade
+    let known = match kind {
+        Kind::Cards => db::SCHEMA_VERSION,
+        Kind::Reading => stories::SCHEMA_VERSION,
+    };
+    if raw.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0)).is_ok_and(|v| v > known) {
+        return Err(AppError::msg(db::newer_message(used_by(&raw, kind).as_deref())));
+    }
     // before anything is changed: a damaged database isn't upgraded or studied on
     match raw.query_row("PRAGMA quick_check(1)", [], |r| r.get::<_, String>(0)) {
         Ok(r) if r == "ok" => Ok(Some(raw)),
@@ -507,7 +542,10 @@ pub fn open_for_version(app_data: &Path, version: &str) -> AppResult<Connection>
         sort_out_backups(app_data, Kind::Cards);
         clean_up(app_data, Kind::Cards);
         let last: Option<String> = raw.query_row("SELECT value FROM settings WHERE key = 'app_version'", [], |r| r.get(0)).ok();
-        if last.as_deref() != Some(version) {
+        // (also when this build upgrades the database's tables without being a new version:
+        // a development build)
+        let schema: i64 = raw.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap_or(0);
+        if last.as_deref() != Some(version) || schema < db::SCHEMA_VERSION {
             // still start if this fails: not being able to open the app at all would be worse
             if let Err(e) = backup(&raw, app_data, Kind::Cards, Made::Version(version)) {
                 eprintln!("backup before {version}: {e}");
@@ -526,7 +564,7 @@ pub fn open_for_version(app_data: &Path, version: &str) -> AppResult<Connection>
         // `raw` closes here: the app's own connection has the file to itself
     }
     let conn = db::open(&path).map_err(|e| if is_busy(&e) { in_use(Kind::Cards) } else { e.into() })?;
-    db::set_setting(&conn, "app_version", version)?;
+    db::record_app_version(&conn, version)?;
     Ok(conn)
 }
 
@@ -537,7 +575,15 @@ pub fn open_reading(app_data: &Path) -> AppResult<Connection> {
         clean_up(app_data, Kind::Reading);
         // nothing to keep of one that has no stories yet
         if contents(&raw, Kind::Reading).is_ok_and(|c| c.stories > 0) {
-            daily_backup(&raw, app_data, Kind::Reading);
+            // before this build changes its tables, whatever else was backed up today
+            let schema: i64 = raw.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap_or(0);
+            if schema < stories::SCHEMA_VERSION {
+                if let Err(e) = backup(&raw, app_data, Kind::Reading, Made::Version(env!("CARGO_PKG_VERSION"))) {
+                    eprintln!("reading backup before upgrade: {e}");
+                }
+            } else {
+                daily_backup(&raw, app_data, Kind::Reading);
+            }
         }
     }
     stories::open(&db_path(app_data, Kind::Reading)).map_err(|e| if is_busy(&e) { in_use(Kind::Reading) } else { e.into() })
@@ -642,6 +688,10 @@ pub fn use_file(conn: &mut Connection, app_data: &Path, kind: Kind, source: &Pat
     match opened {
         Ok(c) => {
             *conn = c;
+            // (a database from elsewhere may carry another device's id for its study time)
+            if kind == Kind::Cards {
+                let _ = crate::sync_data::new_device_id(conn);
+            }
             Ok(saved.unwrap_or(aside))
         }
         Err(e) => {
@@ -689,7 +739,7 @@ pub fn start_fresh(conn: &mut Connection, app_data: &Path, kind: Kind) -> AppRes
     }
     *conn = kind.open(&target)?;
     if kind == Kind::Cards {
-        db::set_setting(conn, "app_version", env!("CARGO_PKG_VERSION"))?;
+        db::record_app_version(conn, env!("CARGO_PKG_VERSION"))?;
     }
     Ok(aside)
 }
@@ -1086,5 +1136,60 @@ mod tests {
         drop(conn);
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&other);
+    }
+
+    /// Data from a newer version of the app: this version leaves it alone, and so does a
+    /// version from before versions checked (it opens anything, but its first write fails).
+    #[test]
+    fn newer_data_is_not_opened_and_older_versions_stop() {
+        let dir = std::env::temp_dir().join(format!("hanzi-data-newer-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        drop(open_for_version(&dir, "9.0.0").unwrap());
+        drop(open_reading(&dir).unwrap());
+
+        // what a version from before this did at every start: open, then record its name
+        {
+            let old = Connection::open(db_path(&dir, Kind::Cards)).unwrap();
+            let e = db::set_setting(&old, "app_version", "0.3.2").unwrap_err().to_string();
+            assert!(e.contains(&format!("updated by Hanzi Cards {}", env!("CARGO_PKG_VERSION"))), "{e}");
+            let e = old.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('app_version', '0.3.1')", []).unwrap_err().to_string();
+            assert!(e.contains("newer than this version"), "{e}");
+            let recorded: String = old.query_row("SELECT value FROM settings WHERE key = 'app_version'", [], |r| r.get(0)).unwrap();
+            assert_eq!(recorded, "9.0.0", "nothing was written");
+            // (its other settings are not in the way)
+            db::set_setting(&old, "theme", "dark").unwrap();
+        }
+        // this version starts as usual, any number of times
+        drop(open_for_version(&dir, "9.0.0").unwrap());
+        let conn = open_for_version(&dir, "9.0.1").unwrap();
+        assert_eq!(db::get_setting(&conn, "app_version").unwrap().as_deref(), Some("9.0.1"));
+        assert_eq!(conn.query_row::<i64, _, _>("SELECT COUNT(*) FROM sync_meta WHERE key = 'opened_by'", [], |r| r.get(0)).unwrap(), 0);
+        drop(conn);
+
+        // a database from a version after this one: refused before anything is touched
+        for (kind, file) in [(Kind::Cards, DB_FILE), (Kind::Reading, stories::DB_FILE)] {
+            let c = Connection::open(dir.join(file)).unwrap();
+            c.execute_batch("PRAGMA user_version = 999").unwrap();
+            // (as that later version would have left its name)
+            match kind {
+                Kind::Cards => c.execute_batch("DROP TRIGGER guard_older_insert; DROP TRIGGER guard_older_update; UPDATE settings SET value = '12.5.0' WHERE key = 'app_version'").unwrap(),
+                Kind::Reading => c.execute_batch("UPDATE sync_meta SET value = '12.5.0' WHERE key = 'app_version'").unwrap(),
+            }
+            drop(c);
+            let before = std::fs::read(dir.join(file)).unwrap();
+            let backups = auto_names(&dir, kind).len();
+            let e = match kind {
+                Kind::Cards => open_for_version(&dir, "9.0.2").unwrap_err(),
+                Kind::Reading => open_reading(&dir).unwrap_err(),
+            }
+            .to_string();
+            assert!(e.contains("last used by Hanzi Cards 12.5.0") && e.contains("Install version 12.5.0 or later"), "{e}");
+            assert_eq!(std::fs::read(dir.join(file)).unwrap(), before, "the file is exactly as it was");
+            assert_eq!(auto_names(&dir, kind).len(), backups);
+            assert!(inspect(&dir.join(file), kind).unwrap_err().to_string().contains("Hanzi Cards 12.5.0"));
+            assert!(kind.open(&dir.join(file)).unwrap_err().to_string().contains("12.5.0"), "nor by any other way in");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

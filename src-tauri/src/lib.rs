@@ -22,6 +22,8 @@ mod speech;
 mod stats;
 mod stories;
 mod study;
+mod sync;
+mod sync_data;
 mod tone_check;
 mod tones;
 mod tts;
@@ -41,6 +43,8 @@ pub struct AppState {
     /// what happened and offers the backups, instead of the usual pages. Until one is put in
     /// place, that database's connection is an empty stand-in.
     pub startup_problem: Mutex<Option<StartupProblem>>,
+    /// Keeping this device the same as the learner's others (sync.rs).
+    pub sync: sync::Runtime,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -131,7 +135,11 @@ pub fn run() {
                 db: Mutex::new(conn),
                 stories: Mutex::new(stories),
                 startup_problem: Mutex::new(problem),
+                sync: sync::Runtime::default(),
             });
+            if healthy {
+                sync::start(&app.state::<AppState>().sync, &dir);
+            }
             // the dictionary ships with the app: import it on first start, in the background
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -220,6 +228,15 @@ pub fn run() {
             commands::undo_answer,
             commands::bookmark_story,
             commands::log_study_time,
+            sync::sync_status,
+            sync::sync_host,
+            sync::sync_join,
+            sync::sync_code,
+            sync::sync_ping,
+            sync::sync_addresses,
+            sync::sync_now,
+            sync::sync_online,
+            sync::sync_forget,
             commands::dict_status,
             commands::dict_search,
             commands::dict_lookup,

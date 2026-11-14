@@ -53,7 +53,8 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   time, card progress, an activity heatmap and a 30-day forecast. The advanced view adds progress by
   HSK level and by deck, true retention for young and mature words, how you answered, when you study
   (by hour and weekday), time by study direction, how long memories last and how hard words are, and
-  the words you forget most. Time on the Reading and AI Tutor pages is counted with flashcard time
+  the words you forget most. Time with a story open or in a tutor conversation is counted with flashcard time (only while the
+  window is in front and in use)
 - **Tone colours** for characters and pinyin
 - **Pleco flashcards** (`.xml`): import categories as (nested) decks (re-importing an updated file skips cards you
   already have; pinyin is checked against the dictionary, with Pleco's reading choosing between readings),
@@ -61,9 +62,10 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
 - **CSV/TSV import & export** (also works with Anki and Pleco text exports); a 6th `deck` column holds
   the subdeck path, e.g. `Class 9` or `Lesson 1/Food`. Every file format the app reads and writes is
   described in [docs/import-formats.md](docs/import-formats.md)
-- **Reading**: stories in nested collections (type them, or import text files or a whole folder), with
+- **Reading**: stories in nested collections (type them, or import text files or a whole folder), shown as
+  a plain list or as book covers (illustrated, cloth & gilt, thread-bound 线装, or poster: Settings › Reading), with
   bookmarks and a full-screen view; **Read aloud** reads a story a sentence at a time and marks the
-  sentence being read (and the word, where the voice reports it); a word that isn't a card yet can be made one from its hover note; export a
+  sentence being read (and the word, where the voice reports it), starting from the selection if text is selected; a word that isn't a card yet can be made one from its hover note; export a
   story or a whole collection as plain text files, to keep or to share with other learners (importing
   them gives the same stories back); hover a word for its pinyin and meaning; choose the typeface (free Chinese fonts can be downloaded), size and
   spacing. Stories are kept in a database of their own
@@ -109,6 +111,9 @@ Your cards and stories are the one thing the app can't make again, so they are g
 - **The dictionary is separate.** It is five times the size of everything else and holds nothing of yours,
   so it has its own file: card backups stay small (a megabyte or two), and a damaged dictionary is simply
   thrown away and rebuilt.
+- **One version at a time.** Data that a newer version of the app has upgraded is not opened by an
+  older one: it says which version is needed and changes nothing. (Versions before 0.4.0 didn't check;
+  data upgraded by 0.4.0 or later stops them at start-up with the same message.)
 - **Tests never touch the real files.** The benchmark tests that need a learner's cards work on a private
   copy (`db::open_copy`).
 

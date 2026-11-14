@@ -80,13 +80,13 @@ pub fn check_pcm(pcm: &[f32]) -> AppResult<()> {
 
 /// The settings the page may save. The app's own records in the same table (its version, the
 /// pitch profile) aren't among them.
-const SETTINGS: [&str; 34] = [
+const SETTINGS: [&str; 35] = [
     "language", "theme", "desired_retention", "new_per_day", "answer_buttons", "one_direction_per_session",
     "new_recalls", "relearn_recalls", "again_minutes", "learn_gaps", "relearn_minutes", "min_gap_cards", "fuzz",
     "max_interval_days", "leech_lapses", "new_order", "tone_colors", "hsk_autotag", "speech_rate", "autoplay_audio",
     "voice", "audio_output", "audio_output_label", "speech_engine", "whisper_model", "whisper_device", "pitch_tones",
     "replay_answers", "tutor_model", "debug_mode", "reading_font", "reading_size", "reading_line_height",
-    "reading_tone_colors",
+    "reading_tone_colors", "reading_style",
 ];
 
 pub fn check_setting(key: &str, value: &str) -> AppResult<()> {

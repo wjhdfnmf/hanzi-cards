@@ -138,8 +138,77 @@ fn init(conn: Connection, dictionary: Option<&Path>) -> rusqlite::Result<Connect
     Ok(conn)
 }
 
+/// The version `migrate` brings a cards database to.
+pub const SCHEMA_VERSION: i64 = 13;
+
+/// What an app is told when the data is from a newer version than itself. `from`: the
+/// version that last used the data, when the data says.
+pub fn newer_message(from: Option<&str>) -> String {
+    let by = match from {
+        Some(v) if !v.trim().is_empty() => format!("Hanzi Cards {}", v.trim()),
+        _ => "a newer version of Hanzi Cards".to_string(),
+    };
+    format!(
+        "This data was last used by {by}, which is newer than this version ({}), and this version can't use it. Install version {} or later. Nothing has been changed.",
+        env!("CARGO_PKG_VERSION"),
+        from.map(str::trim).filter(|v| !v.is_empty()).unwrap_or("the latest")
+    )
+}
+
+/// Where each database says which version of the app last used it.
+pub const CARDS_APP_VERSION: &str = "SELECT value FROM settings WHERE key = 'app_version'";
+pub const READING_APP_VERSION: &str = "SELECT value FROM sync_meta WHERE key = 'app_version'";
+
+/// A database from a newer version of the app is not opened: this version doesn't know what
+/// its tables mean, and working on them could spoil what the newer version put there.
+/// `used_by`: the query for the app version recorded in it (see above).
+pub fn refuse_newer(conn: &Connection, found: i64, known: i64, used_by: &str) -> rusqlite::Result<()> {
+    if found > known {
+        let from: Option<String> = conn.query_row(used_by, [], |r| r.get(0)).ok();
+        return Err(rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_ERROR), Some(newer_message(from.as_deref()))));
+    }
+    Ok(())
+}
+
+/// Versions of the app released before `refuse_newer` existed (0.3.2 and earlier) open
+/// whatever they find. What stops them is in the database itself: every version records its
+/// name in the settings as it starts, and these triggers refuse that record unless the app
+/// has first said (in `sync_meta`, for the length of one transaction) that it knows this
+/// version of the tables. An older app says nothing, its start-up write fails with the
+/// message below, and it shows that message instead of working on the data.
+/// Made again at every start, so the number is always this version's.
+fn guard_older_versions(conn: &Connection) -> rusqlite::Result<()> {
+    let refuse = format!(
+        "WHEN NEW.key = 'app_version'
+           AND COALESCE((SELECT CAST(value AS INTEGER) FROM sync_meta WHERE key = 'opened_by'), 0) < {SCHEMA_VERSION}
+         BEGIN SELECT RAISE(ABORT, '{}'); END;",
+        // (the older app can't say which version it is, so the message names only this one)
+        format!(
+            "This data was updated by Hanzi Cards {v}, which is newer than this version, and this version can't use it. Install version {v} or later. Nothing has been changed.",
+            v = env!("CARGO_PKG_VERSION")
+        )
+        .replace('\'', "''")
+    );
+    conn.execute_batch(&format!(
+        "DROP TRIGGER IF EXISTS main.guard_older_insert;
+         DROP TRIGGER IF EXISTS main.guard_older_update;
+         CREATE TRIGGER main.guard_older_insert BEFORE INSERT ON settings {refuse}
+         CREATE TRIGGER main.guard_older_update BEFORE UPDATE ON settings {refuse}"
+    ))
+}
+
+/// Record which version of the app is using the database (see `guard_older_versions`).
+pub fn record_app_version(conn: &Connection, version: &str) -> rusqlite::Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('opened_by', ?1)", [SCHEMA_VERSION])?;
+    set_setting(&tx, "app_version", version)?;
+    tx.execute("DELETE FROM sync_meta WHERE key = 'opened_by'", [])?;
+    tx.commit()
+}
+
 fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     let version: i64 = conn.query_row("PRAGMA main.user_version", [], |r| r.get(0))?;
+    refuse_newer(conn, version, SCHEMA_VERSION, CARDS_APP_VERSION)?;
     if version < 1 {
         conn.execute_batch(SCHEMA_V1)?;
         seed(conn)?;
@@ -280,6 +349,15 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
              COMMIT;",
         )?;
     }
+    if version < 13 {
+        // v13: permanent ids for decks, cards and answers, a "changed" time for decks, a record
+        // of deletions, and reading/tutor time kept per device (see sync_data.rs).
+        let tx = conn.unchecked_transaction()?;
+        crate::sync_data::upgrade_cards(&tx)?;
+        tx.execute_batch("PRAGMA main.user_version = 13")?;
+        tx.commit()?;
+    }
+    guard_older_versions(conn)?;
     Ok(())
 }
 
