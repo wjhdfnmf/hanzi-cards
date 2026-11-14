@@ -14,6 +14,7 @@
 //!   (a device only ever adds to its own).
 //! - **Statistics that were reset** stay reset: answers from before the reset, and study
 //!   time from days before it, are dropped wherever they come from.
+//! - **Progress that was reset** stays reset: schedules from reviews before it are dropped.
 //! - **The same thing made separately on two devices** (the starter deck, a file imported
 //!   on both) becomes one thing: same place, same content, one id from then on.
 //!
@@ -357,6 +358,7 @@ pub fn merge(a: &Snapshot, b: &Snapshot) -> Snapshot {
 
     // ---- the statistics were started over: nothing from before that comes back ----
     let reset = deleted.get(&("reset".to_string(), "statistics".to_string())).copied();
+    let progress_reset = deleted.get(&("reset".to_string(), "progress".to_string())).copied();
 
     // ---- answers: all of them, except the ones taken back ----
     let mut log: BTreeMap<String, Review> = BTreeMap::new();
@@ -380,6 +382,9 @@ pub fn merge(a: &Snapshot, b: &Snapshot) -> Snapshot {
     let mut by_word: BTreeMap<(String, String), Progress> = BTreeMap::new();
     for p in a.progress.iter().chain(&b.progress) {
         let Some(card) = cards.get(&id(&p.card)) else { continue };
+        if progress_reset.is_some_and(|at| p.last_review < at) {
+            continue;
+        }
         let key = (card.hanzi.clone(), p.direction.clone());
         let p = match by_word.remove(&key) {
             Some(old) => newer(old, p.clone()),
@@ -549,6 +554,19 @@ mod tests {
         let m = both_ways(&a, &b);
         assert!(m.log.is_empty());
         assert_eq!(m.deleted.len(), 1);
+    }
+
+    #[test]
+    fn progress_that_was_reset_stays_reset() {
+        // a still has schedules from before b started every card over; b has studied c2 since
+        let mut a = base();
+        a.progress = vec![prog("c1", "recognition", 100, 3), prog("c2", "recognition", 120, 2)];
+        let mut b = base();
+        b.deleted = vec![tomb("reset", "progress", 200)];
+        b.progress = vec![prog("c2", "recognition", 250, 1)];
+        let m = both_ways(&a, &b);
+        assert_eq!(m.progress.iter().map(|p| (p.card.as_str(), p.last_review)).collect::<Vec<_>>(), [("c2", 250)]);
+        assert_eq!(m.deleted, b.deleted, "the reset is remembered");
     }
 
     #[test]

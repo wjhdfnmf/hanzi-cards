@@ -16,7 +16,8 @@
   import SettingsView from "./views/SettingsView.svelte";
   import TutorView from "./views/TutorView.svelte";
   import Console from "./components/Console.svelte";
-  import { sync, refreshStatus, ping, syncNow, summary } from "./lib/sync.svelte";
+  import { sync, refreshStatus, ping, syncNow, summary, syncIfAutomatic } from "./lib/sync.svelte";
+  import { listen } from "@tauri-apps/api/event";
   import { showToast } from "./lib/toast.svelte";
   import { device, showRail, railShown, ios } from "./lib/device.svelte";
   const shown = $derived(railShown());
@@ -42,6 +43,7 @@
       await refreshFonts();
       watchSync();
       checkSiri();
+      syncOnOpen();
     } catch (e) {
       startupError = errorText(e);
     }
@@ -64,6 +66,21 @@
     if (!ios) return;
     const timer = setInterval(checkSiri, 1500);
     return () => clearInterval(timer);
+  });
+
+  // ---------- LINK on a phone: what's new on the computer as the app opens or comes back ----------
+  async function syncOnOpen() {
+    const line = await syncIfAutomatic();
+    if (line) showToast(line);
+  }
+  onMount(() => {
+    if (!ios) return;
+    const stop = listen("app-resumed", () => {
+      if (problem) return;
+      checkSiri();
+      syncOnOpen();
+    });
+    return () => void stop.then((f) => f());
   });
 
   // ---------- keeping devices the same: the button above "Collapse", once it is set up ----------
@@ -186,7 +203,8 @@
 
   const items: { view: View; icon: string; key: Parameters<typeof t>[0] }[] = [
     { view: "study", icon: "study", key: "nav.study" },
-    { view: "tutor", icon: "chat", key: "nav.tutor" },
+    // (no AI tutor on an iPhone, for now)
+    ...(ios ? [] : [{ view: "tutor" as View, icon: "chat", key: "nav.tutor" as Parameters<typeof t>[0] }]),
     { view: "decks", icon: "decks", key: "nav.decks" },
     { view: "reading", icon: "book", key: "nav.reading" },
     { view: "dictionary", icon: "dictionary", key: "nav.dictionary" },

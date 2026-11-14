@@ -210,6 +210,8 @@ pub struct Config {
     pub fingerprint: String,
     pub last_sync: i64,
     pub last_generation: u64,
+    /// client: sync only when asked (otherwise a phone syncs as it opens and as it's left)
+    pub manual: bool,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -412,6 +414,8 @@ pub struct Status {
     pub last_sync: i64,
     pub generation: u64,
     pub local_address: Option<String>,
+    /// client: syncs by itself (see `Config::manual`)
+    pub automatic: bool,
 }
 
 fn status_of(runtime: &Runtime, app_data: &Path) -> Status {
@@ -420,6 +424,7 @@ fn status_of(runtime: &Runtime, app_data: &Path) -> Status {
         online: runtime.listening(),
         pending: config.role == "server" && runtime.pending.load(Ordering::Relaxed),
         local_address: if config.role == "server" { local_address() } else { None },
+        automatic: config.role == "client" && !config.manual,
         role: config.role,
         address: config.address,
         port: config.port,
@@ -614,8 +619,44 @@ pub async fn sync_ping(app: AppHandle) -> AppResult<Pong> {
 
 #[tauri::command]
 pub async fn sync_now(app: AppHandle) -> AppResult<Report> {
+    blocking(move || sync_blocking(&app)).await
+}
+
+/// Client: sync by itself, or only when asked.
+#[tauri::command]
+pub async fn sync_set_automatic(app: AppHandle, on: bool) -> AppResult<Status> {
     blocking(move || {
         let dir = dir_of(&app)?;
+        let mut config = load_config(&dir);
+        config.manual = !on;
+        save_config(&dir, &config)?;
+        Ok(status_of(&app.state::<AppState>().sync, &dir))
+    })
+    .await
+}
+
+/// A phone being left (iOS may stop it moments later): a client that syncs by itself sends
+/// what's new now, without the page. Merging is all-or-nothing, so being stopped part way
+/// changes nothing.
+#[cfg_attr(not(mobile), allow(dead_code))]
+pub fn sync_on_leaving(app: &AppHandle) {
+    let Ok(dir) = dir_of(app) else { return };
+    let config = load_config(&dir);
+    if config.role != "client" || config.manual {
+        return;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = sync_blocking(&app) {
+            eprintln!("sync on leaving: {e}");
+        }
+    });
+}
+
+/// One sync, start to finish (the console, the side bar's button, a phone opening or left).
+fn sync_blocking(app: &AppHandle) -> AppResult<Report> {
+    {
+        let dir = dir_of(app)?;
         let mut config = load_config(&dir);
         if config.role.is_empty() {
             return Err(not_set_up());
@@ -641,8 +682,7 @@ pub async fn sync_now(app: AppHandle) -> AppResult<Report> {
         config.last_generation = report.generation;
         save_config(&dir, &config)?;
         Ok(report)
-    })
-    .await
+    }
 }
 
 /// Server: listen for the other devices, or stop.

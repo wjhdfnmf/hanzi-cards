@@ -13,6 +13,7 @@
   import Hanzi from "../components/Hanzi.svelte";
   import Pinyin from "../components/Pinyin.svelte";
   import Icon from "../components/Icon.svelte";
+  import { ios } from "../lib/device.svelte";
 
   type Period = 7 | 30 | 90 | 365 | null; // null = all time
   const PERIODS = [
@@ -341,7 +342,7 @@
               <thead>
                 <tr>
                   <th>{t("stats.date")}</th><th>{t("stats.col.time")}</th><th>{t("stats.col.reviews")}</th><th>{t("stats.correctPct")}</th><th>{t("stats.metric.new")}</th>
-                  {#if otherTime}<th>{t("stats.time.reading")}</th><th>{t("stats.time.tutor")}</th>{/if}
+                  {#if otherTime}<th>{t("stats.time.reading")}</th>{#if !ios}<th>{t("stats.time.tutor")}</th>{/if}{/if}
                 </tr>
               </thead>
               <tbody>
@@ -352,7 +353,7 @@
                     <td>{fmtNum(p.reviews)}</td>
                     <td>{pct(share(p.correct, p.reviews))}</td>
                     <td>{fmtNum(p.newCards)}</td>
-                    {#if otherTime}<td>{durationLabel(p.reading)}</td><td>{durationLabel(p.tutor)}</td>{/if}
+                    {#if otherTime}<td>{durationLabel(p.reading)}</td>{#if !ios}<td>{durationLabel(p.tutor)}</td>{/if}{/if}
                   </tr>
                 {/each}
               </tbody>
@@ -370,7 +371,8 @@
           <div class="legend">
             <span><i style="background:var(--cat-1)"></i>{t("stats.time.cards")} <strong>{durationLabel(s.period.timeMs)}</strong></span>
             <span><i style="background:var(--cat-2)"></i>{t("stats.time.reading")} <strong>{durationLabel(s.period.readingMs)}</strong></span>
-            <span><i style="background:var(--cat-3)"></i>{t("stats.time.tutor")} <strong>{durationLabel(s.period.tutorMs)}</strong></span>
+            <!-- (no AI tutor on an iPhone, for now) -->
+            {#if !ios}<span><i style="background:var(--cat-3)"></i>{t("stats.time.tutor")} <strong>{durationLabel(s.period.tutorMs)}</strong></span>{/if}
           </div>
         {:else}
           <BarChart

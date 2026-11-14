@@ -111,6 +111,19 @@ pub fn run() {
     }));
     builder
         .plugin(tauri_plugin_dialog::init())
+        // A phone: left (a client that syncs by itself sends what's new) and back at the front
+        // (the page is told: iOS's web view isn't, and the page syncs and looks for Siri's request).
+        .on_window_event(|_window, _event| {
+            #[cfg(mobile)]
+            match _event {
+                tauri::WindowEvent::Suspended => sync::sync_on_leaving(_window.app_handle()),
+                tauri::WindowEvent::Resumed => {
+                    use tauri::Emitter;
+                    let _ = _window.emit("app-resumed", ());
+                }
+                _ => {}
+            }
+        })
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -238,6 +251,7 @@ pub fn run() {
             commands::bookmark_story,
             commands::log_study_time,
             commands::reset_statistics,
+            commands::reset_progress,
             sync::sync_status,
             sync::sync_host,
             sync::sync_join,
@@ -245,6 +259,7 @@ pub fn run() {
             sync::sync_ping,
             sync::sync_addresses,
             sync::sync_now,
+            sync::sync_set_automatic,
             sync::sync_online,
             sync::sync_forget,
             commands::dict_status,

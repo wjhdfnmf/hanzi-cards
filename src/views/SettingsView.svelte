@@ -11,7 +11,7 @@
   import { fmtNum } from "../lib/format";
   import { goto, nav } from "../lib/nav.svelte";
   import { settings, saveSetting } from "../lib/settings.svelte";
-  import { sync } from "../lib/sync.svelte";
+  import { sync, refreshStatus, ping, syncNow, summary as syncSummary } from "../lib/sync.svelte";
   import { device as layout, ios, trackLevel } from "../lib/device.svelte";
   import Back from "../components/Back.svelte";
   import { SIZE_MIN, SIZE_MAX, LINE_MIN, LINE_MAX, readingFont, clampSize } from "../lib/reading";
@@ -327,6 +327,74 @@
         ? t("settings.dataSummaryReading", { stories: fmtNum(c.stories), collections: fmtNum(c.collections) })
         : t(c.decks === 1 ? "settings.dataSummaryOne" : "settings.dataSummary", { cards: fmtNum(c.cards), decks: fmtNum(c.decks), reviews: fmtNum(c.reviews) });
 
+  // ---------- LINK (an iPhone): pairing with the computer that keeps the box ----------
+  let linkAddress = $state("");
+  let linkCode = $state("");
+  let linkBusy = $state(false);
+  let linkError = $state("");
+  async function linkJoin() {
+    linkBusy = true;
+    linkError = "";
+    try {
+      await api.syncJoin(linkAddress.trim(), linkCode.replace(/\s+/g, ""));
+      await refreshStatus();
+      await ping().catch(() => {});
+      linkCode = "";
+      const r = await syncNow();
+      showToast(t("link.paired", { cards: fmtNum(r.cards) }));
+    } catch (e) {
+      linkError = errorText(e);
+    } finally {
+      linkBusy = false;
+    }
+  }
+  async function linkSync() {
+    linkBusy = true;
+    linkError = "";
+    try {
+      showToast(syncSummary(await syncNow()));
+    } catch (e) {
+      linkError = errorText(e);
+    } finally {
+      linkBusy = false;
+    }
+  }
+  async function linkCheck() {
+    const p = await ping().catch(() => null);
+    linkError = p && !p.ok ? p.error : "";
+  }
+  async function linkAutomatic(on: boolean) {
+    sync.status = await api.syncSetAutomatic(on);
+  }
+  async function linkForget() {
+    if (!(await ask(t("link.forgetConfirm"), { title: t("link.forget"), kind: "warning" }))) return;
+    await api.syncForget();
+    linkError = "";
+    await refreshStatus();
+  }
+  $effect(() => {
+    if (section === "link")
+      refreshStatus().then((s) => {
+        if (s?.role === "client") linkCheck();
+      });
+  });
+
+  // ---------- starting every card over ----------
+  async function resetProgress() {
+    if (!(await ask(t("settings.resetProgressConfirm"), { title: t("settings.resetProgress"), kind: "warning" }))) return;
+    resetting = true;
+    try {
+      const n = await api.resetProgress();
+      showToast(t("settings.resetProgressDone", { n }));
+      sync.epoch++;
+      await refreshData().catch(() => {});
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      resetting = false;
+    }
+  }
+
   // ---------- starting the statistics over ----------
   let resetting = $state(false);
   async function resetStatistics() {
@@ -533,14 +601,19 @@
     { name: "FSRS-6 · open-spaced-repetition", what: "settings.about.fsrs", licence: "MIT" },
     { name: "complete-hsk-vocabulary © Yanis Zafirópulos", what: "settings.about.hsk", licence: "MIT" },
     { name: "Unicode Unihan (kHanyuPinlu)", what: "settings.about.unihan", licence: "Unicode License" },
-    { name: "Tone Perfect · Michigan State University", what: "settings.about.toneperfect", licence: "—" },
-    { name: "Whisper · OpenAI", what: "settings.about.whisper", licence: "MIT" },
+    // (the computers' speech checking: an iPhone uses Apple's own)
+    ...(ios
+      ? []
+      : [
+          { name: "Tone Perfect · Michigan State University", what: "settings.about.toneperfect" as const, licence: "—" },
+          { name: "Whisper · OpenAI", what: "settings.about.whisper" as const, licence: "MIT" },
+        ]),
     { name: "LXGW WenKai, Noto Serif SC, ZCOOL…", what: "settings.about.fonts", licence: "SIL OFL 1.1" },
     { name: "Tauri · Svelte · SQLite", what: "settings.about.stack", licence: "MIT / Apache-2.0 · public domain" },
   ];
 
   // ---------- sections (the side bar) ----------
-  type Section = "general" | "reading" | "study" | "audio" | "speech" | "ai" | "data" | "dictionary" | "about";
+  type Section = "general" | "reading" | "study" | "audio" | "speech" | "ai" | "data" | "link" | "dictionary" | "about";
   const SECTIONS: { key: Section; label: Parameters<typeof t>[0] }[] = [
     { key: "general", label: "settings.general" },
     { key: "reading", label: "settings.reading" },
@@ -549,10 +622,14 @@
     { key: "speech", label: "settings.speech" },
     { key: "ai", label: "settings.ai" },
     { key: "data", label: "settings.data" },
+    // (an iPhone: keeping in step with a computer, as a page of its own; computers keep the console)
+    ...(ios ? [{ key: "link" as Section, label: "settings.link" as Parameters<typeof t>[0] }] : []),
     { key: "dictionary", label: "settings.dictionary" },
     { key: "about", label: "settings.about" },
   ];
   const SECTION_KEY = "settings.section";
+  // (no AI tutor on an iPhone, for now)
+  if (ios) SECTIONS.splice(SECTIONS.findIndex((x) => x.key === "ai"), 1);
   const isSection = (k: unknown): k is Section => SECTIONS.some((x) => x.key === k);
   // On a phone the list of sections and a section are two screens: a section opened from
   // another page shows straight away, otherwise the list comes first.
@@ -656,7 +733,7 @@
       </button>
     {/each}
     <!-- (nothing to see here) -->
-    <button class="sec door" tabindex="-1" aria-hidden="true" onclick={() => (sync.consoleOpen = true)}>&nbsp;</button>
+    {#if !ios}<button class="sec door" tabindex="-1" aria-hidden="true" onclick={() => (sync.consoleOpen = true)}>&nbsp;</button>{/if}
   </nav>
   <div class="secmain" bind:this={mainEl}>
   <!-- a phone: the way back stays at the top while the section scrolls under it -->
@@ -1511,7 +1588,70 @@
       </span>
       <button class="btn danger" disabled={resetting} onclick={resetStatistics}>{t("settings.resetStatsButton")}</button>
     </div>
+    <div class="row">
+      <span>
+        {t("settings.resetProgress")}
+        <small class="faint block">{t("settings.resetProgressHint")}</small>
+      </span>
+      <button class="btn danger" disabled={resetting} onclick={resetProgress}>{t("settings.resetStatsButton")}</button>
+    </div>
   </section>
+  {/if}
+
+  {#if section === "link"}
+  {@const s = sync.status}
+  {#if s?.role === "client"}
+    <section class="group card-surface">
+      <div class="row">
+        <span>{t("link.computer")}</span>
+        <span class="link-state">
+          <span class="lamp" class:ok={sync.light === "ok"} class:bad={sync.light === "bad"}></span>
+          <code>{s.address}</code>
+        </span>
+      </div>
+      <div class="row">
+        <span>{t("link.last")}</span>
+        <span class="muted">{s.lastSync ? new Date(s.lastSync * 1000).toLocaleString() : t("link.never")}</span>
+      </div>
+      <div class="row">
+        <span>{t("link.automatic")}<small class="faint block">{t("link.automaticHint")}</small></span>
+        <input type="checkbox" class="toggle" checked={s.automatic} onchange={(e) => linkAutomatic(e.currentTarget.checked)} />
+      </div>
+      <div class="row">
+        <button class="btn primary" disabled={linkBusy || sync.busy} onclick={linkSync}>
+          {sync.busy ? t("sync.syncing") : t("link.syncNow")}
+        </button>
+        <button class="btn ghost" disabled={linkBusy} onclick={linkCheck}>{t("link.check")}</button>
+      </div>
+      {#if linkError}<div class="notice err small">{linkError}</div>{/if}
+    </section>
+    <section class="group card-surface">
+      <div class="row">
+        <span>{t("link.forget")}</span>
+        <button class="btn danger" onclick={linkForget}>{t("link.forgetButton")}</button>
+      </div>
+    </section>
+  {:else}
+    <section class="group card-surface">
+      <div class="row col">
+        <p class="link-intro">{t("link.intro")}</p>
+      </div>
+      <label class="row col">
+        <span>{t("link.address")}</span>
+        <input type="text" bind:value={linkAddress} placeholder="192.168.1.20" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url" />
+      </label>
+      <label class="row col">
+        <span>{t("link.code")}</span>
+        <input type="text" bind:value={linkCode} placeholder="AB12C-…" autocapitalize="characters" autocorrect="off" spellcheck="false" />
+      </label>
+      <div class="row">
+        <button class="btn primary" disabled={linkBusy || !linkAddress.trim() || !linkCode.trim()} onclick={linkJoin}>
+          {linkBusy ? t("link.pairing") : t("link.pair")}
+        </button>
+      </div>
+      {#if linkError}<div class="notice err small">{linkError}</div>{/if}
+    </section>
+  {/if}
   {/if}
 
   {#if section === "dictionary"}
@@ -1972,6 +2112,32 @@
   .phone .credits li > .faint {
     flex-basis: 100%;
     order: 3;
+  }
+  .link-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .link-intro {
+    margin: 0;
+    color: var(--text-2);
+  }
+  .lamp {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--text-3);
+  }
+  .lamp.ok {
+    background: #22b45a;
+    box-shadow: 0 0 0 3px rgb(34 180 90 / 0.2);
+  }
+  .lamp.bad {
+    background: #e0453a;
+    box-shadow: 0 0 0 3px rgb(224 69 58 / 0.2);
+  }
+  .row.col > input {
+    width: 100%;
   }
   .backbar {
     position: sticky;

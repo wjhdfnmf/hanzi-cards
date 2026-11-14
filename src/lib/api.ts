@@ -714,6 +714,8 @@ export const api = {
 
   /** Start the statistics over (a backup is made first). Returns how many answers went. */
   resetStatistics: () => invoke<number>("reset_statistics"),
+  /** Every card new again; returns how many schedules were removed. */
+  resetProgress: () => invoke<number>("reset_progress"),
 
   syncStatus: () => invoke<SyncStatus>("sync_status"),
   syncHost: (port: number | null) => invoke<string>("sync_host", { port }),
@@ -725,6 +727,8 @@ export const api = {
     ),
   syncNow: () => invoke<SyncReport>("sync_now"),
   syncOnline: (on: boolean) => invoke<SyncStatus>("sync_online", { on }),
+  /** Client: sync by itself (as the app opens and as it's left), or only when asked. */
+  syncSetAutomatic: (on: boolean) => invoke<SyncStatus>("sync_set_automatic", { on }),
   syncForget: () => invoke<void>("sync_forget"),
 
   dataInfo: (kind: DbKind) => invoke<DataInfo>("data_info", { kind }),
@@ -797,6 +801,8 @@ export interface SyncStatus {
   lastSync: number;
   generation: number;
   localAddress: string | null;
+  /** client: syncs by itself */
+  automatic: boolean;
 }
 export interface SyncChanges {
   decks: number;

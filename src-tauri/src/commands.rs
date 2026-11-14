@@ -486,6 +486,16 @@ pub fn reset_statistics(app: AppHandle, state: State<AppState>) -> AppResult<usi
     stats::reset(&mut conn)
 }
 
+/// Settings › Your data › Reset study progress: every card new again (a backup first).
+#[tauri::command]
+pub fn reset_progress(app: AppHandle, state: State<AppState>) -> AppResult<usize> {
+    let dir = app_data(&app)?;
+    let mut conn = lock(&state);
+    crate::data::check(&conn)?;
+    crate::data::backup(&conn, &dir, crate::data::Kind::Cards, crate::data::Made::Reset)?;
+    stats::reset_progress(&mut conn)
+}
+
 // ---------- speaking ----------
 
 fn app_data(app: &AppHandle) -> AppResult<PathBuf> {

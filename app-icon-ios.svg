@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- the iPhone's icon: the same, edge to edge (iOS rounds the corners itself) -->
+  <rect width="1024" height="1024" fill="#c8323a"/>
+  <g transform="translate(512 512) scale(1.143) translate(-512 -512)">
+  <!-- back card -->
+  <rect x="300" y="210" width="460" height="560" rx="56" fill="#f3d9c9" transform="rotate(10 530 490)"/>
+  <!-- front card -->
+  <rect x="250" y="250" width="460" height="560" rx="56" fill="#fffaf5"/>
+  <!-- stylised character 文: dot, horizontal, two crossing sweeps -->
+  <rect x="450" y="330" width="60" height="70" rx="22" fill="#c8323a"/>
+  <rect x="320" y="420" width="320" height="52" rx="26" fill="#c8323a"/>
+  <path d="M400 500 C 440 610, 520 690, 630 740" stroke="#c8323a" stroke-width="54" stroke-linecap="round" fill="none"/>
+  <path d="M570 500 C 530 610, 450 690, 330 740" stroke="#c8323a" stroke-width="54" stroke-linecap="round" fill="none"/>
+  </g>
+</svg>

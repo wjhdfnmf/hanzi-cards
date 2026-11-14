@@ -76,6 +76,19 @@ export async function syncNow(): Promise<SyncReport> {
   }
 }
 
+/** A client that syncs by itself, as the app opens or comes back: quietly, and a line only
+ *  when something came in. (Leaving is handled without the page: sync.rs, sync_on_leaving.) */
+export async function syncIfAutomatic(): Promise<string | null> {
+  const s = await refreshStatus();
+  if (s?.role !== "client" || !s.automatic || sync.busy) return null;
+  try {
+    const r = await syncNow();
+    return any(r.received) ? `In: ${describe(r.received)}.` : null;
+  } catch {
+    return null; // (the light shows the server couldn't be reached)
+  }
+}
+
 /** One line for after a sync from the side bar. */
 export function summary(r: SyncReport): string {
   const [got, gave] = [any(r.received), any(r.sent)];

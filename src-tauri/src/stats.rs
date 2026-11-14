@@ -210,6 +210,21 @@ pub fn reset(conn: &mut Connection) -> AppResult<usize> {
     Ok(answers)
 }
 
+/// Every card's progress started over: all are new again, due as new cards. The answers and
+/// statistics stay (that's `reset`). Remembered for syncing, so other devices' older
+/// schedules don't come back. Returns how many schedules were removed.
+pub fn reset_progress(conn: &mut Connection) -> AppResult<usize> {
+    let tx = conn.transaction()?;
+    tx.execute("INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('applying', '1')", [])?;
+    let n = tx.execute("DELETE FROM progress", [])?;
+    tx.execute("INSERT OR REPLACE INTO sync_deleted (kind, uid, at) VALUES ('reset', 'progress', ?1)", [now()])?;
+    // the last answer can't be taken back any more: the schedule it would restore is gone
+    tx.execute("DELETE FROM settings WHERE key = 'last_answer'", [])?;
+    tx.execute("DELETE FROM sync_meta WHERE key = 'applying'", [])?;
+    tx.commit()?;
+    Ok(n)
+}
+
 /// Add reading or tutor time to today's total. Small steps only: a page reports as it goes.
 pub fn log_time(conn: &Connection, kind: &str, seconds: i64) -> AppResult<()> {
     if !TIME_KINDS.contains(&kind) {
