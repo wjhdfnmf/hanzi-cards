@@ -1,17 +1,52 @@
 # Hanzi Cards (汉字卡)
 
-A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows, macOS and Linux.
+A desktop app for learning Mandarin Chinese (Simplified): flash cards with spaced repetition, spoken
+answers checked on your own computer, graded reading, a dictionary and statistics. Free and open
+source, for Windows, macOS and Linux. Your cards, recordings and study history stay on your computer.
+
+![Studying: a card's answer, with each character and its pinyin coloured by tone, and the Wrong / Right buttons](docs/images/study.png)
+
+## Download
+
+**[Get the latest release](https://github.com/wjhdfnmf/hanzi-cards/releases/latest)**
+
+| | File | Notes |
+|---|---|---|
+| Windows 10/11 | `Hanzi.Cards_<version>_x64-setup.exe` | Installs for your account, no administrator prompt. Not code-signed: *More info → Run anyway* |
+| macOS 13+ | `…_aarch64.dmg` (Apple Silicon), `…_x64.dmg` (Intel) | Not signed with an Apple certificate: *Privacy & Security → Open Anyway*. **Not yet tested on a Mac** |
+| Debian, Ubuntu, Mint | `…_amd64.deb` | `sudo apt install ./Hanzi.Cards_<version>_amd64.deb` |
+| Fedora, openSUSE | `…x86_64.rpm` | `sudo dnf install ./Hanzi.Cards-<version>-1.x86_64.rpm` |
+| Arch | [`packaging/arch`](packaging/arch) | `makepkg -si` |
+| Any Linux | `…_amd64.AppImage` | `chmod +x`, then run it |
+
+Nothing else is needed to start: the dictionary ships with the app, and a small sample deck is made on
+first start. Speech models, the built-in voice and extra fonts are downloaded from inside the app if
+and when you want them. The AI tutor is optional and needs your own Anthropic API key.
+
+## A look around
 
 <p>
-  <img src="docs/images/study-sakura.png" width="49%" alt="A card's answer in the Sakura theme: characters coloured by tone, pinyin, meaning and the Wrong / Right buttons">
-  <img src="docs/images/study-ink.png" width="49%" alt="The same in the Ink &amp; paper theme">
-  <img src="docs/images/study-lantern.png" width="49%" alt="A card's question in the Lantern theme">
-  <img src="docs/images/study-moon.png" width="49%" alt="A card's answer in the Moon Night theme">
+  <img src="docs/images/decks.png" width="49%" alt="Decks &amp; Cards in the Ink &amp; paper theme: nested decks with due and new counts, and a deck's cards with tone-coloured characters">
+  <img src="docs/images/study-question.png" width="49%" alt="A card's question in the Indigo theme">
+  <img src="docs/images/reading-library.png" width="49%" alt="The Reading library as cloth-bound book covers, in the Lantern theme">
+  <img src="docs/images/reading-story.png" width="49%" alt="An open story with its key vocabulary, in the Celadon theme with a thread-bound banner">
+  <img src="docs/images/dictionary.png" width="49%" alt="Dictionary search results in the Matcha theme">
+  <img src="docs/images/themes.png" width="49%" alt="The theme picker: sixteen themes in three groups">
 </p>
 
-![The Statistics page: what the figures mean in a few sentences, headline numbers, and time studied by day](docs/images/statistics.png)
+![Statistics: what the figures mean in a few sentences, the headline numbers, time studied by day, card progress and activity](docs/images/statistics.png)
 
 <sub>Screenshots use sample data.</sub>
+
+## Contents
+
+[What it does](#what-it-does) · [Stack](#stack) · [Data safety](#data-safety) · [Security](#security) ·
+[How tone checking was built and measured](#how-tone-checking-was-built-and-measured) ·
+[Develop](#develop) · [Layout](#layout) · [Licence](#licence)
+
+## What it does
+
+### Cards and decks
 
 - **Cards** with characters, pinyin, English meaning, notes and tags, organised into **nested decks**
   (e.g. Class › Class 9; a deck includes its subdecks when listing, studying and exporting; one button
@@ -26,6 +61,17 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   (`nihao` → 你好, `woaini` → 我爱你; add a tone number to narrow: `ni3`). Pinyin and meaning fill in from the
   dictionary and update as you add characters. In the pinyin field, a digit after a syllable sets its tone
   (`ni3` → `nǐ`, `5` = neutral)
+- **HSK tags**: new cards are tagged with their HSK 3.0 level (2026 syllabus, with the 2021 lists filling gaps;
+  combinations of list words get the highest level of their parts). The cards table sorts by any column
+- **Pleco flashcards** (`.xml`): import categories as (nested) decks (re-importing an updated file skips cards you
+  already have; pinyin is checked against the dictionary, with Pleco's reading choosing between readings),
+  and export any deck back to Pleco (decks become categories, pinyin as tone numbers)
+- **CSV/TSV import & export** (also works with Anki and Pleco text exports); a 6th `deck` column holds
+  the subdeck path, e.g. `Class 9` or `Lesson 1/Food`. Every file format the app reads and writes is
+  described in [docs/import-formats.md](docs/import-formats.md)
+
+### Studying
+
 - **Study** with FSRS-6 spaced repetition. Pick decks, tags, mode (due & new / new only / cram / difficult), session size, and directions:
   characters → meaning, meaning → characters, listening, and **speaking**: say the answer and it is checked
   by speech recognition, either Windows' built-in Mandarin recognizer or OpenAI Whisper run locally
@@ -35,19 +81,34 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   While studying: **Back** returns to the card just answered and takes its answer back; *Show answer*
   stays in place as *Hide answer* with Wrong / Right below it; Space shows or hides, 9 or 1 is wrong,
   0 or 2 is right; the counter says how many cards are answered and how many will come round again
-- **AI conversation tutor** (optional, needs your own Anthropic API key): a spoken role-play with Claude
-  built from your decks' words. Speak (Whisper, on this computer) or type; it answers aloud, notes which of
-  your words you used correctly, suggests new words, and at the end records reviews and adds cards. Each
-  conversation can be tuned (level, corrections, English, reply length…), typing has a built-in pinyin
-  keyboard, and Settings keeps a record of what the tutor has cost
-- **HSK tags**: new cards are tagged with their HSK 3.0 level (2026 syllabus, with the 2021 lists filling gaps;
-  combinations of list words get the highest level of their parts). The cards table sorts by any column
-- **Dictionary**: CC-CEDICT (~120k entries), searchable by characters, pinyin (with or without tones) or English; one click adds a word as a card. The card editor auto-fills pinyin and meaning from it
 - **Voices**: words, stories and the tutor are read aloud by the system's Chinese voice. Where there
   is none (most Linux installs), or if you prefer it, Settings › Audio downloads a built-in voice
   (Kokoro, 147 MB, Chinese and English) that runs on the computer itself, with its own volume setting. With no voice at all, the
   speaker buttons are switched off and say why. The options that were weighed are in
   [docs/tts-options.md](docs/tts-options.md)
+- **Tone colours** for characters and pinyin
+
+### Reading and the dictionary
+
+- **Reading**: stories in nested collections (type them, or import text files or a whole folder), shown as
+  a plain list or as book covers (illustrated, cloth & gilt, thread-bound 线装, or poster: Settings › Reading), with
+  bookmarks and a full-screen view; **Read aloud** reads a story a sentence at a time and marks the
+  sentence being read (and the word, where the voice reports it), starting from the selection if text is selected; a word that isn't a card yet can be made one from its hover note; export a
+  story or a whole collection as plain text files, to keep or to share with other learners (importing
+  them gives the same stories back); hover a word for its pinyin and meaning; choose the typeface (free Chinese fonts can be downloaded), size and
+  spacing. Stories are kept in a database of their own
+- **Dictionary**: CC-CEDICT (~120k entries), searchable by characters, pinyin (with or without tones) or English; one click adds a word as a card. The card editor auto-fills pinyin and meaning from it
+
+### AI conversation tutor
+
+- **AI conversation tutor** (optional, needs your own Anthropic API key): a spoken role-play with Claude
+  built from your decks' words. Speak (Whisper, on this computer) or type; it answers aloud, notes which of
+  your words you used correctly, suggests new words, and at the end records reviews and adds cards. Each
+  conversation can be tuned (level, corrections, English, reply length…), typing has a built-in pinyin
+  keyboard, and Settings keeps a record of what the tutor has cost
+
+### Statistics
+
 - **Statistics** for all decks or one, over the last week, month, quarter, year or all time. The
   simple view has the headline figures (time studied, reviews, how much you remembered against your
   target, new words, streak, what is due), a few sentences on what they mean, time or reviews over
@@ -57,20 +118,9 @@ A desktop flash card app for learning Mandarin Chinese (Simplified), for Windows
   the words you forget most. Settings › Your data can start the statistics over (after a backup;
   cards and their due dates stay). Time with a story open or in a tutor conversation is counted with flashcard time (only while the
   window is in front and in use)
-- **Tone colours** for characters and pinyin
-- **Pleco flashcards** (`.xml`): import categories as (nested) decks (re-importing an updated file skips cards you
-  already have; pinyin is checked against the dictionary, with Pleco's reading choosing between readings),
-  and export any deck back to Pleco (decks become categories, pinyin as tone numbers)
-- **CSV/TSV import & export** (also works with Anki and Pleco text exports); a 6th `deck` column holds
-  the subdeck path, e.g. `Class 9` or `Lesson 1/Food`. Every file format the app reads and writes is
-  described in [docs/import-formats.md](docs/import-formats.md)
-- **Reading**: stories in nested collections (type them, or import text files or a whole folder), shown as
-  a plain list or as book covers (illustrated, cloth & gilt, thread-bound 线装, or poster: Settings › Reading), with
-  bookmarks and a full-screen view; **Read aloud** reads a story a sentence at a time and marks the
-  sentence being read (and the word, where the voice reports it), starting from the selection if text is selected; a word that isn't a card yet can be made one from its hover note; export a
-  story or a whole collection as plain text files, to keep or to share with other learners (importing
-  them gives the same stories back); hover a word for its pinyin and meaning; choose the typeface (free Chinese fonts can be downloaded), size and
-  spacing. Stories are kept in a database of their own
+
+### Your data, language and looks
+
 - **Your data** (Settings): shows which database files hold your cards and your stories; back them up, save
   a copy anywhere, or switch to a backup or a database from another computer. The app also backs up by
   itself, in a folder of its own that it keeps tidy. See [Data safety](#data-safety)
@@ -186,8 +236,9 @@ for:
   *Calibrate tone detection* does, gives 94.1% against 96.6% from all their recordings.
 
 **speaker1**: one native speaker reading the project's own sheet
-(`docs/tone-recordings/speaker-sheet.pdf`) into a phone at home, with consent: 80 single syllables
-and 47 two-syllable words so far, 127 clips. It is the check that Tone Perfect can't give: an
+(`docs/tone-recordings/speaker-sheet.pdf`) into a phone at home, with consent: 284 clips. 80 single
+syllables and 47 two-syllable words, each at a careful and at an everyday speed, 20 words with one tone
+said wrong on purpose, and 10 sentences. It is the check that Tone Perfect can't give: an
 everyday voice, a plain microphone, and tones inside words. It was used for:
 
 - **Tones in words**, which Tone Perfect doesn't have. The first run got 61% of syllables in words
@@ -198,12 +249,14 @@ everyday voice, a plain microphone, and tones inside words. It was used for:
   Perfect and worse on speaker1 (it took low 3rd tones that never rise for 4th tones), and in words
   it was worse at every weight. That is why the app blends it instead of switching to it, and
   only for a syllable said alone. Other changes that helped one set and hurt the other were dropped.
-- **Knowing what is still wrong**: 2nd tones in words heard as 3rd (15 of 44), because this
-  speaker's 2nd tones start low and rise late.
+- **Knowing what is still wrong**: 2nd tones heard as 3rd, because this speaker's 2nd tones start low
+  and rise late. At everyday speed single syllables hold at 90% right, and syllables in words drop from
+  73% to 66%. Sentences can't be judged yet: the syllables aren't found reliably in running speech.
 
-What this doesn't cover: one home-recorded speaker is a small sample; nobody has recorded wrong
-tones on purpose yet (parts C and D of the sheet), so how often a wrong tone is let through is
-not measured; and there are no labelled learner recordings. The effect of the new classifier on
+What this doesn't cover: one home-recorded speaker is a small sample; the words recorded with a
+wrong tone on purpose still have to be listened to and labelled (the speaker did not always say the
+tone that was asked for), so how often a wrong tone is let through is not measured; and there are no
+labelled learner recordings. The effect of the new classifier on
 the combined Whisper + pitch judgement hasn't been measured either. Tone Perfect came without a
 licence text, and whether weights fitted to it may be distributed has not been confirmed with its
 authors.

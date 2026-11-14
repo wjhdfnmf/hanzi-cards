@@ -702,7 +702,7 @@
       {/if}
 
       {#if vocab.length}
-        <section class="vocab card-surface">
+        <section class="vocab card-surface" style="--rs:{settings.readingSize}px">
           <button class="vocab-head" aria-expanded={showVocab} onclick={() => (showVocab = !showVocab)}>
             <span class="twisty" class:open={showVocab} aria-hidden="true">▸</span>
             <span>{t("reading.keyVocab")}</span>
@@ -1163,7 +1163,7 @@
     background: var(--surface-2);
   }
   .vocab {
-    max-width: 52em;
+    max-width: calc(52 * var(--rs)); /* as wide as the text below it */
     margin-bottom: 12px;
     padding: 10px 16px;
   }
