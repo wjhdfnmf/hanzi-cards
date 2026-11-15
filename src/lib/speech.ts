@@ -224,10 +224,28 @@ export function speakQueued(text: string, rate = settings.speechRate) {
   else webSpeak(text, rate, false);
 }
 
+/** A reading that is paused: the sound stays where it is, and nothing further is said. */
+let paused = false;
+/** Ends the wait for the sound that is playing (a paused sound says nothing when stopped). */
+let release: (() => void) | null = null;
+export function pauseSpeaking() {
+  paused = true;
+  current?.pause();
+  synth()?.pause();
+}
+export function resumeSpeaking() {
+  paused = false;
+  current?.play().catch(() => release?.());
+  synth()?.resume();
+}
+
 export function stopSpeaking() {
+  paused = false;
   reading++;
   stopRouted();
   synth()?.cancel();
+  release?.();
+  release = null;
 }
 
 // ---------- reading a text aloud, part by part ----------
@@ -246,6 +264,12 @@ export function readAloud(
   parts: string[],
   on: { start: (i: number) => void; word?: (i: number, at: number, length: number) => void; done: () => void },
   rate = settings.speechRate,
+  /** A part's sound if it was made beforehand (an MP3; null when it wasn't): played as it
+   *  is, at the speed in Settings, instead of being said by the voice. */
+  made?: (text: string) => Promise<ArrayBuffer | null>,
+  /** When each word of a made part is said (ms into its sound; `at` counts from the part's
+   *  first character that isn't space), so the word being said can be marked. */
+  timing?: (text: string) => Promise<{ at: number; len: number; begin: number; end: number }[]>,
 ) {
   stopSpeaking();
   const mine = ++reading;
@@ -280,9 +304,12 @@ export function readAloud(
     try {
       if (device) await (audio as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(device);
       await new Promise<void>((done) => {
+        release = done;
         audio.onended = () => done();
         audio.onerror = () => done();
-        audio.onpause = () => done();
+        audio.onpause = () => {
+          if (!paused) done(); // (stopped; a pause waits here)
+        };
         audio.play().catch(() => done());
       });
     } finally {
@@ -291,14 +318,62 @@ export function readAloud(
     }
   };
 
+  const playMade = async (mp3: ArrayBuffer, device: string | null, i: number) => {
+    const words = (timing && on.word ? await timing(parts[i]).catch(() => []) : []).slice().sort((a, b) => a.begin - b.begin);
+    if (!alive()) return;
+    const lead = parts[i].length - parts[i].trimStart().length;
+    const url = URL.createObjectURL(new Blob([mp3], { type: "audio/mpeg" }));
+    const audio = new Audio(url);
+    audio.volume = volume();
+    // (how fast is the player's business: the sound was made once, at its natural speed)
+    audio.playbackRate = settings.speechRate;
+    current = audio;
+    madeNow = audio;
+    // the word being said, looked up as the sound plays (several times a second is enough)
+    let said = -1;
+    const mark = () => {
+      const ms = audio.currentTime * 1000;
+      let now = -1;
+      for (let k = 0; k < words.length && words[k].begin <= ms; k++) now = k;
+      if (now >= 0 && now !== said && alive()) {
+        said = now;
+        on.word?.(i, lead + words[now].at, words[now].len);
+      }
+    };
+    const watch = words.length ? setInterval(mark, 40) : undefined;
+    try {
+      if (device) await (audio as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(device);
+      await new Promise<void>((done, failed) => {
+        release = done;
+        audio.onended = () => done();
+        audio.onerror = () => failed(new Error("a made sentence couldn't be played"));
+        audio.onpause = () => {
+          if (!paused) done(); // (stopped; a pause waits here)
+        };
+        audio.play().catch(failed);
+      });
+    } finally {
+      clearInterval(watch);
+      URL.revokeObjectURL(url);
+      if (current === audio) current = null;
+      if (madeNow === audio) madeNow = null;
+    }
+  };
+
   (async () => {
     for (let i = 0; i < parts.length && alive(); i++) {
       if (!parts[i].trim()) continue;
+      // (paused between two parts: the next one waits)
+      while (paused && alive()) await new Promise((r) => setTimeout(r, 100));
+      if (!alive()) break;
       on.start(i);
       const device = routed() ? await chosenDevice() : null;
       if (!alive()) break;
       try {
-        if (builtIn() || device) await sayAsSound(i, device);
+        const mp3 = made ? await made(parts[i]).catch(() => null) : null;
+        if (!alive()) break;
+        if (mp3) await playMade(mp3, device, i);
+        else if (builtIn() || device) await sayAsSound(i, device);
         else await sayOnWeb(i);
       } catch (e) {
         console.warn("reading aloud: a part failed", e);
@@ -308,6 +383,13 @@ export function readAloud(
     if (alive()) reading++;
     on.done();
   })();
+}
+
+/** A made sentence that is playing now (see `readAloud`). */
+let madeNow: HTMLAudioElement | null = null;
+/** The speed was changed while a made sentence plays: it changes at once. */
+export function setMadeRate(rate: number) {
+  if (madeNow) madeNow.playbackRate = rate;
 }
 
 /** Whether anything is being said or is waiting to be said. */

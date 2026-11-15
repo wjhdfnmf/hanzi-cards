@@ -117,7 +117,7 @@ is built with Xcode and put on your own phone ([docs/building-for-iphone.md](doc
   a plain list or as book covers (illustrated, cloth & gilt, thread-bound 线装, or poster: Settings › Reading), with
   bookmarks and a full-screen view; **Read aloud** reads a story a sentence at a time and marks the
   sentence being read (and the word, where the voice reports it), starting from the selection or from a
-  word you clicked; stories can be marked as read, which shows on their covers; a word that isn't a card yet can be made one from its hover note; export a
+  word you clicked; **Pause** and **Resume** hold a reading where it is; on a computer, with your own MiniMax API key, a story can be read in a MiniMax voice: its sentences are made into sound once (the cost is shown first, for one story or for all of them) and then played from files in the app's data folder, from any sentence, with each word marked as it is said; the voice, its speed and its feeling are chosen and tried in Settings › Audio, where **Lock in** keeps to voices that already have sound made, so that nothing more is charged; stories can be marked as read, which shows on their covers; a word that isn't a card yet can be made one from its hover note; export a
   story or a whole collection as plain text files, to keep or to share with other learners (importing
   them gives the same stories back); click a word for its pinyin and meaning; choose the typeface (free Chinese fonts can be downloaded), size and
   spacing. Stories are kept in a database of their own
@@ -345,6 +345,8 @@ and behind `device` checks in the page, never in a branch of its own for long.
 
 With the CUDA Toolkit installed, `scripts/dev-gpu.ps1` runs the app with Whisper on the graphics card
 (`--features gpu`); a spoken answer then takes about 0.2 s instead of 1-3 s. See `docs/gpu-whisper-plan.md`.
+Run this way, the app never touches your real data: it runs as `com.hanzicards.app.dev`, on a copy of
+your cards and stories that the script makes afresh at every start (and that has no LINK set up).
 
 ### Windows installer
 

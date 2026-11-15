@@ -1,4 +1,5 @@
 // Text settings for the Reading page (also shown in Settings).
+import type { Segment } from "./api";
 
 export type FontGroup = "sans" | "serif" | "script" | "decorative" | "traditional";
 
@@ -100,5 +101,20 @@ export function installedFonts(): Set<string> {
     for (const f of READING_FONTS) out.add(f.key); // can't tell: offer them all
   }
   installedCache = out;
+  return out;
+}
+
+/** A story's segments as sentences to read aloud: which segments each covers, and its text.
+ *  (One place for this: a sentence's made sound is found by its exact text.) */
+export function sentences(segs: Segment[]): { from: number; to: number; text: string }[] {
+  const out: { from: number; to: number; text: string }[] = [];
+  let from = 0;
+  segs.forEach((s, i) => {
+    if (/[。！？!?；;…\n]/.test(s.text) || i === segs.length - 1) {
+      const text = segs.slice(from, i + 1).map((x) => x.text).join("");
+      if (/\p{L}/u.test(text)) out.push({ from, to: i, text });
+      from = i + 1;
+    }
+  });
   return out;
 }

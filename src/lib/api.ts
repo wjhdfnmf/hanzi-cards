@@ -363,6 +363,28 @@ export interface KeyStatus {
   hint: string | null;
 }
 
+/** How much of a story has its sound made (MiniMax), in the voice in use. */
+export interface StoryAudioStatus {
+  /** Sentences with something to say. */
+  total: number;
+  /** Of those, the ones whose sound is made. */
+  have: number;
+  /** Characters in the ones still to make. */
+  characters: number;
+}
+export interface StoryAudioMade {
+  made: number;
+  characters: number;
+  stopped: boolean;
+  error: string | null;
+  status: StoryAudioStatus;
+}
+export interface StoryAudioUsage {
+  files: number;
+  bytes: number;
+  folder: string;
+}
+
 /** How the tutor behaves in one conversation. */
 export interface TutorOptions {
   level: "hsk1" | "hsk2" | "hsk3";
@@ -679,6 +701,25 @@ export const api = {
   whisperDownload: (name: string) => invoke<void>("whisper_download", { name }),
   whisperDelete: (name: string) => invoke<void>("whisper_delete", { name }),
   aiKeyStatus: () => invoke<KeyStatus>("ai_key_status"),
+  // Stories read in a made voice (MiniMax, the learner's own key; computers only).
+  voiceKeyStatus: () => invoke<KeyStatus>("voice_key_status"),
+  voiceKeySet: (key: string) => invoke<void>("voice_key_set", { key }),
+  voiceKeyClear: () => invoke<void>("voice_key_clear"),
+  storyVoices: () => invoke<{ id: string; name: string }[]>("story_voices"),
+  storyAudioStatus: (parts: string[]) => invoke<StoryAudioStatus>("story_audio_status", { parts }),
+  /** Makes what is missing; progress arrives as "story-audio" events ({ done, total }). */
+  storyAudioMake: (parts: string[]) => invoke<StoryAudioMade>("story_audio_make", { parts }),
+  storyAudioCancel: () => invoke<void>("story_audio_cancel"),
+  /** A sentence's sound (MP3), if it has been made: fails otherwise, and makes nothing. */
+  storyAudioClip: (text: string) => invoke<ArrayBuffer>("story_audio_clip", { text }),
+  /** When each word of a made sentence is said (ms into its sound); empty if not known. */
+  storyAudioWords: (text: string) => invoke<{ at: number; len: number; begin: number; end: number }[]>("story_audio_words", { text }),
+  /** The choices sound has been made with, most sentences first ("lock in" in Settings). */
+  storyAudioMadeWith: () =>
+    invoke<{ model: string; voice: string; speed: number; emotion: string; sentences: number }[]>("story_audio_made_with"),
+  storyAudioRemove: (parts: string[]) => invoke<StoryAudioStatus>("story_audio_remove", { parts }),
+  storyAudioUsage: () => invoke<StoryAudioUsage>("story_audio_usage"),
+  storyAudioClear: () => invoke<StoryAudioUsage>("story_audio_clear"),
   aiKeySet: (key: string) => invoke<void>("ai_key_set", { key }),
   aiKeyClear: () => invoke<void>("ai_key_clear"),
   tutorStart: (deckIds: number[], scenario: string, options: TutorOptions) =>

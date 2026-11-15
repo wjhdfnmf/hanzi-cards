@@ -24,14 +24,15 @@ The phone build is the same app, not a copy:
 | Spoken answers | Whisper, or Windows' recognizer | Apple's speech recognition, on the device only (`apple_speech.rs`) |
 | Tones by pitch | with Whisper | not in the build (see below) |
 | AI tutor | with your own Anthropic key | not in the build (see below) |
+| Stories read by MiniMax | with your own MiniMax key | not in the build (see below) |
 | Data | choose files and folders, save copies | the app's own data; backups and restore stay |
 | Keeping devices the same | server or client | client only (iOS stops a background app listening) |
 | GPU libraries | NVIDIA download | not offered |
 
 **Left out of the build, not only hidden.** `build.rs` sets `cfg(appstore)` for every iPhone build.
-With it, `lib.rs` compiles without `ai.rs`, `tutor.rs`, `tones.rs`, `tone_check.rs` and
-`calibration.rs`, and `commands.rs` answers their commands with "not part of this version": nothing
-in the phone's program talks to Anthropic, and none of the tone-checking numbers (fitted to the Tone
+With it, `lib.rs` compiles without `ai.rs`, `tutor.rs`, `story_audio.rs`, `tones.rs`,
+`tone_check.rs` and `calibration.rs`, and `commands.rs` answers their commands with "not part of this version": nothing
+in the phone's program talks to Anthropic or MiniMax, and none of the tone-checking numbers (fitted to the Tone
 Perfect and speaker recordings) are in it. The pages are shared, so the tutor's screen is still among
 the page files, never shown and with nothing behind it. `HANZI_APPSTORE=1 cargo check --lib` checks
 this build on any computer.

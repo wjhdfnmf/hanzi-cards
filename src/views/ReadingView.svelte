@@ -5,7 +5,11 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { api, errorText, type Deck, type DictEntry, type Segment, type Story, type StoryFolder, type StoryInfo } from "../lib/api";
   import CardEditor from "../components/CardEditor.svelte";
-  import { readAloud, stopSpeaking } from "../lib/speech";
+  import { readAloud, stopSpeaking, setMadeRate, pauseSpeaking, resumeSpeaking } from "../lib/speech";
+  import { listen } from "@tauri-apps/api/event";
+  import { ios } from "../lib/device.svelte";
+  import type { StoryAudioStatus } from "../lib/api";
+  import { costOf, pricePerMillion } from "../lib/storyAudio.svelte";
   import { voice } from "../lib/voice.svelte";
   import { t } from "../lib/i18n.svelte";
   import { settings, saveSetting } from "../lib/settings.svelte";
@@ -16,7 +20,7 @@
   import Modal from "../components/Modal.svelte";
   import Pinyin from "../components/Pinyin.svelte";
   import { hanziTones } from "../lib/pinyin";
-  import { SIZE_MIN, SIZE_MAX, readingFont, clampSize } from "../lib/reading";
+  import { SIZE_MIN, SIZE_MAX, readingFont, clampSize, sentences } from "../lib/reading";
   import FontSelect from "../components/FontSelect.svelte";
   import StoryCover, { coverOf, LOOKS, type Look } from "../components/StoryCover.svelte";
 
@@ -143,18 +147,6 @@
   // too where the voice says which word it is on (the Windows voices do).
   let playing = $state<{ from: number; to: number; word: number | null } | null>(null);
   /** The story as sentences: the segments each one covers, and its text. */
-  function sentences(segs: Segment[]): { from: number; to: number; text: string }[] {
-    const out: { from: number; to: number; text: string }[] = [];
-    let from = 0;
-    segs.forEach((s, i) => {
-      if (/[。！？!?；;…\n]/.test(s.text) || i === segs.length - 1) {
-        const text = segs.slice(from, i + 1).map((x) => x.text).join("");
-        if (/\p{L}/u.test(text)) out.push({ from, to: i, text });
-        from = i + 1;
-      }
-    });
-    return out;
-  }
   /** The segment where the learner's selection in the story starts, if they have selected text. */
   function selectionStart(): number | null {
     const sel = window.getSelection();
@@ -207,7 +199,31 @@
     }
     return null;
   }
-  function play() {
+  /** The question before a story's sound is made (and paid for): the app's own, in its look.
+   *  `reading`: asked on the way to reading aloud, where "no" still reads, in the usual voice. */
+  let buying = $state<{ status: StoryAudioStatus; reading: boolean; answer: (a: "buy" | "usual" | null) => void } | null>(null);
+  function askBuy(status: StoryAudioStatus, reading: boolean): Promise<"buy" | "usual" | null> {
+    return new Promise((done) => {
+      buying = {
+        status,
+        reading,
+        answer: (a) => {
+          buying = null;
+          done(a);
+        },
+      };
+    });
+  }
+  /** "$0.018" for small amounts, "$1.24" otherwise. */
+  const dollars = (characters: number) => {
+    const cost = costOf(characters, settings.minimaxModel);
+    return cost.toFixed(cost < 0.1 ? 3 : 2);
+  };
+  /** "News Anchor" for "Chinese (Mandarin)_News_Anchor". */
+  const voiceName = (id: string) => id.replace(/^Chinese \(Mandarin\)_/, "").replaceAll("_", " ");
+  /** Stories the learner said no to making the sound of, this time the app is open: not asked again. */
+  const notMade = new Set<number>();
+  async function play() {
     if (!segments) return;
     const segs = segments;
     let parts = sentences(segs);
@@ -217,11 +233,38 @@
     const from = pressedAt ?? startPoint() ?? picked?.i ?? null;
     pressedAt = null;
     picked = null;
+    // Searching for a voice (not locked in), with a key, and this story has no sound in the
+    // chosen voice yet, or not all of it: offer to make it now. It is then read as it is made,
+    // from where the reading starts.
+    const id = story?.id;
+    if (!ios && voiceKey && !settings.minimaxLock && !makingAudio && audio && audio.have < audio.total && id !== undefined && !notMade.has(id)) {
+      const answer = await askBuy(audio, true);
+      if (answer === null || story?.id !== id || segments !== segs) return; // (closed, or another story was opened meanwhile)
+      if (answer === "buy") {
+        const first = from === null ? 0 : Math.max(0, parts.findIndex((x) => x.to >= from));
+        const texts = parts.map((p) => p.text);
+        void runMaking([...texts.slice(first), ...texts.slice(0, first)]);
+      } else {
+        notMade.add(id);
+      }
+    }
+    const hasMade = (audio?.have ?? 0) > 0 || !!makingAudio;
+    /** A sentence's made sound; while the story is being made, it is waited for. */
+    const madeClip = async (text: string) => {
+      for (;;) {
+        const mp3 = await api.storyAudioClip(text).catch(() => null);
+        if (mp3) return mp3;
+        if (!makingAudio) return api.storyAudioClip(text).catch(() => null); // (made as the making ended, or not at all)
+        if (!playing) return null; // (stopped)
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    };
     if (from !== null) {
       const p = parts.findIndex((x) => x.to >= from);
       if (p >= 0) {
         parts = parts.slice(p);
-        if (from > parts[0].from) {
+        // (a made sentence is one sound: it is played from its beginning)
+        if (from > parts[0].from && !hasMade) {
           const text = segs.slice(from, parts[0].to + 1).map((x) => x.text).join("");
           if (/\p{L}/u.test(text)) parts[0] = { from, to: parts[0].to, text };
           else parts = parts.slice(1);
@@ -250,11 +293,112 @@
         },
         done: () => (playing = null),
       },
+      settings.speechRate,
+      hasMade ? madeClip : undefined,
+      hasMade ? (text) => api.storyAudioWords(text) : undefined,
     );
   }
   function stopReading() {
     if (playing) stopSpeaking();
     playing = null;
+    paused = false;
+  }
+  /** The reading is held where it is (the sentence stays marked). */
+  let paused = $state(false);
+  function togglePause() {
+    if (!playing) return;
+    paused = !paused;
+    if (paused) pauseSpeaking();
+    else resumeSpeaking();
+  }
+  $effect(() => {
+    if (!playing) paused = false;
+  });
+
+  // ---------- text and audio settings: out of the way until asked for ----------
+  let optionsOpen = $state(false);
+  try {
+    optionsOpen = localStorage.getItem("reading.options") === "open";
+  } catch {
+    /* (no storage: closed) */
+  }
+  function toggleOptions() {
+    optionsOpen = !optionsOpen;
+    try {
+      localStorage.setItem("reading.options", optionsOpen ? "open" : "closed");
+    } catch {
+      /* (not remembered) */
+    }
+  }
+
+  // ---------- the story's sound, made once (MiniMax; Settings › Audio) and kept ----------
+  /** Whether a MiniMax key is saved: only then is making offered. */
+  let voiceKey = $state(false);
+  /** How much of the open story has its sound made. */
+  let audio = $state<StoryAudioStatus | null>(null);
+  /** Being made now: how far. */
+  let makingAudio = $state<{ done: number; total: number } | null>(null);
+  const storyParts = () => (segments ? sentences(segments).map((p) => p.text) : []);
+  onMount(() => {
+    if (ios) return;
+    api.voiceKeyStatus().then((k) => (voiceKey = k.set)).catch(() => {});
+    const stop = listen<{ done: number; total: number }>("story-audio", (e) => {
+      if (makingAudio) makingAudio = e.payload;
+    });
+    return () => void stop.then((f) => f());
+  });
+  $effect(() => {
+    const id = story?.id;
+    const parts = storyParts();
+    // (the voice in use decides which files count)
+    void [settings.minimaxVoice, settings.minimaxModel, settings.minimaxSpeed, settings.minimaxEmotion];
+    audio = null;
+    if (ios || id === undefined || !parts.length) return;
+    api.storyAudioStatus(parts)
+      .then((s) => {
+        if (story?.id === id) audio = s;
+      })
+      .catch(() => {});
+  });
+  async function makeAudio() {
+    if (makingAudio) return void api.storyAudioCancel().catch(() => {});
+    const parts = storyParts();
+    if (!audio || !parts.length) return;
+    if ((await askBuy(audio, false)) !== "buy") return;
+    await runMaking(parts);
+  }
+  /** Make the sound of these sentences (in this order), showing how far it is. */
+  async function runMaking(parts: string[]) {
+    if (makingAudio || !audio) return;
+    const id = story?.id;
+    makingAudio = { done: audio.have, total: audio.total };
+    try {
+      const r = await api.storyAudioMake(parts);
+      if (story?.id === id) audio = r.status;
+      if (r.error) showToast(t("reading.audioStopped", { error: r.error }), "err");
+      else if (r.stopped) showToast(t("reading.audioCancelled", { have: r.status.have, total: r.status.total }));
+      else showToast(t("reading.audioMade", { n: r.characters.toLocaleString() }));
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      makingAudio = null;
+    }
+  }
+  async function removeAudio() {
+    const parts = storyParts();
+    if (!parts.length || !(await ask(t("reading.audioRemoveAsk"), { kind: "warning" }))) return;
+    stopReading();
+    try {
+      audio = await api.storyAudioRemove(parts);
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+  }
+  /** How fast it is read: for a made sentence that is playing, at once. */
+  const RATES = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3];
+  function setRate(rate: number) {
+    saveSetting("speechRate", rate);
+    setMadeRate(rate);
   }
 
   // ---------- bookmarks ----------
@@ -605,9 +749,11 @@
   const folderName = (id: number | null) => (id === null ? "" : (folders.find((f) => f.id === id)?.path ?? ""));
 </script>
 
-{#snippet storyTools()}
+<!-- An open story's buttons, in three groups: what is done with the story while reading it
+     (kept, marked read, read aloud), how it is shown (text and audio settings, full screen),
+     and the story as a thing (edit, export, delete). A phone has them on one line. -->
+{#snippet readGroup()}
   {#if story}
-  <div class="tools">
     <button
       class="btn ghost icon mark"
       class:on={story.bookmarked}
@@ -626,38 +772,54 @@
       <Icon name="check" size={15} />{t(story.read ? "reading.read" : "reading.markRead")}
     </button>
     {#if !device.phone}
-    <button
-      class="btn"
-      class:primary={!playing}
-      disabled={!segments || !voice.available}
-      onpointerdown={() => (pressedAt = playing ? null : startPoint())}
-      title={voice.available ? t("reading.playHint") : t("speech.noVoice")}
-      onclick={() => (playing ? stopReading() : play())}
-    >
-      <Icon name={playing ? "close" : "speaker"} size={15} />{playing ? t("reading.stop") : t("reading.play")}
-    </button>
+      {#if playing}
+        <button class="btn primary" onclick={togglePause}>
+          <Icon name={paused ? "play" : "pause"} size={15} />{paused ? t("reading.resume") : t("reading.pause")}
+        </button>
+        <button class="btn" onclick={stopReading}><Icon name="close" size={15} />{t("reading.stop")}</button>
+      {:else}
+        <button
+          class="btn primary"
+          disabled={!segments || !voice.available}
+          onpointerdown={() => (pressedAt = startPoint())}
+          title={voice.available ? t("reading.playHint") : t("speech.noVoice")}
+          onclick={play}
+        >
+          <Icon name="speaker" size={15} />{t("reading.play")}
+        </button>
+      {/if}
+      <!-- which voice will read: said when it is not the one that was locked in -->
+      {#if settings.minimaxLock && audio && audio.total > 0 && audio.have < audio.total}
+        <span class="voice-note" title={t("reading.audioLockedHint")}>
+          {t("reading.audioLocked")}
+        </span>
+      {/if}
     {/if}
-    {#if !device.phone}
-      <button class="btn ghost" onclick={() => setFull(!full)} title={t("reading.fullScreenHint")}>
-        {full ? t("reading.exitFull") : t("reading.fullScreen")}
-      </button>
-    {/if}
-    <button
-      class="btn ghost icon"
-      title={t("reading.editStory")}
-      aria-label={t("reading.editStory")}
-      onclick={() => story && (storyForm = { id: story.id, title: story.title, body: story.body, folderId: story.folderId })}
-    >
-      <Icon name="edit" />
-    </button>
-    <button class="btn ghost icon" title={t("reading.exportStory")} aria-label={t("reading.exportStory")} onclick={exportStory}>
-      <Icon name="download" />
-    </button>
-    <button class="btn ghost icon" title={t("reading.deleteStory")} aria-label={t("reading.deleteStory")} onclick={removeStory}>
-      <Icon name="trash" />
-    </button>
-  </div>
   {/if}
+{/snippet}
+{#snippet viewGroup()}
+  <button class="btn ghost opts" class:on={optionsOpen} aria-expanded={optionsOpen} title={t("reading.optionsHint")} onclick={toggleOptions}>
+    <Icon name="sliders" size={15} />{t("reading.options")}
+  </button>
+  <button class="btn ghost" onclick={() => setFull(!full)} title={t("reading.fullScreenHint")}>
+    {full ? t("reading.exitFull") : t("reading.fullScreen")}
+  </button>
+{/snippet}
+{#snippet editGroup()}
+  <button
+    class="btn ghost icon"
+    title={t("reading.editStory")}
+    aria-label={t("reading.editStory")}
+    onclick={() => story && (storyForm = { id: story.id, title: story.title, body: story.body, folderId: story.folderId })}
+  >
+    <Icon name="edit" />
+  </button>
+  <button class="btn ghost icon" title={t("reading.exportStory")} aria-label={t("reading.exportStory")} onclick={exportStory}>
+    <Icon name="download" />
+  </button>
+  <button class="btn ghost icon" title={t("reading.deleteStory")} aria-label={t("reading.deleteStory")} onclick={removeStory}>
+    <Icon name="trash" />
+  </button>
 {/snippet}
 
 <div class="layout" class:full class:phone={device.phone} class:open={shelfOpen || !!story} style="--side:{sideWidth}px">
@@ -709,7 +871,9 @@
   </aside>
 
   <section class="main">
-    <!-- text settings, always at the top of the page -->
+    <!-- text settings, for a story that is open: behind its "Text & audio" button, with what
+         reading aloud can be set to beside them (the page of covers has none of this) -->
+    {#if story && optionsOpen}
     <div class="textbar" role="toolbar" aria-label={t("reading.textSettings")}>
       <label class="tb-field">
         <span class="small muted">{t("reading.font")}</span>
@@ -743,8 +907,36 @@
         >
         <span class="small muted num">{settings.readingSize}px</span>
       </div>
-      <span class="sample han" style="font-family:{fontFamily}">汉字阅读</span>
+      {#if story && !device.phone}
+        <label class="tb-field">
+          <span class="small muted">{t("reading.rate")}</span>
+          <select class="rate" value={settings.speechRate} onchange={(e) => setRate(Number(e.currentTarget.value))}>
+            {#each RATES.includes(settings.speechRate) ? RATES : [...RATES, settings.speechRate].sort((a, b) => a - b) as r (r)}
+              <option value={r}>{r}×</option>
+            {/each}
+          </select>
+        </label>
+        {#if audio && audio.total > 0 && (voiceKey || audio.have > 0)}
+          <div class="tb-field">
+            <span class="small muted">{t("reading.audio")}</span>
+            {#if makingAudio}
+              <button class="btn small" onclick={makeAudio} title={t("reading.audioStop")}>
+                {t("reading.audioMaking", { done: makingAudio.done, total: makingAudio.total })}
+              </button>
+            {:else if audio.have < audio.total && voiceKey && !settings.minimaxLock}
+              <button class="btn small" onclick={makeAudio} title={t("reading.audioHint")}>
+                {audio.have ? t("reading.audioFinish", { have: audio.have, total: audio.total }) : t("reading.audioMake")}
+              </button>
+            {/if}
+            {#if audio.have > 0 && !makingAudio}
+              <span class="small muted">{t("reading.audioHave", { have: audio.have, total: audio.total })}</span>
+              <button class="btn ghost small" onclick={removeAudio} title={t("reading.audioRemoveHint")}>{t("reading.audioRemove")}</button>
+            {/if}
+          </div>
+        {/if}
+      {/if}
     </div>
+    {/if}
 
     {#if story}
       <div class="head story-head" style="--rs:{settings.readingSize}px">
@@ -753,8 +945,15 @@
             <span class="flip"><Icon name="arrow" size={16} /></span>{folder?.name ?? t("reading.allStories")}
           </button>
         </div>
-        {@render storyTools()}
+        {#if device.phone}
+          <div class="tools">{@render readGroup()}{@render editGroup()}</div>
+        {:else}
+          <div class="tools">{@render viewGroup()}</div>
+        {/if}
       </div>
+      {#if !device.phone}
+        <div class="tools read-tools" style="--rs:{settings.readingSize}px">{@render readGroup()}</div>
+      {/if}
       {#if look}
         {@const about = stories.find((x) => x.id === story?.id)?.preview ?? story.body.slice(0, 160)}
         {@const cv = coverOf(story.title, about, look)}
@@ -770,6 +969,9 @@
         {/if}
       {/if}
 
+      {#if !device.phone}
+        <div class="tools edit-tools" style="--rs:{settings.readingSize}px">{@render editGroup()}</div>
+      {/if}
       {#if vocab.length}
         <section class="vocab card-surface" style="--rs:{settings.readingSize}px">
           <button class="vocab-head" aria-expanded={showVocab} onclick={() => (showVocab = !showVocab)}>
@@ -955,6 +1157,33 @@
       {/if}
     </div>
   </div>
+{/if}
+
+{#if buying}
+  {@const b = buying}
+  <Modal title={t("reading.buyTitle")} onclose={() => b.answer(null)} width={400}>
+    <dl class="buy">
+      <dt>{t("reading.buyVoice")}</dt>
+      <dd>
+        <strong>{voiceName(settings.minimaxVoice)}</strong>
+        <small class="faint">
+          {settings.minimaxModel} · {settings.minimaxSpeed}× · {t(`settings.storyVoiceEmotion.${settings.minimaxEmotion || "auto"}` as Parameters<typeof t>[0])}
+        </small>
+      </dd>
+      <dt>{t("reading.buyCost")}</dt>
+      <dd>
+        <strong>{t("reading.buyAbout", { cost: dollars(b.status.characters) })}</strong>
+        <small class="faint">{t("reading.buyAmount", { sentences: b.status.total - b.status.have, n: b.status.characters.toLocaleString() })}</small>
+      </dd>
+    </dl>
+    <p class="small faint buy-note">{t("reading.buyNote", { price: pricePerMillion(settings.minimaxModel) })}</p>
+    {#snippet footer()}
+      <button class="btn ghost" onclick={() => b.answer(b.reading ? "usual" : null)}>
+        {b.reading ? t("reading.buyUsual") : t("common.cancel")}
+      </button>
+      <button class="btn primary" onclick={() => b.answer("buy")}>{t("reading.buyYes")}</button>
+    {/snippet}
+  </Modal>
 {/if}
 
 {#if adding}
@@ -1869,5 +2098,58 @@
     justify-content: flex-end;
     gap: 8px;
     margin-top: 6px;
+  }
+  select.rate {
+    width: auto;
+    min-width: 0;
+    padding-inline: 0.5rem;
+  }
+  .tools .opts.on {
+    color: var(--accent);
+  }
+  /* under the way back, at the story's right edge: what is done while reading */
+  .read-tools {
+    max-width: calc(52 * var(--rs));
+    align-items: center;
+    justify-content: flex-end;
+    margin: -4px 0 14px;
+  }
+  /* above the key vocabulary, at its right edge: the story as a thing */
+  .edit-tools {
+    max-width: calc(52 * var(--rs));
+    justify-content: flex-end;
+    margin: 0 0 4px;
+  }
+  /* "Buy the reading?": the voice and the cost, a line each */
+  .buy {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px 18px;
+    margin: 0;
+  }
+  .buy dt {
+    color: var(--text-2);
+  }
+  .buy dd {
+    margin: 0;
+    display: grid;
+    gap: 2px;
+  }
+  .buy dd strong {
+    font-size: 1.05em;
+  }
+  .buy-note {
+    margin: 16px 0 0;
+  }
+  .voice-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-2);
+    font-size: 12.5px;
+    white-space: nowrap;
   }
 </style>

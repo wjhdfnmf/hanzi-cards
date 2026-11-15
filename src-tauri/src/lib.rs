@@ -27,6 +27,8 @@ mod scheduler;
 mod speech;
 mod stats;
 mod stories;
+#[cfg(not(appstore))]
+mod story_audio;
 mod study;
 mod sync;
 mod sync_data;
@@ -258,6 +260,19 @@ pub fn run() {
             commands::tutor_cancel,
             commands::tutor_end,
             commands::tutor_translate,
+            commands::voice_key_status,
+            commands::voice_key_set,
+            commands::voice_key_clear,
+            commands::story_voices,
+            commands::story_audio_status,
+            commands::story_audio_make,
+            commands::story_audio_cancel,
+            commands::story_audio_clip,
+            commands::story_audio_words,
+            commands::story_audio_made_with,
+            commands::story_audio_remove,
+            commands::story_audio_usage,
+            commands::story_audio_clear,
             commands::ai_spending,
             commands::ai_spending_export,
             commands::get_stats,

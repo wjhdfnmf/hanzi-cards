@@ -1,5 +1,5 @@
 # Run the app in development mode with GPU support, or build the Windows installer:
-#   scripts\dev-gpu.ps1          (dev)
+#   scripts\dev-gpu.ps1          (dev: on a fresh copy of your data, never the real one; see below)
 #   scripts\dev-gpu.ps1 build    (installer in src-tauri\target\release\bundle\nsis)
 # Needs the CUDA Toolkit (tested with 13.5) and the Visual Studio C++ build tools.
 # The first build compiles candle's CUDA kernels (a few minutes). The installer does NOT
@@ -45,5 +45,38 @@ Set-Location (Join-Path $PSScriptRoot "..")
 if ($mode -eq "build") {
   npm run tauri build -- --features gpu
 } else {
-  npm run tauri dev -- --features gpu
+  # Development never runs on the real data: it runs as "com.hanzicards.app.dev", whose data
+  # folder gets a fresh copy of the cards and the stories each time this starts. What is tried
+  # here (answers, edits, a sync set up by mistake) stays in the copy and is thrown away by
+  # the next start.
+  $real = Join-Path $env:APPDATA "com.hanzicards.app"
+  $dev = Join-Path $env:APPDATA "com.hanzicards.app.dev"
+  New-Item -ItemType Directory -Force $dev | Out-Null
+  # (the last copy, and anything that would make the copy sync as the real device)
+  Get-ChildItem $dev -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "hanzi-cards.db*" -or $_.Name -like "stories.db*" } | Remove-Item -Force
+  if (Test-Path (Join-Path $dev "sync")) { Remove-Item -Recurse -Force (Join-Path $dev "sync") }
+  foreach ($db in @(@("hanzi-cards.db", "backups\decks\auto"), @("stories.db", "backups\reading\auto"))) {
+    # the newest of the file itself and the app's own automatic backups of it; the file can't
+    # be copied while the installed app has it open, and then the newest backup is the copy
+    $from = @(Get-Item (Join-Path $real $db[0]) -ErrorAction SilentlyContinue) +
+      @(Get-ChildItem (Join-Path $real $db[1]) -Filter "$($db[0]).backup-*" -ErrorAction SilentlyContinue) |
+      Sort-Object LastWriteTime -Descending
+    $copied = $false
+    foreach ($f in $from) {
+      try { Copy-Item $f.FullName (Join-Path $dev $db[0]) -Force -ErrorAction Stop; $copied = $true; "Copy of $($db[0]): from $($f.Name) ($($f.LastWriteTime))"; break } catch {}
+    }
+    if (-not $copied) { "No $($db[0]) to copy: the development app starts with an empty one." }
+  }
+  # Big things that are downloaded, not written: shared with the real folder, not copied
+  # (speech models, voices, fonts). Only what the real folder already has: nothing is made
+  # in the real folder from here. Stories' made sound is the copy's own (it stays from one
+  # start to the next: it is paid for by the character).
+  foreach ($shared in @("whisper", "voices", "fonts")) {
+    $link = Join-Path $dev $shared
+    if (-not (Test-Path $link) -and (Test-Path (Join-Path $real $shared))) {
+      New-Item -ItemType Junction -Path $link -Target (Join-Path $real $shared) | Out-Null
+    }
+  }
+  $conf = (Resolve-Path "src-tauri\tauri.dev.conf.json").Path
+  npm run tauri dev -- --features gpu --config "$conf"
 }

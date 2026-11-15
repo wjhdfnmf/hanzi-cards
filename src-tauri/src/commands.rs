@@ -5,7 +5,7 @@ use crate::models::*;
 use crate::stats::Stats;
 use crate::{billing, cards, data, db, decks, dictionary, fonts, pleco, speech, stats, stories, study, whisper, AppState};
 #[cfg(not(appstore))]
-use crate::{ai, calibration, pinyin, tone_check, tones, tutor};
+use crate::{ai, calibration, pinyin, story_audio, tone_check, tones, tutor};
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -125,6 +125,13 @@ pub fn get_settings(state: State<AppState>) -> AppResult<HashMap<String, String>
         // Settings › About; development builds are in debug mode regardless (`debug_mode`)
         ("debug_mode", "false".to_string()),
         ("tutor_model", TUTOR_MODEL.to_string()),
+        // stories read in a made voice (story_audio.rs): which MiniMax service, model and voice
+        ("minimax_region", "io".to_string()),
+        ("minimax_model", STORY_VOICE.0.to_string()),
+        ("minimax_voice", STORY_VOICE.1.to_string()),
+        ("minimax_speed", "1".to_string()),
+        ("minimax_emotion", String::new()),
+        ("minimax_lock", "false".to_string()),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v))
@@ -1093,8 +1100,14 @@ const TUTOR_MODEL: &str = ai::DEFAULT_MODEL;
 #[cfg(appstore)]
 const TUTOR_MODEL: &str = "";
 
-// The App Store build (build.rs) is made without the AI tutor and without checking tones by
-// pitch: none of that code is in it. The page doesn't offer either there; were it to ask
+/// (model, voice) a story's sound is made with until the learner picks.
+#[cfg(not(appstore))]
+const STORY_VOICE: (&str, &str) = (story_audio::DEFAULT_MODEL, story_audio::DEFAULT_VOICE);
+#[cfg(appstore)]
+const STORY_VOICE: (&str, &str) = ("", "");
+
+// The App Store build (build.rs) is made without the AI tutor, without stories read in a made
+// voice and without checking tones by pitch: none of that code is in it. The page doesn't offer either there; were it to ask
 // anyway, these answer in their place.
 #[cfg(appstore)]
 fn left_out<T>() -> AppResult<T> {
@@ -1133,6 +1146,69 @@ pub fn ai_key_set() -> AppResult<()> {
 #[cfg(appstore)]
 #[tauri::command]
 pub fn ai_key_clear() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn voice_key_status() -> AppResult<KeyStatus> {
+    Ok(KeyStatus { set: false, hint: None })
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn story_audio_cancel() {}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn story_audio_words() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn story_audio_made_with() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn voice_key_set() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn voice_key_clear() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn story_voices() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn story_audio_status() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn story_audio_make() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn story_audio_clip() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn story_audio_remove() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn story_audio_usage() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn story_audio_clear() -> AppResult<()> {
     left_out()
 }
 #[cfg(appstore)]
@@ -1300,6 +1376,180 @@ pub async fn tutor_translate(app: AppHandle, text: String, session_id: Option<u6
         return Err(AppError::msg("Claude declined to translate this."));
     }
     Ok(english)
+}
+
+// ---------- stories read in a made voice (story_audio.rs; computers only) ----------
+
+/// What a story's sound is made with: the saved choices, or the defaults.
+#[cfg(not(appstore))]
+fn making(conn: &Connection) -> AppResult<story_audio::Making> {
+    let get = |key: &str, default: &str| -> AppResult<String> {
+        Ok(db::get_setting(conn, key)?.filter(|v| !v.trim().is_empty()).unwrap_or_else(|| default.to_string()))
+    };
+    Ok(story_audio::Making {
+        region: get("minimax_region", "io")?,
+        model: get("minimax_model", story_audio::DEFAULT_MODEL)?,
+        voice: get("minimax_voice", story_audio::DEFAULT_VOICE)?,
+        speed: get("minimax_speed", "1")?.parse().unwrap_or(1.0),
+        emotion: db::get_setting(conn, "minimax_emotion")?.unwrap_or_default(),
+    })
+}
+
+/// A story's sentences, as the page sends them: not more than any story has.
+#[cfg(not(appstore))]
+fn check_parts(parts: &[String]) -> AppResult<()> {
+    if parts.len() > 100_000 || parts.iter().map(String::len).sum::<usize>() > 8 * crate::input::MAX_STORY {
+        return Err(AppError::msg("That is too much text to make into sound at once."));
+    }
+    Ok(())
+}
+
+/// Network and keychain work, off the main thread.
+#[cfg(not(appstore))]
+async fn off_thread<T: Send + 'static>(f: impl FnOnce() -> AppResult<T> + Send + 'static) -> AppResult<T> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| AppError::msg(e.to_string()))?
+}
+
+#[cfg(not(appstore))]
+#[tauri::command]
+pub async fn voice_key_status() -> AppResult<KeyStatus> {
+    let key = off_thread(story_audio::get_key).await?;
+    Ok(KeyStatus {
+        set: key.is_some(),
+        hint: key.map(|k| k.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect()),
+    })
+}
+
+/// Check the key by asking for the voices (free), then store it in the system keychain.
+#[cfg(not(appstore))]
+#[tauri::command]
+pub async fn voice_key_set(app: AppHandle, key: String) -> AppResult<()> {
+    let key = key.trim().to_string();
+    if key.is_empty() {
+        return Err(AppError::msg("Paste an API key first."));
+    }
+    crate::input::fits("That key", &key, 4000)?;
+    let making = blocking(app, |conn| making(conn)).await?;
+    off_thread(move || {
+        story_audio::voices(&key, &making.region)?;
+        story_audio::set_key(&key)
+    })
+    .await
+}
+
+#[cfg(not(appstore))]
+#[tauri::command]
+pub async fn voice_key_clear() -> AppResult<()> {
+    off_thread(story_audio::clear_key).await
+}
+
+/// The voices the MiniMax account can use, Mandarin first.
+#[cfg(not(appstore))]
+#[tauri::command]
+pub async fn story_voices(app: AppHandle) -> AppResult<Vec<story_audio::Voice>> {
+    let making = blocking(app, |conn| making(conn)).await?;
+    off_thread(move || story_audio::voices(&story_audio::require_key()?, &making.region)).await
+}
+
+/// How much of a story (its sentences) has its sound made, in the voice in use.
+#[cfg(not(appstore))]
+#[tauri::command]
+pub async fn story_audio_status(app: AppHandle, parts: Vec<String>) -> AppResult<story_audio::Status> {
+    check_parts(&parts)?;
+    let dir = app_data(&app)?;
+    let making = blocking(app, |conn| making(conn)).await?;
+    off_thread(move || Ok(story_audio::status(&dir, &making, &parts))).await
+}
+
+/// Make the sound of the sentences that have none yet. Progress arrives as "story-audio"
+/// events; `story_audio_cancel` stops it after the sentence it is on.
+#[cfg(not(appstore))]
+#[tauri::command]
+pub async fn story_audio_make(app: AppHandle, parts: Vec<String>) -> AppResult<story_audio::Made> {
+    check_parts(&parts)?;
+    let dir = app_data(&app)?;
+    let (making, locked) = blocking(app.clone(), |conn| Ok((making(conn)?, db::get_setting(conn, "minimax_lock")?.as_deref() == Some("true")))).await?;
+    if locked {
+        // (locked in: only what is already made is used, so nothing can be charged)
+        return Err(AppError::msg("The story voice is locked in (Settings › Audio), so nothing new is made. Switch to Search there to make audio."));
+    }
+    off_thread(move || {
+        let key = story_audio::require_key()?;
+        story_audio::make(&dir, &key, &making, &parts, |done, total| {
+            let _ = app.emit("story-audio", serde_json::json!({ "done": done, "total": total }));
+        })
+    })
+    .await
+}
+
+#[cfg(not(appstore))]
+#[tauri::command]
+pub fn story_audio_cancel() {
+    story_audio::cancel();
+}
+
+/// A sentence's sound (an MP3, raw bytes), if it has been made: nothing is made here, so
+/// reading aloud never spends anything by itself.
+#[cfg(not(appstore))]
+#[tauri::command]
+pub async fn story_audio_clip(app: AppHandle, text: String) -> AppResult<tauri::ipc::Response> {
+    crate::input::fits("That sentence", &text, crate::input::MAX_STORY)?;
+    let dir = app_data(&app)?;
+    let making = blocking(app, |conn| making(conn)).await?;
+    let clip = off_thread(move || Ok(story_audio::clip(&dir, &making, &text))).await?;
+    clip.map(tauri::ipc::Response::new).ok_or_else(|| AppError::msg("That sentence's sound hasn't been made."))
+}
+
+/// The choices (model, voice, speed, feeling) that sound has been made with: what "lock in"
+/// offers.
+#[cfg(not(appstore))]
+#[tauri::command]
+pub async fn story_audio_made_with(app: AppHandle) -> AppResult<Vec<story_audio::MadeWith>> {
+    let dir = app_data(&app)?;
+    off_thread(move || Ok(story_audio::made_with(&dir))).await
+}
+
+/// When each word of a made sentence is said (empty when MiniMax didn't say).
+#[cfg(not(appstore))]
+#[tauri::command]
+pub async fn story_audio_words(app: AppHandle, text: String) -> AppResult<Vec<story_audio::Word>> {
+    crate::input::fits("That sentence", &text, crate::input::MAX_STORY)?;
+    let dir = app_data(&app)?;
+    let making = blocking(app, |conn| making(conn)).await?;
+    off_thread(move || Ok(story_audio::words(&dir, &making, &text))).await
+}
+
+/// Remove a story's sound (in the voice in use).
+#[cfg(not(appstore))]
+#[tauri::command]
+pub async fn story_audio_remove(app: AppHandle, parts: Vec<String>) -> AppResult<story_audio::Status> {
+    check_parts(&parts)?;
+    let dir = app_data(&app)?;
+    let making = blocking(app, |conn| making(conn)).await?;
+    off_thread(move || {
+        story_audio::remove(&dir, &making, &parts);
+        Ok(story_audio::status(&dir, &making, &parts))
+    })
+    .await
+}
+
+/// All the sound that has been made: how many files, how big, and where.
+#[cfg(not(appstore))]
+#[tauri::command]
+pub async fn story_audio_usage(app: AppHandle) -> AppResult<story_audio::Usage> {
+    let dir = app_data(&app)?;
+    off_thread(move || Ok(story_audio::usage(&dir))).await
+}
+
+#[cfg(not(appstore))]
+#[tauri::command]
+pub async fn story_audio_clear(app: AppHandle) -> AppResult<story_audio::Usage> {
+    let dir = app_data(&app)?;
+    off_thread(move || {
+        story_audio::clear(&dir)?;
+        Ok(story_audio::usage(&dir))
+    })
+    .await
 }
 
 #[tauri::command]

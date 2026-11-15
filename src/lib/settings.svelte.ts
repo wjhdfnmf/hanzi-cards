@@ -67,6 +67,16 @@ export const settings = $state({
   /** How the Reading page looks: "plain" (a list and a title), or a kind of book cover, with a
    * banner on the open story: "books" (illustrated), "cloth", "thread", "poster". */
   readingStyle: "plain",
+  /** Stories read in a made voice (MiniMax): "io" (international) or "cn" (mainland China). */
+  minimaxRegion: "io",
+  minimaxModel: "speech-2.8-hd",
+  minimaxVoice: "Chinese (Mandarin)_News_Anchor",
+  /** How fast MiniMax speaks when a story is made (1 = the natural speed of the voice). */
+  minimaxSpeed: 1,
+  /** The feeling it reads with ("" = MiniMax chooses from the text). */
+  minimaxEmotion: "",
+  /** Locked in: only choices that already have sound made are offered, and nothing new is made. */
+  minimaxLock: false,
 });
 
 const KEYS: Record<string, keyof typeof settings> = {
@@ -106,6 +116,12 @@ const KEYS: Record<string, keyof typeof settings> = {
   reading_line_height: "readingLineHeight",
   reading_tone_colors: "readingToneColors",
   reading_style: "readingStyle",
+  minimax_region: "minimaxRegion",
+  minimax_model: "minimaxModel",
+  minimax_voice: "minimaxVoice",
+  minimax_speed: "minimaxSpeed",
+  minimax_emotion: "minimaxEmotion",
+  minimax_lock: "minimaxLock",
 };
 
 function parse(field: keyof typeof settings, raw: string): unknown {

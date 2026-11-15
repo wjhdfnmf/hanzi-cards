@@ -1,6 +1,6 @@
 # Privacy policy
 
-*Hanzi Cards, for iPhone, Windows, macOS and Linux. Last changed 14 November 2026.*
+*Hanzi Cards, for iPhone, Windows, macOS and Linux. Last changed 15 November 2026.*
 
 **Hanzi Cards collects nothing.** There are no accounts, no analytics, no advertising and no
 tracking, and the people who make the app run no server that it talks to. Your cards, your study
@@ -28,9 +28,10 @@ download sees (your internet address and the file asked for) and nothing about y
 | Download the latest dictionary | `mdbg.net` (CC-CEDICT) | Nothing but the request. |
 | Download a reading font | `github.com` | Nothing but the request. |
 | *Computers only:* download a speech model, the built-in voice, or NVIDIA's libraries | `huggingface.co`, `github.com`, `developer.download.nvidia.com` | Nothing but the request. |
+| *Computers only:* have a story's sound made (Reading › Make audio) | MiniMax (`api.minimax.io`, or `api.minimaxi.com` for mainland China), with **your own** API key | The text of that story, once. The sound that comes back is kept on your computer. MiniMax's own terms and privacy policy apply to it. The key is kept in your system's keychain. |
 | *Computers only:* talk with the AI tutor | Anthropic (`api.anthropic.com`), with **your own** API key | What you say or type to the tutor, and the words from the decks you chose for the conversation. Anthropic's own terms and privacy policy apply to it. The key is kept in your system's keychain. |
 
-The iPhone app has no AI tutor and sends nothing to any AI service.
+The iPhone app has no AI tutor and no made story sound, and sends nothing to any AI service.
 
 ## Permissions on an iPhone
 

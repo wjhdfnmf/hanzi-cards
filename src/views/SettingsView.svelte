@@ -3,6 +3,8 @@
   import { listen } from "@tauri-apps/api/event";
   import { ask, open, save } from "@tauri-apps/plugin-dialog";
   import { getVersion } from "@tauri-apps/api/app";
+  import type { StoryAudioUsage } from "../lib/api";
+  import { bulk, countAll, makeAll, stopAll, keepCountFor, costOf, pricePerMillion } from "../lib/storyAudio.svelte";
   import { api, errorText, type AiSpending, type DataContents, type DataFile, type DataInfo, type DbKind, type DictStatus, type KeyStatus, type SpeechStatus, type WhisperDeviceInfo, type WhisperModel } from "../lib/api";
   import { recordUtterance } from "../lib/mic";
   import PitchCalibration from "../components/PitchCalibration.svelte";
@@ -70,7 +72,7 @@
       showToast(errorText(e), "err");
     }
   }
-  import { BUILT_IN, outputDevices, routingReady, sampleBuiltIn, speak, voicesReady } from "../lib/speech";
+  import { BUILT_IN, outputDevices, playClip, routingReady, sampleBuiltIn, speak, voicesReady } from "../lib/speech";
   import { voice, checkVoices } from "../lib/voice.svelte";
 
   let voices = $state<SpeechSynthesisVoice[]>([]);
@@ -678,6 +680,135 @@
   let keyInput = $state("");
   let keyBusy = $state(false);
 
+  // ---------- stories read in a made voice (MiniMax; computers only) ----------
+  let voiceKey = $state<KeyStatus | null>(null);
+  let voiceKeyInput = $state("");
+  let voiceKeyBusy = $state(false);
+  let storyVoices = $state<{ id: string; name: string }[] | null>(null);
+  let storyAudio = $state<StoryAudioUsage | null>(null);
+  /** MiniMax's Mandarin voices: named so, but for two (its documentation's list). */
+  const mandarinVoice = (id: string) => id.startsWith("Chinese (Mandarin)") || id === "Arrogant_Miss" || id === "Robot_Armor";
+  /** "News Anchor" for "Chinese (Mandarin)_News_Anchor"; the name MiniMax gives is added when it says more. */
+  function voiceLabel(v: { id: string; name: string }) {
+    const short = v.id.replace(/^Chinese \(Mandarin\)_/, "").replaceAll("_", " ");
+    return v.name && v.name !== v.id && v.name.toLowerCase() !== short.toLowerCase() ? `${short} · ${v.name}` : short;
+  }
+  /** The choices that already have sound made ("lock in" offers only these). */
+  let madeWith = $state<{ model: string; voice: string; speed: number; emotion: string; sentences: number }[]>([]);
+  async function loadMadeWith() {
+    madeWith = await api.storyAudioMadeWith().catch(() => []);
+  }
+  const sameChoice = (m: { model: string; voice: string; speed: number; emotion: string }) =>
+    m.model === settings.minimaxModel && m.voice === settings.minimaxVoice && Math.abs(m.speed - settings.minimaxSpeed) < 0.005 && m.emotion === settings.minimaxEmotion;
+  async function useMade(m: { model: string; voice: string; speed: number; emotion: string }) {
+    await saveSetting("minimaxModel", m.model);
+    await saveSetting("minimaxVoice", m.voice);
+    await saveSetting("minimaxSpeed", m.speed);
+    await saveSetting("minimaxEmotion", m.emotion);
+  }
+  /** Search: every choice, and making. Lock in: only what is made, and nothing new is. */
+  async function setVoiceLock(on: boolean) {
+    await saveSetting("minimaxLock", on);
+    if (!on) return;
+    await loadMadeWith();
+    // (a choice that has nothing made can't stay: the one with the most sentences takes its place)
+    if (madeWith.length && !madeWith.some(sameChoice)) await useMade(madeWith[0]);
+  }
+  /** The service and the voice ID: behind a fold. */
+  let voiceMoreOpen = $state(false);
+  // (the count for all stories was for the choices as they were)
+  const voiceChoices = () => [settings.minimaxModel, settings.minimaxVoice, settings.minimaxSpeed, settings.minimaxEmotion, settings.minimaxRegion].join("|");
+  $effect(() => {
+    keepCountFor(voiceChoices());
+  });
+  async function makeAllStories() {
+    const st = bulk.status;
+    if (!st) return;
+    const message = t("settings.storyVoiceAllAsk", {
+      sentences: (st.total - st.have).toLocaleString(),
+      n: st.characters.toLocaleString(),
+      cost: costOf(st.characters, settings.minimaxModel).toFixed(2),
+      price: pricePerMillion(settings.minimaxModel),
+    });
+    if (!(await ask(message, { kind: "warning" }))) return;
+    const made = await makeAll();
+    storyAudio = await api.storyAudioUsage().catch(() => storyAudio);
+    loadMadeWith();
+    if (made && !made.error) showToast(made.stopped ? t("reading.audioCancelled", { have: made.status.have, total: made.status.total }) : t("reading.audioMade", { n: made.characters.toLocaleString() }));
+  }
+  /** Narrow the voice list by a word of a name or an ID. */
+  let voiceSearch = $state("");
+  const voiceShown = (v: { id: string; name: string }) => {
+    const q = voiceSearch.trim().toLowerCase();
+    return !q || v.id === settings.minimaxVoice || `${v.id} ${v.name}`.toLowerCase().includes(q);
+  };
+  async function loadStoryVoices() {
+    storyVoices = voiceKey?.set ? await api.storyVoices().catch(() => null) : null;
+  }
+  onMount(async () => {
+    if (ios) return;
+    voiceKey = await api.voiceKeyStatus().catch(() => null);
+    storyAudio = await api.storyAudioUsage().catch(() => null);
+    loadStoryVoices();
+    loadMadeWith();
+  });
+  async function saveVoiceKey() {
+    voiceKeyBusy = true;
+    try {
+      await api.voiceKeySet(voiceKeyInput);
+      voiceKeyInput = "";
+      voiceKey = await api.voiceKeyStatus();
+      showToast(t("settings.aiSaved"));
+      loadStoryVoices();
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      voiceKeyBusy = false;
+    }
+  }
+  async function removeVoiceKey() {
+    if (!(await ask(t("settings.aiRemove") + "?", { kind: "warning" }))) return;
+    try {
+      await api.voiceKeyClear();
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+    voiceKey = await api.voiceKeyStatus().catch(() => null);
+    storyVoices = null;
+  }
+  async function setVoiceRegion(region: string) {
+    await saveSetting("minimaxRegion", region);
+    loadStoryVoices(); // (the two services have their own accounts and voices)
+  }
+  /** Hear the voice, model and speed that are chosen: one short sentence, made like any
+   *  other (so the same choice is only made, and charged, the first time) and played. */
+  const VOICE_SAMPLE = "你好，欢迎学习中文。今天我们一起读一个小故事。";
+  let trying = $state(false);
+  async function tryStoryVoice() {
+    trying = true;
+    try {
+      const made = await api.storyAudioMake([VOICE_SAMPLE]);
+      if (made.error) throw made.error;
+      const mp3 = await api.storyAudioClip(VOICE_SAMPLE);
+      storyAudio = await api.storyAudioUsage().catch(() => storyAudio);
+      loadMadeWith();
+      await playClip(new Blob([mp3], { type: "audio/mpeg" }));
+    } catch (e) {
+      showToast(errorText(e), "err");
+    } finally {
+      trying = false;
+    }
+  }
+  async function clearStoryAudio() {
+    if (!(await ask(t("settings.storyAudioClearAsk"), { kind: "warning" }))) return;
+    try {
+      storyAudio = await api.storyAudioClear();
+      loadMadeWith();
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+  }
+
   onMount(async () => {
     aiKey = await api.aiKeyStatus().catch(() => null);
     spending = await api.aiSpending().catch(() => null);
@@ -1249,6 +1380,231 @@
     {/if}
   </section>
 
+  {#if !ios}
+  <h2>{t("settings.storyVoice")}</h2>
+  <section class="group card-surface">
+    <div class="row col">
+      <small class="faint">{t("settings.storyVoiceHint")}</small>
+    </div>
+    {#if voiceKey?.set}
+      <div class="row">
+        <span>{t("settings.aiKey")}</span>
+        <span class="key-state small">
+          <span class="in-use">{t("settings.aiKeySet", { hint: voiceKey.hint ?? "" })}</span>
+          <button class="btn ghost small" onclick={removeVoiceKey}>{t("settings.aiRemove")}</button>
+        </span>
+      </div>
+    {:else}
+      <!-- (no key yet: the field to give one; once it is saved the field goes) -->
+      <div class="row">
+        <input
+          class="key-input"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder={t("settings.storyVoiceKeyPlaceholder")}
+          bind:value={voiceKeyInput}
+          onkeydown={(e) => e.key === "Enter" && voiceKeyInput.trim() && saveVoiceKey()}
+        />
+        <button class="btn" disabled={voiceKeyBusy || !voiceKeyInput.trim()} onclick={saveVoiceKey}>
+          {voiceKeyBusy ? t("settings.aiChecking") : t("settings.aiSave")}
+        </button>
+      </div>
+    {/if}
+    {#if voiceKey?.set || madeWith.length}
+    <div class="row col">
+      <div class="modes" role="group" aria-label={t("settings.storyVoiceMode")}>
+        <button class="mode" class:on={!settings.minimaxLock} aria-pressed={!settings.minimaxLock} onclick={() => setVoiceLock(false)}>
+          <strong><Icon name="search" size={15} />{t("settings.storyVoiceSearch")}</strong>
+          <small>{t("settings.storyVoiceSearchHint")}</small>
+        </button>
+        <button class="mode" class:on={settings.minimaxLock} aria-pressed={settings.minimaxLock} onclick={() => setVoiceLock(true)}>
+          <strong><Icon name="check" size={15} />{t("settings.storyVoiceLock")}</strong>
+          <small>{t("settings.storyVoiceLockHint")}</small>
+        </button>
+      </div>
+    </div>
+    {#if settings.minimaxLock}
+      {#if madeWith.length}
+        <div class="row col">
+          <div class="made-list" role="radiogroup" aria-label={t("settings.storyVoiceLock")}>
+            {#each madeWith as m (`${m.model}|${m.voice}|${m.speed}|${m.emotion}`)}
+              <label class="made" class:on={sameChoice(m)}>
+                <input type="radio" name="made-with" checked={sameChoice(m)} onchange={() => useMade(m)} />
+                <span>
+                  <strong>{voiceLabel({ id: m.voice, name: m.voice })}</strong>
+                  <small class="faint block">
+                    {m.model} · {m.speed}× · {t(`settings.storyVoiceEmotion.${m.emotion || "auto"}` as Parameters<typeof t>[0])}
+                  </small>
+                </span>
+                <small class="muted">{t("settings.storyVoiceMadeCount", { n: m.sentences.toLocaleString() })}</small>
+              </label>
+            {/each}
+          </div>
+        </div>
+      {:else}
+        <div class="row"><span class="muted small">{t("settings.storyVoiceNothingMade")}</span></div>
+      {/if}
+    {:else}
+    <label class="row">
+      <span>{t("settings.storyVoiceModel")}</span>
+      <select class="wide" value={settings.minimaxModel} onchange={(e) => saveSetting("minimaxModel", e.currentTarget.value)}>
+        <option value="speech-2.8-hd">speech-2.8-hd</option>
+        <option value="speech-2.8-turbo">speech-2.8-turbo</option>
+        <option value="speech-2.6-hd">speech-2.6-hd</option>
+        <option value="speech-2.6-turbo">speech-2.6-turbo</option>
+      </select>
+    </label>
+    <label class="row">
+      <span>
+        {t("settings.storyVoiceVoice")}
+        <small class="faint block">{t("settings.storyVoiceVoiceHint")}</small>
+      </span>
+      {#if storyVoices?.length}
+        <span class="voice-pick">
+        <input type="search" placeholder={t("settings.storyVoiceSearchBox")} bind:value={voiceSearch} spellcheck="false" />
+        <select class="wide" value={settings.minimaxVoice} onchange={(e) => saveSetting("minimaxVoice", e.currentTarget.value)}>
+          {#if !storyVoices.some((v) => v.id === settings.minimaxVoice)}
+            <option value={settings.minimaxVoice}>{voiceLabel({ id: settings.minimaxVoice, name: settings.minimaxVoice })}</option>
+          {/if}
+          <optgroup label={t("settings.storyVoiceMandarin")}>
+            {#each storyVoices.filter((v) => mandarinVoice(v.id) && voiceShown(v)) as v (v.id)}
+              <option value={v.id}>{voiceLabel(v)}</option>
+            {/each}
+          </optgroup>
+          <optgroup label={t("settings.storyVoiceOthers")}>
+            {#each storyVoices.filter((v) => !mandarinVoice(v.id) && voiceShown(v)) as v (v.id)}
+              <option value={v.id}>{voiceLabel(v)}</option>
+            {/each}
+          </optgroup>
+        </select>
+        </span>
+      {:else}
+        <span class="small muted">{voiceLabel({ id: settings.minimaxVoice, name: settings.minimaxVoice })}</span>
+      {/if}
+    </label>
+    <div class="row">
+      <span>
+        {t("settings.storyVoiceSpeed")}
+        <small class="faint block">{t("settings.storyVoiceSpeedHint")}</small>
+      </span>
+      <div class="line">
+        <input
+          type="range"
+          min="0.5"
+          max="1.2"
+          step="0.05"
+          value={settings.minimaxSpeed}
+          onchange={(e) => saveSetting("minimaxSpeed", Number(e.currentTarget.value))}
+        />
+        <span class="small muted">{settings.minimaxSpeed}×</span>
+      </div>
+    </div>
+    <label class="row">
+      <span>
+        {t("settings.storyVoiceEmotion")}
+        <small class="faint block">{t("settings.storyVoiceEmotionHint")}</small>
+      </span>
+      <select class="wide" value={settings.minimaxEmotion} onchange={(e) => saveSetting("minimaxEmotion", e.currentTarget.value)}>
+        <option value="">{t("settings.storyVoiceEmotion.auto")}</option>
+        {#each ["calm", "happy", "sad", "surprised", "angry", "fearful", "disgusted"] as e (e)}
+          <option value={e}>{t(`settings.storyVoiceEmotion.${e}` as Parameters<typeof t>[0])}</option>
+        {/each}
+        {#each ["fluent", "whisper"] as e (e)}
+          <option value={e} disabled={!settings.minimaxModel.includes("2.6")}>
+            {t(`settings.storyVoiceEmotion.${e}` as Parameters<typeof t>[0])} (2.6)
+          </option>
+        {/each}
+      </select>
+    </label>
+    <div class="row">
+      <span>
+        {t("settings.storyVoiceTry")}
+        <small class="faint block">{t("settings.storyVoiceTryHint", { n: VOICE_SAMPLE.length })}</small>
+      </span>
+      <button class="btn" disabled={trying || !voiceKey?.set} onclick={tryStoryVoice}>
+        <Icon name="speaker" size={15} />{trying ? t("settings.storyVoiceTrying") : t("settings.test")}
+      </button>
+    </div>
+    {#if voiceKey?.set}
+    <!-- every story at once: counted first (nothing is sent), and made only on a yes to its cost -->
+    <div class="row">
+      <span>
+        {t("settings.storyVoiceAll")}
+        <small class="faint block">
+          {#if bulk.phase === "counting"}
+            {t("settings.storyVoiceAllCounting", { done: bulk.done, total: bulk.total || "…" })}
+          {:else if bulk.phase === "making"}
+            {t("settings.storyVoiceAllMaking", { done: bulk.done.toLocaleString(), total: bulk.total.toLocaleString() })}
+          {:else if bulk.phase === "ready" && bulk.status}
+            {#if bulk.status.have >= bulk.status.total}
+              {t("settings.storyVoiceAllDone", { stories: bulk.stories.toLocaleString(), sentences: bulk.status.total.toLocaleString() })}
+            {:else}
+              {t("settings.storyVoiceAllReady", {
+                stories: bulk.stories.toLocaleString(),
+                sentences: (bulk.status.total - bulk.status.have).toLocaleString(),
+                n: bulk.status.characters.toLocaleString(),
+                cost: costOf(bulk.status.characters, settings.minimaxModel).toFixed(2),
+              })}
+            {/if}
+          {:else}
+            {t("settings.storyVoiceAllHint")}
+          {/if}
+        </small>
+        {#if bulk.phase === "ready" && bulk.status && bulk.status.have < bulk.status.total}
+          <small class="faint block">{t("settings.storyVoiceCostHint", { price: pricePerMillion(settings.minimaxModel) })}</small>
+        {/if}
+        {#if bulk.error}<small class="block err-text">{bulk.error}</small>{/if}
+      </span>
+      <span class="key-state">
+        {#if bulk.phase === "counting" || bulk.phase === "making"}
+          <button class="btn" onclick={stopAll}>{t("reading.stop")}</button>
+        {:else if bulk.phase === "ready" && bulk.status && bulk.status.have < bulk.status.total}
+          <button class="btn ghost small" onclick={() => countAll(voiceChoices())}>{t("settings.storyVoiceAllRecount")}</button>
+          <button class="btn primary" onclick={makeAllStories}>{t("settings.storyVoiceAllMake")}</button>
+        {:else}
+          <button class="btn" onclick={() => countAll(voiceChoices())}>{t("settings.storyVoiceAllCount")}</button>
+        {/if}
+      </span>
+    </div>
+    {/if}
+    {/if}
+    {/if}
+    <!-- seldom needed: which MiniMax service the key is from, and a voice by its ID -->
+    <div class="row col">
+      <button class="fonttoggle" aria-expanded={voiceMoreOpen} onclick={() => (voiceMoreOpen = !voiceMoreOpen)}>
+        <span class="twisty" class:open={voiceMoreOpen} aria-hidden="true"><Icon name="chevron-right" size={14} /></span>
+        <span class="small">{t("settings.storyVoiceMore")}</span>
+      </button>
+    </div>
+    {#if voiceMoreOpen}
+    <label class="row">
+      <span>
+        {t("settings.storyVoiceRegion")}
+        <small class="faint block">{t("settings.storyVoiceRegionHint")}</small>
+      </span>
+      <select class="wide" value={settings.minimaxRegion} onchange={(e) => setVoiceRegion(e.currentTarget.value)}>
+        <option value="io">{t("settings.storyVoiceRegion.io")}</option>
+        <option value="cn">{t("settings.storyVoiceRegion.cn")}</option>
+      </select>
+    </label>
+    {#if !settings.minimaxLock}
+    <label class="row">
+      <span>
+        {t("settings.storyVoiceId")}
+        <small class="faint block">{t("settings.storyVoiceIdHint")}</small>
+      </span>
+      <input
+        class="wide"
+        spellcheck="false"
+        value={settings.minimaxVoice}
+        onchange={(e) => e.currentTarget.value.trim() && saveSetting("minimaxVoice", e.currentTarget.value.trim())}
+      />
+    </label>
+    {/if}
+    {/if}
+  </section>
+  {/if}
   {/if}
 
   {#if section === "speech"}
@@ -1614,6 +1970,19 @@
   {/if}
   {@render dbBlock("cards")}
   {@render dbBlock("reading")}
+  {#if !ios && storyAudio}
+  <h2>{t("settings.storyAudio")}</h2>
+  <section class="group card-surface">
+    <div class="row">
+      <span>
+        {t("settings.storyAudioSize", { files: storyAudio.files.toLocaleString(), mb: (storyAudio.bytes / 1e6).toFixed(1) })}
+        <small class="faint block">{t("settings.storyAudioHint")}</small>
+        <small class="faint block"><code class="data-path">{storyAudio.folder}</code></small>
+      </span>
+      <button class="btn ghost" disabled={!storyAudio.files} onclick={clearStoryAudio}>{t("settings.storyAudioClear")}</button>
+    </div>
+  </section>
+  {/if}
   <h2>{t("settings.statsData")}</h2>
   <section class="group card-surface">
     <div class="row">
@@ -2577,5 +2946,69 @@
     gap: 8px;
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+  /* stories read by MiniMax: Search / Lock in as two cards, and the list of what is made */
+  .modes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  .mode {
+    display: grid;
+    gap: 4px;
+    align-content: start;
+    text-align: left;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-2);
+  }
+  .mode strong {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text);
+  }
+  .mode small {
+    line-height: 1.35;
+  }
+  .mode.on,
+  .made.on {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .mode.on strong {
+    color: var(--accent);
+  }
+  .err-text {
+    color: var(--danger, #c0392b);
+  }
+  .made-list {
+    display: grid;
+    gap: 6px;
+    width: 100%;
+  }
+  .made {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .made:hover {
+    background: var(--surface-2);
+  }
+  .voice-pick {
+    display: grid;
+    gap: 6px;
+    justify-items: end;
+  }
+  .voice-pick input[type="search"] {
+    width: 100%;
   }
 </style>

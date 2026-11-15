@@ -56,8 +56,8 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        CFBundleShortVersionString: 0.5.0
-        CFBundleVersion: "0.5.0"
+        CFBundleShortVersionString: 0.5.1
+        CFBundleVersion: "0.5.1"
         NSMicrophoneUsageDescription: Hanzi Cards listens when you say an answer in Chinese, to check your pronunciation. Audio stays on this device.
         NSSpeechRecognitionUsageDescription: Hanzi Cards uses Apple's speech recognition, on this iPhone, to check the answers you say aloud.
         NSLocalNetworkUsageDescription: Hanzi Cards connects to your own computer or server on this network to keep your cards the same on your devices (LINK). Nothing else on the network is contacted.
