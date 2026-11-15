@@ -3,7 +3,9 @@
 use crate::error::{AppError, AppResult};
 use crate::models::*;
 use crate::stats::Stats;
-use crate::{ai, billing, fonts, calibration, cards, data, db, decks, dictionary, pinyin, pleco, speech, stats, stories, study, tone_check, tones, tutor, whisper, AppState};
+use crate::{billing, cards, data, db, decks, dictionary, fonts, pleco, speech, stats, stories, study, whisper, AppState};
+#[cfg(not(appstore))]
+use crate::{ai, calibration, pinyin, tone_check, tones, tutor};
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -122,7 +124,7 @@ pub fn get_settings(state: State<AppState>) -> AppResult<HashMap<String, String>
         ("pitch_tones", "false".to_string()),
         // Settings › About; development builds are in debug mode regardless (`debug_mode`)
         ("debug_mode", "false".to_string()),
-        ("tutor_model", ai::DEFAULT_MODEL.to_string()),
+        ("tutor_model", TUTOR_MODEL.to_string()),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v))
@@ -536,6 +538,9 @@ pub async fn speech_check_audio(
             let plan = speech::plan(conn, card_id, &others)?;
             // "Use pitch to tell tones apart": the words it may choose between, and the
             // learner's pitch range so far
+            #[cfg(appstore)]
+            let pitch: Option<()> = None;
+            #[cfg(not(appstore))]
             let pitch = if db::get_setting(conn, "pitch_tones")?.as_deref() == Some("true") {
                 let cands = tone_check::candidates(conn, &plan.hanzi, &plan.pinyin, tone_check::MAX_VARIANTS)?;
                 let profile = tones::PitchProfile::parse(&db::get_setting(conn, "pitch_profile")?.unwrap_or_default());
@@ -565,11 +570,12 @@ pub async fn speech_check_audio(
     words.insert(card_id.unsigned_abs() as usize % (words.len() + 1), answer);
     let prompt = format!("{}。", words.join("，"));
     let text = match pitch {
+        #[cfg(not(appstore))]
         Some((cands, profile)) => {
             let text = run_whisper(&app, dir.clone(), model.clone(), pcm.clone(), prompt, true).await?;
             pick_by_pitch(&app, dir, model, pcm, text, cands, profile).await?
         }
-        None => run_whisper(&app, dir, model, pcm, prompt, true).await?,
+        _ => run_whisper(&app, dir, model, pcm, prompt, true).await?,
     };
     blocking(app, move |conn| speech::judge_text(conn, &plan, &text)).await
 }
@@ -578,6 +584,7 @@ pub async fn speech_check_audio(
 /// syllables in another tone (妈 / 马), choose among those words by Whisper's score plus the
 /// pitch of the recording (see tone_check.rs). Every recording also extends the learner's
 /// pitch range; choosing starts once it has `PROFILE_MIN_RECORDINGS` of them.
+#[cfg(not(appstore))]
 async fn pick_by_pitch(
     app: &AppHandle,
     dir: PathBuf,
@@ -662,11 +669,13 @@ pub fn kokoro_remove(app: AppHandle) -> AppResult<()> {
 
 // ---------- tone calibration (Settings) ----------
 
+#[cfg(not(appstore))]
 fn saved_profile(conn: &Connection) -> AppResult<tones::PitchProfile> {
     Ok(tones::PitchProfile::parse(&db::get_setting(conn, "pitch_profile")?.unwrap_or_default()))
 }
 
 /// The learner's pitch range so far and the tone detector's settings.
+#[cfg(not(appstore))]
 #[tauri::command]
 pub async fn pitch_profile_info(app: AppHandle) -> AppResult<calibration::ProfileInfo> {
     blocking(app, |conn| Ok(calibration::info(&saved_profile(conn)?))).await
@@ -674,6 +683,7 @@ pub async fn pitch_profile_info(app: AppHandle) -> AppResult<calibration::Profil
 
 /// Analyse one calibration recording; `earlier` are the pitch tracks of the calibration's
 /// earlier recordings. Nothing is saved.
+#[cfg(not(appstore))]
 #[tauri::command]
 pub async fn pitch_analyze(app: AppHandle, pcm: Vec<f32>, tone: Option<u8>, earlier: Vec<calibration::Earlier>) -> AppResult<calibration::Analysis> {
     crate::input::check_pcm(&pcm)?;
@@ -684,6 +694,7 @@ pub async fn pitch_analyze(app: AppHandle, pcm: Vec<f32>, tone: Option<u8>, earl
 }
 
 /// Replace the pitch profile with the one a finished calibration's recordings make.
+#[cfg(not(appstore))]
 #[tauri::command]
 pub async fn pitch_calibration_save(app: AppHandle, recordings: Vec<calibration::Earlier>) -> AppResult<calibration::ProfileInfo> {
     blocking(app, move |conn| {
@@ -735,6 +746,7 @@ pub async fn pitch_save_recording(app: AppHandle, pcm: Vec<f32>, label: String) 
 }
 
 /// Forget the pitch profile (it builds up again from spoken answers, or a new calibration).
+#[cfg(not(appstore))]
 #[tauri::command]
 pub async fn pitch_profile_reset(app: AppHandle) -> AppResult<calibration::ProfileInfo> {
     blocking(app, |conn| {
@@ -1074,6 +1086,84 @@ pub async fn dict_download(app: AppHandle) -> AppResult<i64> {
 
 // ---------- AI tutor ----------
 
+/// The tutor's model until the learner picks one. (The App Store build has no tutor, and so
+/// no name of a model in it.)
+#[cfg(not(appstore))]
+const TUTOR_MODEL: &str = ai::DEFAULT_MODEL;
+#[cfg(appstore)]
+const TUTOR_MODEL: &str = "";
+
+// The App Store build (build.rs) is made without the AI tutor and without checking tones by
+// pitch: none of that code is in it. The page doesn't offer either there; were it to ask
+// anyway, these answer in their place.
+#[cfg(appstore)]
+fn left_out<T>() -> AppResult<T> {
+    Err(AppError::msg("That is not part of this version of the app."))
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn pitch_profile_info() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn pitch_analyze() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn pitch_calibration_save() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn pitch_profile_reset() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn ai_key_status() -> AppResult<KeyStatus> {
+    Ok(KeyStatus { set: false, hint: None })
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn ai_key_set() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn ai_key_clear() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn tutor_start() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn tutor_send() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn tutor_transcribe() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn tutor_cancel() {}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn tutor_end() -> AppResult<()> {
+    left_out()
+}
+#[cfg(appstore)]
+#[tauri::command]
+pub fn tutor_translate() -> AppResult<()> {
+    left_out()
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KeyStatus {
@@ -1082,6 +1172,7 @@ pub struct KeyStatus {
     pub hint: Option<String>,
 }
 
+#[cfg(not(appstore))]
 #[tauri::command]
 pub async fn ai_key_status() -> AppResult<KeyStatus> {
     let key = tauri::async_runtime::spawn_blocking(ai::get_key).await.map_err(|e| AppError::msg(e.to_string()))??;
@@ -1092,6 +1183,7 @@ pub async fn ai_key_status() -> AppResult<KeyStatus> {
 }
 
 /// Check the key with a free API call, then store it in the system keychain.
+#[cfg(not(appstore))]
 #[tauri::command]
 pub async fn ai_key_set(key: String) -> AppResult<()> {
     let key = key.trim().to_string();
@@ -1106,16 +1198,19 @@ pub async fn ai_key_set(key: String) -> AppResult<()> {
     .map_err(|e| AppError::msg(e.to_string()))?
 }
 
+#[cfg(not(appstore))]
 #[tauri::command]
 pub async fn ai_key_clear() -> AppResult<()> {
     tauri::async_runtime::spawn_blocking(ai::clear_key).await.map_err(|e| AppError::msg(e.to_string()))?
 }
 
+#[cfg(not(appstore))]
 fn tutor_model(conn: &Connection) -> String {
     conn.query_row("SELECT value FROM settings WHERE key = 'tutor_model'", [], |r| r.get(0))
         .unwrap_or_else(|_| ai::DEFAULT_MODEL.to_string())
 }
 
+#[cfg(not(appstore))]
 #[tauri::command]
 pub async fn tutor_start(
     app: AppHandle,
@@ -1131,6 +1226,7 @@ pub async fn tutor_start(
     .await
 }
 
+#[cfg(not(appstore))]
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TutorEventPayload {
@@ -1139,6 +1235,7 @@ struct TutorEventPayload {
 }
 
 /// One turn: the learner's message (none = the tutor opens), streamed as "tutor-event"s.
+#[cfg(not(appstore))]
 #[tauri::command]
 pub async fn tutor_send(app: AppHandle, session_id: u64, text: Option<String>) -> AppResult<tutor::TurnResult> {
     let billing_app = app.clone();
@@ -1172,21 +1269,25 @@ pub async fn tutor_send(app: AppHandle, session_id: u64, text: Option<String>) -
 }
 
 /// Transcribe the learner's reply, hinting Whisper with their words and the tutor's last line.
+#[cfg(not(appstore))]
 #[tauri::command]
 pub async fn tutor_transcribe(app: AppHandle, session_id: u64, pcm: Vec<f32>) -> AppResult<String> {
     speech_transcribe(app, pcm, Some(tutor::hint(session_id))).await
 }
 
+#[cfg(not(appstore))]
 #[tauri::command]
 pub fn tutor_cancel(session_id: u64) {
     tutor::cancel(session_id);
 }
 
+#[cfg(not(appstore))]
 #[tauri::command]
 pub fn tutor_end(session_id: u64) -> AppResult<tutor::Summary> {
     tutor::end(session_id)
 }
 
+#[cfg(not(appstore))]
 #[tauri::command]
 pub async fn tutor_translate(app: AppHandle, text: String, session_id: Option<u64>) -> AppResult<String> {
     crate::input::fits("That text", &text, crate::input::MAX_STORY)?;

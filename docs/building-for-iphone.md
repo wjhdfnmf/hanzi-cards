@@ -22,10 +22,26 @@ The phone build is the same app, not a copy:
 |---|---|---|
 | Voice (text to speech) | system voices, or the built-in Kokoro voice | Apple's Chinese voices only |
 | Spoken answers | Whisper, or Windows' recognizer | Apple's speech recognition, on the device only (`apple_speech.rs`) |
-| Tones by pitch | with Whisper | not offered (Apple's recognizer can't be steered that way) |
+| Tones by pitch | with Whisper | not in the build (see below) |
+| AI tutor | with your own Anthropic key | not in the build (see below) |
 | Data | choose files and folders, save copies | the app's own data; backups and restore stay |
 | Keeping devices the same | server or client | client only (iOS stops a background app listening) |
 | GPU libraries | NVIDIA download | not offered |
+
+**Left out of the build, not only hidden.** `build.rs` sets `cfg(appstore)` for every iPhone build.
+With it, `lib.rs` compiles without `ai.rs`, `tutor.rs`, `tones.rs`, `tone_check.rs` and
+`calibration.rs`, and `commands.rs` answers their commands with "not part of this version": nothing
+in the phone's program talks to Anthropic, and none of the tone-checking numbers (fitted to the Tone
+Perfect and speaker recordings) are in it. The pages are shared, so the tutor's screen is still among
+the page files, never shown and with nothing behind it. `HANZI_APPSTORE=1 cargo check --lib` checks
+this build on any computer.
+
+**For the App Store** (`gen/apple/hanzi-cards_iOS/`): `Info.plist` has the reasons for the
+microphone, speech recognition and local network (LINK) permissions, and
+`ITSAppUsesNonExemptEncryption` = true (LINK encrypts with its own code, not Apple's: answer the
+encryption questions in App Store Connect once). `PrivacyInfo.xcprivacy` is the privacy manifest:
+nothing collected, nothing tracked. The privacy policy and support pages are `PRIVACY.md` and
+`SUPPORT.md` at the top of the repository.
 
 Device sync (LINK) is a page of its own in Settings on the phone, and a console on a computer: see `docs/link.md`.
 

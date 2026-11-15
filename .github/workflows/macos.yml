@@ -7,7 +7,10 @@
 #     were in the code is built from a later commit of the same version)
 #
 # The app is ad-hoc signed (tauri.conf.json > bundle > macOS > signingIdentity "-") unless the
-# repository has Apple signing secrets: see docs/building-for-mac.md.
+# repository has Apple signing secrets: then it is signed with the Developer ID certificate and
+# notarized by Apple, and opens without a warning. The secrets (docs/building-for-mac.md):
+#   APPLE_CERTIFICATE (the .p12 as base64), APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY
+#   APPLE_API_KEY (the key's ID), APPLE_API_ISSUER, APPLE_API_KEY_P8 (the .p8 file's contents)
 name: macOS build
 
 on:
@@ -53,11 +56,52 @@ jobs:
 
       - run: npm ci
 
+      # Hands the secrets to Tauri's build, which signs and notarizes when it finds them. With
+      # no secrets nothing is set (an empty value would replace the ad-hoc identity with none).
+      - name: Apple signing, when the repository has the secrets
+        env:
+          CERT: ${{ secrets.APPLE_CERTIFICATE }}
+          CERT_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEY_ID: ${{ secrets.APPLE_API_KEY }}
+          ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          if [ -z "$CERT" ] || [ -z "$IDENTITY" ]; then
+            echo "No signing secrets: the app is ad-hoc signed."
+            exit 0
+          fi
+          {
+            echo "APPLE_CERTIFICATE=$(printf '%s' "$CERT" | tr -d '[:space:]')"
+            echo "APPLE_CERTIFICATE_PASSWORD=$CERT_PASSWORD"
+            echo "APPLE_SIGNING_IDENTITY=$IDENTITY"
+          } >> "$GITHUB_ENV"
+          if [ -z "$KEY_ID" ] || [ -z "$ISSUER" ] || [ -z "$P8" ]; then
+            echo "::warning::Signed, but not notarized: the notarization secrets are missing. macOS will still warn."
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/apple"
+          echo "$P8" >"$RUNNER_TEMP/apple/AuthKey_$KEY_ID.p8"
+          {
+            echo "APPLE_API_KEY=$KEY_ID"
+            echo "APPLE_API_ISSUER=$ISSUER"
+            echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/apple/AuthKey_$KEY_ID.p8"
+            echo "NOTARIZED=yes"
+          } >> "$GITHUB_ENV"
+
       - name: Build
         run: npm run tauri build -- --target ${{ matrix.target }} --bundles app,dmg
 
       - name: Check the signature
         run: codesign --verify --deep --strict --verbose=2 "src-tauri/target/${{ matrix.target }}/release/bundle/macos/Hanzi Cards.app"
+
+      # What a Mac decides when the app is first opened: it must say "Notarized Developer ID".
+      - name: Check that macOS accepts it without a warning
+        if: env.NOTARIZED == 'yes'
+        run: |
+          app="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Hanzi Cards.app"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute -vv "$app"
 
       - name: Keep the disk image with the run
         uses: actions/upload-artifact@v7

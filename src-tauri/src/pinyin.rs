@@ -230,6 +230,7 @@ pub fn marks_to_numbered(input: &str) -> String {
 /// The tones a word is actually said with, from its dictionary tones (one per character, 5 =
 /// neutral): 3-3 → 2-3 (a run of third tones keeps only the last), 不 before a 4th tone → 2,
 /// 一 before a 4th tone → 2 and before 1-3 → 4 (alone or last it stays 1).
+#[cfg_attr(appstore, allow(dead_code))] // (used by what the App Store build leaves out)
 pub fn spoken_tones(hanzi: &str, tones: &[u8]) -> Vec<u8> {
     let chars: Vec<char> = hanzi.chars().filter(|c| is_hanzi(*c)).collect();
     let mut out = tones.to_vec();

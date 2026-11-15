@@ -1,5 +1,7 @@
+#[cfg(not(appstore))]
 mod ai;
 mod billing;
+#[cfg(not(appstore))]
 mod calibration;
 mod cards;
 mod commands;
@@ -28,9 +30,12 @@ mod stories;
 mod study;
 mod sync;
 mod sync_data;
+#[cfg(not(appstore))]
 mod tone_check;
+#[cfg(not(appstore))]
 mod tones;
 mod tts;
+#[cfg(not(appstore))]
 mod tutor;
 mod whisper;
 mod whisper_net;

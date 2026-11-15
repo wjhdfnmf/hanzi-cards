@@ -18,6 +18,7 @@ pub const MAX_NAME: usize = 200;
 pub const MAX_DESCRIPTION: usize = 2_000;
 pub const MAX_STORY: usize = 1_000_000;
 /// A message to the tutor, or a custom scene for it.
+#[cfg_attr(appstore, allow(dead_code))] // (used by what the App Store build leaves out)
 pub const MAX_MESSAGE: usize = 2_000;
 pub const MAX_QUERY: usize = 200;
 

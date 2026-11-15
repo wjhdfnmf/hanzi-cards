@@ -448,6 +448,10 @@ scripts/              theme generator, tone data preparation, the Windows GPU bu
 packaging/arch/       PKGBUILD for Arch Linux
 ```
 
+## Privacy and support
+
+The app collects nothing: see the [privacy policy](PRIVACY.md). For help, see [Support](SUPPORT.md).
+
 ## Licence
 
 Hanzi Cards' own code is under the [MIT licence](LICENSE). The data below keeps its own licences.

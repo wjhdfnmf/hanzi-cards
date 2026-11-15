@@ -9,5 +9,14 @@ fn main() {
         }
         println!("cargo:rustc-link-arg=delayimp.lib");
     }
+    // `appstore`: the build for Apple's App Store (every iPhone build; HANZI_APPSTORE=1 turns it
+    // on anywhere, to check that it compiles). It leaves out the AI tutor with everything that
+    // talks to Anthropic, and checking tones by pitch (tones.rs and what uses it, whose numbers
+    // were fitted to recordings that aren't ours to hand on): see lib.rs and commands.rs.
+    println!("cargo:rustc-check-cfg=cfg(appstore)");
+    println!("cargo:rerun-if-env-changed=HANZI_APPSTORE");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios") || std::env::var_os("HANZI_APPSTORE").is_some() {
+        println!("cargo:rustc-cfg=appstore");
+    }
     tauri_build::build()
 }

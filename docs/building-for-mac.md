@@ -90,7 +90,7 @@ and notarizes once these repository secrets exist (names from Tauri's guide):
 - Signing: `APPLE_CERTIFICATE` (the certificate as base64 `.p12`), `APPLE_CERTIFICATE_PASSWORD`,
   `APPLE_SIGNING_IDENTITY`. The certificate type for apps outside the App Store is **Developer
   ID Application**; only the account holder can create it.
-- Notarization: `APPLE_API_ISSUER`, `APPLE_API_KEY`, `APPLE_API_KEY_PATH` (an App Store Connect
+- Notarization: `APPLE_API_ISSUER`, `APPLE_API_KEY`, `APPLE_API_KEY_P8` (the `.p8` file's contents; the workflow writes it to a file for Tauri) (an App Store Connect
   API key; the option that suits unattended builds), or `APPLE_ID`, `APPLE_PASSWORD`,
   `APPLE_TEAM_ID`.
 

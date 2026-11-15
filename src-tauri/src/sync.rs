@@ -639,9 +639,11 @@ pub async fn sync_set_automatic(app: AppHandle, on: bool) -> AppResult<Status> {
     .await
 }
 
-/// A phone being left (iOS may stop it moments later): a client that syncs by itself sends
-/// what's new now, without the page. Merging is all-or-nothing, so being stopped part way
-/// changes nothing.
+/// A phone being left: a client that syncs by itself sends what's new now, without the page.
+/// iOS stops an app within moments of its being left, so it is asked for a little more time
+/// first (`background`); without that the sync was frozen part way, nothing was sent, and it
+/// was still "running" when the app came back. Merging is all-or-nothing, so being stopped
+/// part way changes nothing.
 #[cfg_attr(not(mobile), allow(dead_code))]
 pub fn sync_on_leaving(app: &AppHandle) {
     let Ok(dir) = dir_of(app) else { return };
@@ -649,12 +651,55 @@ pub fn sync_on_leaving(app: &AppHandle) {
     if config.role.is_empty() || config.manual {
         return;
     }
+    #[cfg(target_os = "ios")]
+    let time = background::begin();
     let app = app.clone();
     std::thread::spawn(move || {
         if let Err(e) = sync_blocking(&app) {
             eprintln!("sync on leaving: {e}");
         }
+        #[cfg(target_os = "ios")]
+        background::end(&time);
     });
+}
+
+/// Time to finish something after an iPhone app has been left (about half a minute, iOS
+/// decides): UIKit's background task. It is given back as soon as the work is done, or when
+/// iOS says the time is up.
+#[cfg(target_os = "ios")]
+mod background {
+    use block2::RcBlock;
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    /// UIBackgroundTaskInvalid
+    const NONE: usize = 0;
+    pub type Task = Arc<AtomicUsize>;
+
+    fn application() -> *mut AnyObject {
+        unsafe { msg_send![class!(UIApplication), sharedApplication] }
+    }
+
+    pub fn begin() -> Task {
+        let task: Task = Arc::new(AtomicUsize::new(NONE));
+        let expired = RcBlock::new({
+            let task = task.clone();
+            move || end(&task)
+        });
+        let id: usize = unsafe { msg_send![application(), beginBackgroundTaskWithExpirationHandler: &*expired] };
+        task.store(id, Ordering::SeqCst);
+        task
+    }
+
+    /// (once only: the id is taken out as it is given back)
+    pub fn end(task: &Task) {
+        let id = task.swap(NONE, Ordering::SeqCst);
+        if id != NONE {
+            let _: () = unsafe { msg_send![application(), endBackgroundTask: id] };
+        }
+    }
 }
 
 /// A computer's window being closed. A client that syncs by itself sends what's new before

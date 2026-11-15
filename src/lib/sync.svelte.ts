@@ -58,6 +58,8 @@ export function describe(c: SyncChanges): string {
 
 const any = (c: SyncChanges) => c.decks + c.cards + c.reviews + c.stories + c.removed > 0;
 
+const RUNNING = /already running/i;
+
 export async function syncNow(): Promise<SyncReport> {
   sync.busy = true;
   try {
@@ -67,8 +69,9 @@ export async function syncNow(): Promise<SyncReport> {
     await refreshStatus();
     return r;
   } catch (e) {
-    // (a server that can't be reached shows on the light too)
-    if (sync.status?.role === "client") {
+    // (a server that can't be reached shows on the light too; a sync that is already under
+    // way says nothing about the server)
+    if (sync.status?.role === "client" && !RUNNING.test(errorText(e))) {
       sync.light = "bad";
       sync.note = errorText(e);
     }
@@ -87,6 +90,21 @@ export async function syncIfAutomatic(): Promise<{ text: string; warn: boolean }
     const r = await syncNow();
     return any(r.received) ? { text: `In: ${describe(r.received)}.`, warn: false } : null;
   } catch (e) {
+    // Another sync is under way: the one a phone starts as it is left, still finishing as the
+    // app comes back. That is the sync that was wanted: wait for it, then show what it brought.
+    if (RUNNING.test(errorText(e))) {
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        try {
+          const r = await syncNow();
+          sync.epoch++; // (what the other sync merged in: the pages reload)
+          return any(r.received) ? { text: `In: ${describe(r.received)}.`, warn: false } : null;
+        } catch (again) {
+          if (!RUNNING.test(errorText(again))) break;
+        }
+      }
+      return null;
+    }
     // A server that can't be reached is not news (the light shows it). Anything else is: a
     // sync that was refused (the other devices are on a newer version, the clocks disagree…)
     // would otherwise never be noticed.

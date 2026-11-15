@@ -75,10 +75,18 @@
   }
   onMount(() => {
     if (!ios) return;
-    const stop = listen("app-resumed", () => {
+    const stop = listen("app-resumed", async () => {
       if (problem) return;
       checkSiri();
-      syncOnOpen();
+      await syncOnOpen();
+      // Coming back, the phone's network can take a moment: a server that didn't answer (or
+      // wasn't asked: syncing by itself is off) is tried once more before the light stays red.
+      if (sync.status?.role !== "client" || sync.light === "ok") return;
+      setTimeout(async () => {
+        if (sync.busy) return;
+        if (sync.status?.automatic) await syncOnOpen();
+        if (sync.light !== "ok") ping().catch(() => {});
+      }, 4000);
     });
     return () => void stop.then((f) => f());
   });

@@ -1,11 +1,15 @@
 //! A record of what the AI tutor has cost: one row per batch of Claude API calls, with
 //! token counts and the estimated price, so spending can be reviewed in Settings.
 
+#[cfg(not(appstore))]
 use crate::ai::Usage;
 use crate::error::AppResult;
-use rusqlite::{params, Connection};
+#[cfg(not(appstore))]
+use rusqlite::params;
+use rusqlite::Connection;
 use serde::Serialize;
 
+#[cfg(not(appstore))]
 pub fn record(conn: &Connection, kind: &str, model: &str, session: Option<u64>, u: &Usage) -> AppResult<()> {
     conn.execute(
         "INSERT INTO ai_usage (at, kind, model, session_id, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost)
@@ -113,7 +117,7 @@ pub fn export_csv(conn: &Connection) -> AppResult<String> {
     Ok(out)
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(appstore)))]
 mod tests {
     use super::*;
 

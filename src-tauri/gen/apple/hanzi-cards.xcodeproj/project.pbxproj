@@ -15,6 +15,7 @@
 		4370B1E0B0E8EA9568E2862B /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A7C75DC7F3D04452C422BD1 /* Security.framework */; };
 		4AEF429F8746B42CA98A5A99 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 609F3D4804AEAF651BB8EEE1 /* Metal.framework */; };
 		70760DEF8C8AF5CA1DE8322B /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BD54B4A1784D91766CA07476 /* LaunchScreen.storyboard */; };
+		7E42B90C6D1A4F38B5E0C3A6 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5F1C9A27D3B84E60A1C7F2D9 /* PrivacyInfo.xcprivacy */; };
 		8B345B2D237221224D0A82C5 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0936D65F2A32F21790ABD1A8 /* QuartzCore.framework */; };
 		9A3B768E1839A60C97C7732E /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9AE2DD3D8C79476F248C48AE /* MetalKit.framework */; };
 		AFFE19703DA32F738132CF2F /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2DA5DA5B771A0B5ACEBD0F50 /* UIKit.framework */; };
@@ -66,6 +67,7 @@
 		C0AB2E7390E6434729EAA134 /* dictionary.rs */ = {isa = PBXFileReference; path = dictionary.rs; sourceTree = "<group>"; };
 		C269AF35EC4E8F8ECC4845A0 /* study.rs */ = {isa = PBXFileReference; path = study.rs; sourceTree = "<group>"; };
 		CFFBD3237CDBCC5A66068F58 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		5F1C9A27D3B84E60A1C7F2D9 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		D0811C7369A3A28DDC5D3EBD /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		D162572313409D28EE54C17E /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
 		D25125E01790F3AD9C3B35A2 /* gpu.rs */ = {isa = PBXFileReference; path = gpu.rs; sourceTree = "<group>"; };
@@ -217,6 +219,7 @@
 			children = (
 				BD7B930F022A83DFFCD2CF82 /* hanzi-cards_iOS.entitlements */,
 				CFFBD3237CDBCC5A66068F58 /* Info.plist */,
+				5F1C9A27D3B84E60A1C7F2D9 /* PrivacyInfo.xcprivacy */,
 			);
 			path = "hanzi-cards_iOS";
 			sourceTree = "<group>";
@@ -295,6 +298,7 @@
 			files = (
 				133F2242591EBE7C5F9A23C9 /* Assets.xcassets in Resources */,
 				70760DEF8C8AF5CA1DE8322B /* LaunchScreen.storyboard in Resources */,
+				7E42B90C6D1A4F38B5E0C3A6 /* PrivacyInfo.xcprivacy in Resources */,
 				38081DBBB8DDD8D1EC09252E /* assets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
