@@ -78,6 +78,13 @@ mod tests {
         };
         assert_eq!(&wav[..4], b"RIFF");
         assert_eq!(&wav[8..12], b"WAVE");
-        assert!(wav.len() > 10_000, "{} bytes for 你好", wav.len());
+        // (how much sound there is can only be said where a Chinese voice is installed: an
+        // English-only Windows, such as the machines that run the checks, says next to nothing)
+        let chinese = windows::Media::SpeechSynthesis::SpeechSynthesizer::AllVoices()
+            .map(|all| all.into_iter().any(|v| v.Language().is_ok_and(|l| l.to_string().to_lowercase().starts_with("zh"))))
+            .unwrap_or(false);
+        if chinese {
+            assert!(wav.len() > 10_000, "{} bytes for 你好", wav.len());
+        }
     }
 }

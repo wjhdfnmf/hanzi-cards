@@ -1,0 +1,107 @@
+# Checks that every platform still works after a change, so work on one (the iPhone build,
+# say) can't quietly break another (the Windows desktop app).
+#
+# On every push to main or ios, and on every pull request:
+#   - the page: type check
+#   - the sync crate: its tests
+#   - the desktop app on Linux, Windows and macOS: the app's own tests (which also proves it
+#     compiles there)
+#   - the iPhone build: that the app's code compiles for iOS
+#
+# Installers are not made here: see the release steps and macos.yml for those.
+name: Checks
+
+on:
+  push:
+    branches: [main, ios, "ci/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  page:
+    name: Page (type check)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  sync:
+    name: Sync crate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sync
+      - run: cargo test
+        working-directory: sync
+
+  desktop:
+    name: Desktop (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-22.04
+          - name: Windows
+            os: windows-latest
+          - name: macOS
+            os: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config file libssl-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libdbus-1-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      # (the app's code includes the built page, so the page is built first)
+      - run: npm run build
+      - name: The app's tests
+        run: cargo test --lib
+        working-directory: src-tauri
+
+  iphone:
+    name: iPhone (compiles)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ios
+      - run: npm ci
+      - run: npm run build
+      - name: Compile for iPhone
+        run: cargo check --lib --target aarch64-apple-ios
+        working-directory: src-tauri

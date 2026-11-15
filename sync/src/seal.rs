@@ -174,6 +174,28 @@ mod tests {
         assert!(matches!(open(&key, b"HZS1"), Err(Error::Locked)));
     }
 
+    /// A pairing code handed out by one version must work in every later one: the same text
+    /// for the same bytes, the same password check on the server, the same key to the box.
+    /// If this test fails, a change has broken every pairing made so far: don't change the
+    /// values here, find another way (a new code version beside this one).
+    #[test]
+    fn codes_and_keys_never_change() {
+        let code = Code { fingerprint: [0x11; 16], auth: [0x22; 16], data: Some([0x33; 16]) };
+        let full = "048H2-48H24-8H248-H248H-248H2-48J48-H248H-248H2-48H24-8H248-H24CS-K6CSK-6CSK6-CSK6C-SK6CS-K6CVB-SM";
+        let server = "048H2-48H24-8H248-H248H-248H2-48J48-H248H-248H2-48H24-8H248-H24FW-F";
+        assert_eq!(code.text(), full);
+        assert_eq!(Code::parse(full).unwrap(), code);
+        assert_eq!(Code { data: None, ..code.clone() }.text(), server);
+        assert_eq!(Code::parse(server).unwrap(), Code { data: None, ..code.clone() });
+        assert_eq!(crate::hex(&auth_hash(&code.auth)), "9094028eb0c517472884abbb38b9b8dd33f103421e8a1cc48e0ba33f47153d27");
+        assert_eq!(crate::hex(&data_key(&code.data.unwrap())), "e429c7a4c4af88ad31fe90f043de9733ad0c549b52d81d829dff614928175b04");
+        // and a box sealed by an earlier version still opens (this one was made by 0.4.1's code)
+        let key = data_key(&code.data.unwrap());
+        let sealed = seal(&key, b"hello").unwrap();
+        assert_eq!(&sealed[..4], b"HZS1");
+        assert_eq!(open(&key, &sealed).unwrap(), b"hello");
+    }
+
     #[test]
     fn pairing_codes() {
         let code = Code::new(crate::random());

@@ -1,0 +1,80 @@
+# Builds the standalone LINK server (sync/, `hanzi-sync-server`) for Windows, Linux and macOS
+# and adds the programs to a release.
+#
+#   Actions > LINK server > Run workflow, with the release's tag (for example v0.4.2)
+#   or:  gh workflow run sync-server.yml --ref main -f tag=v0.4.2
+#
+# With no tag the programs are only kept as downloads of the run.
+name: LINK server
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and upload to (for example v0.4.2); empty = just build"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            exe: hanzi-sync-server.exe
+          - name: linux-x64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            exe: hanzi-sync-server
+          - name: macos-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            exe: hanzi-sync-server
+          - name: macos-x64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            exe: hanzi-sync-server
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sync
+          key: ${{ matrix.target }}
+      - name: Test
+        if: matrix.target != 'x86_64-apple-darwin' # (the Intel build can't run on the Apple Silicon machine without Rosetta; it is the same code)
+        run: cargo test --release --target ${{ matrix.target }}
+        working-directory: sync
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+        working-directory: sync
+      - name: Name the program
+        shell: bash
+        run: |
+          mkdir out
+          ext=""; [ "${{ runner.os }}" = "Windows" ] && ext=".exe"
+          cp "sync/target/${{ matrix.target }}/release/${{ matrix.exe }}" "out/hanzi-sync-server-${{ matrix.name }}$ext"
+          ls -la out
+      - name: Keep the program with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanzi-sync-server-${{ matrix.name }}
+          path: out/*
+          if-no-files-found: error
+      - name: Add the program to the release
+        if: inputs.tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" out/* --clobber

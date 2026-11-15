@@ -71,7 +71,7 @@
   // ---------- LINK on a phone: what's new on the computer as the app opens or comes back ----------
   async function syncOnOpen() {
     const line = await syncIfAutomatic();
-    if (line) showToast(line);
+    if (line) showToast(line.text, line.warn ? "err" : "ok");
   }
   onMount(() => {
     if (!ios) return;

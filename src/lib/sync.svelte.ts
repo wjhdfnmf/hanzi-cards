@@ -78,14 +78,18 @@ export async function syncNow(): Promise<SyncReport> {
 
 /** A client that syncs by itself, as the app opens or comes back: quietly, and a line only
  *  when something came in. (Leaving is handled without the page: sync.rs, sync_on_leaving.) */
-export async function syncIfAutomatic(): Promise<string | null> {
+export async function syncIfAutomatic(): Promise<{ text: string; warn: boolean } | null> {
   const s = await refreshStatus();
   if (s?.role !== "client" || !s.automatic || sync.busy) return null;
   try {
     const r = await syncNow();
-    return any(r.received) ? `In: ${describe(r.received)}.` : null;
-  } catch {
-    return null; // (the light shows the server couldn't be reached)
+    return any(r.received) ? { text: `In: ${describe(r.received)}.`, warn: false } : null;
+  } catch (e) {
+    // A server that can't be reached is not news (the light shows it). Anything else is: a
+    // sync that was refused (the other devices are on a newer version, the clocks disagree…)
+    // would otherwise never be noticed.
+    const text = errorText(e);
+    return /^connection problem|couldn't be secured/i.test(text) ? null : { text: `Sync: ${text}`, warn: true };
   }
 }
 

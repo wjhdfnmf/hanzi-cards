@@ -173,9 +173,13 @@
       <path d="M108 {y} H120" class="thread" />
       <circle cx="108" cy={y} r="1.5" class="dk2" />
     {/each}
-    <rect x="13" y="128" width="19" height="19" rx="2.5" fill="#b3261e" />
-    <rect x="15" y="130" width="15" height="15" rx="1.5" fill="none" stroke="#f7e9d7" stroke-width=".8" />
-    <text x="22.5" y="142.4" text-anchor="middle" class="seal-char paper">{c.first}</text>
+    <!-- (on a cover, in the bottom corner away from the binding; on the strip at the head of
+         an open story, beside the binding, half way up) -->
+    <g transform={band ? "translate(64 -27)" : undefined}>
+      <rect x="13" y="128" width="19" height="19" rx="2.5" fill="#b3261e" />
+      <rect x="15" y="130" width="15" height="15" rx="1.5" fill="none" stroke="#f7e9d7" stroke-width=".8" />
+      <text x="22.5" y="142.4" text-anchor="middle" class="seal-char paper">{c.first}</text>
+    </g>
   {:else if look === "poster"}
     {#if c.variant === 0}
       <circle cx="82" cy="108" r="32" class="hi" />

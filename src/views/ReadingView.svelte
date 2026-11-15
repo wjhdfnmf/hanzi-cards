@@ -85,42 +85,43 @@
     if (v !== settings.readingSize) saveSetting("readingSize", v);
   }
 
-  // ---------- word lookup on hover ----------
-  // One tooltip for the whole text (not one per word): placed next to the word under the pointer.
-  let hover = $state<{ i: number; x: number; top: number; bottom: number } | null>(null);
-  const hoverSeg = $derived(hover && segments ? segments[hover.i] : null);
-
-  // The tooltip can hold a button (make a card of the word), so the pointer must be able to
-  // reach it: leaving the word doesn't close it at once, and being over it keeps it open.
-  let overTip = false;
-  let tipTimer: ReturnType<typeof setTimeout> | undefined;
+  // ---------- word lookup ----------
+  // The word under the pointer is marked. Its note (pinyin, meaning, make a card, read from
+  // here) shows when the word is clicked, and goes when it is clicked again, when another
+  // word is, or on a click anywhere else. One note for the whole text, placed by its word.
+  let hover = $state<{ i: number } | null>(null);
+  let picked = $state<{ i: number; x: number; top: number; bottom: number } | null>(null);
+  const pickedSeg = $derived(picked && segments ? segments[picked.i] : null);
   function over(e: MouseEvent) {
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-i]");
-    let next: typeof hover = null;
-    if (el) {
-      const i = Number(el.dataset.i);
-      if (hover?.i === i) {
-        clearTimeout(tipTimer);
-        return;
-      }
-      const r = el.getBoundingClientRect();
-      next = { i, x: r.left + r.width / 2, top: r.top, bottom: r.bottom };
-    }
-    clearTimeout(tipTimer);
-    if (!hover) hover = next;
-    else tipTimer = setTimeout(() => !overTip && (hover = next), 160);
+    hover = el ? { i: Number(el.dataset.i) } : null;
   }
   function leaveText() {
-    clearTimeout(tipTimer);
-    tipTimer = setTimeout(() => !overTip && (hover = null), 200);
+    hover = null;
   }
+  function pick(e: MouseEvent) {
+    // (dragging across words to select them isn't a click on one)
+    if (window.getSelection()?.toString()) return;
+    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-i]");
+    const i = el ? Number(el.dataset.i) : null;
+    if (!el || i === null || picked?.i === i) {
+      picked = null;
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    picked = { i, x: r.left + r.width / 2, top: r.top, bottom: r.bottom };
+  }
+  // (another story, or none: no note left over from the last)
+  $effect(() => {
+    void story?.id;
+    picked = null;
+  });
 
   // ---------- a card from a word in the text ----------
   let decks = $state<Deck[]>([]);
   let adding = $state<{ hanzi: string; pinyin: string; meaning: string } | null>(null);
   async function addCard(e: DictEntry) {
-    overTip = false;
-    hover = null;
+    picked = null;
     try {
       decks = await api.listDecks();
       if (!decks.length) return showToast(t("reading.noDecks"), "err");
@@ -212,8 +213,10 @@
     let parts = sentences(segs);
     if (!parts.length) return;
     // with text selected, reading begins where the selection does (mid-sentence if need be)
-    const from = pressedAt ?? startPoint();
+    // (or, with nothing selected, at the word whose note is open)
+    const from = pressedAt ?? startPoint() ?? picked?.i ?? null;
     pressedAt = null;
+    picked = null;
     if (from !== null) {
       const p = parts.findIndex((x) => x.to >= from);
       if (p >= 0) {
@@ -256,6 +259,28 @@
 
   // ---------- bookmarks ----------
   let onlyBookmarked = $state(false);
+  /** Read aloud from the word whose note is open. */
+  function readFromPicked() {
+    if (!picked) return;
+    if (playing) stopReading();
+    pressedAt = picked.i;
+    play();
+  }
+
+  // ---------- read, or not yet ----------
+  async function toggleRead() {
+    if (!story) return;
+    const id = story.id;
+    const on = !story.read;
+    try {
+      await api.markStoryRead(id, on);
+      story = { ...story, read: on };
+      stories = stories.map((s) => (s.id === id ? { ...s, read: on } : s));
+    } catch (e) {
+      showToast(errorText(e), "err");
+    }
+  }
+
   async function toggleBookmark() {
     if (!story) return;
     const id = story.id;
@@ -591,6 +616,15 @@
       aria-pressed={story.bookmarked}
       onclick={toggleBookmark}><span aria-hidden="true">{story.bookmarked ? "★" : "☆"}</span></button
     >
+    <button
+      class="btn ghost readbtn"
+      class:on={story.read}
+      title={t(story.read ? "reading.markUnread" : "reading.markRead")}
+      aria-pressed={story.read}
+      onclick={toggleRead}
+    >
+      <Icon name="check" size={15} />{t(story.read ? "reading.read" : "reading.markRead")}
+    </button>
     {#if !device.phone}
     <button
       class="btn"
@@ -769,18 +803,22 @@
           <Icon name={playing ? "close" : "speaker"} size={24} />
         </button>
       {/if}
-      <!-- svelte-ignore a11y_mouse_events_have_key_events -->
+      <!-- (words are looked up with the pointer; the same note is not offered from the keyboard) -->
+      <!-- svelte-ignore a11y_mouse_events_have_key_events, a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
       <article
         class="text card-surface"
         lang="zh-CN"
         style="font-family:{fontFamily}; font-size:{settings.readingSize}px; line-height:{settings.readingLineHeight}"
+        title={t("reading.wordHint")}
         onmouseover={over}
         onmouseleave={leaveText}
+        onclick={pick}
       >
         {#if segments}
           {#each segments as s, i (i)}{#if s.entry}<span
                 class="w"
                 class:on={hover?.i === i}
+                class:picked={picked?.i === i}
                 class:said={playing !== null && i >= playing.from && i <= playing.to}
                 class:now={playing?.word === i}
                 data-i={i}
@@ -863,8 +901,9 @@
             {#each onlyBookmarked ? stories.filter((s) => s.bookmarked) : stories as s (s.id)}
               {@const cv = coverOf(s.title, s.preview, look)}
               <button class="book" onclick={() => openStory(s.id)}>
-                <span class="cover look-{look}" style="--cv-hi:{cv.hi}; --cv-ink:{cv.ink}">
+                <span class="cover look-{look}" class:read={s.read} style="--cv-hi:{cv.hi}; --cv-ink:{cv.ink}">
                   <StoryCover title={s.title} text={s.preview} {look} />
+                  {#if s.read}<span class="readmark">✓ {t("reading.read")}</span>{/if}
                   {#if s.bookmarked}<span class="ribbon" title={t("reading.bookmarked")}>★</span>{/if}
                   <span class="plate han" class:t2={s.title.length > 4} class:t3={s.title.length > 8} class:t4={s.title.length > 16}
                     >{s.title}</span
@@ -880,11 +919,11 @@
         {:else}
           <div class="list">
             {#each onlyBookmarked ? stories.filter((s) => s.bookmarked) : stories as s (s.id)}
-              <button class="story card-surface" onclick={() => openStory(s.id)}>
+              <button class="story card-surface" class:read={s.read} onclick={() => openStory(s.id)}>
                 <span class="st-title han">{#if s.bookmarked}<span class="star" title={t("reading.bookmarked")}>★</span> {/if}{s.title}</span>
                 <span class="st-preview han muted">{s.preview}</span>
                 <span class="small faint">
-                  {t("reading.chars", { n: s.chars })}{#if s.folderId !== null && s.folderId !== selected}
+                  {#if s.read}<span class="readtag">✓ {t("reading.read")}</span> · {/if}{t("reading.chars", { n: s.chars })}{#if s.folderId !== null && s.folderId !== selected}
                     · {folderName(s.folderId)}{/if}
                 </span>
               </button>
@@ -896,21 +935,9 @@
   </section>
 </div>
 
-{#if hover && hoverSeg?.entry}
-  {@const e = hoverSeg.entry}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="tip"
-    use:place={hover}
-    onmouseenter={() => {
-      overTip = true;
-      clearTimeout(tipTimer);
-    }}
-    onmouseleave={() => {
-      overTip = false;
-      hover = null;
-    }}
-  >
+{#if picked && pickedSeg?.entry}
+  {@const e = pickedSeg.entry}
+  <div class="tip" use:place={picked}>
     <div class="tip-head">
       <span class="tip-hz han" lang="zh-CN">{e.simplified}{#if e.traditional !== e.simplified}<span class="trad"
             >（{e.traditional}）</span
@@ -919,9 +946,14 @@
     </div>
     <div class="tip-py"><Pinyin text={e.pinyin} /></div>
     <div class="tip-defs">{e.definitions.slice(0, 5).join("; ")}</div>
-    {#if !e.inCards}
-      <button class="btn small tip-add" onclick={() => addCard(e)}><Icon name="plus" size={14} />{t("reading.addCard")}</button>
-    {/if}
+    <div class="tip-btns">
+      {#if !device.phone && voice.available}
+        <button class="btn small" onclick={readFromPicked}><Icon name="speaker" size={14} />{t("reading.readFromHere")}</button>
+      {/if}
+      {#if !e.inCards}
+        <button class="btn small" onclick={() => addCard(e)}><Icon name="plus" size={14} />{t("reading.addCard")}</button>
+      {/if}
+    </div>
   </div>
 {/if}
 
@@ -929,14 +961,16 @@
   <CardEditor card={null} {decks} deckId={null} prefill={adding} onclose={() => (adding = null)} onsaved={cardAdded} />
 {/if}
 
-<svelte:document onselectionchange={selectionChanged} onscrollcapture={() => (hover = null)} />
+<svelte:document onselectionchange={selectionChanged} onscrollcapture={() => (picked = null)} />
 <svelte:window
   onkeydown={(e) => {
     if (e.key === "Escape" && full && !adding && !storyForm) setFull(false);
   }}
-  onscroll={() => (hover = null)}
-  onresize={() => (hover = null)}
+  onscroll={() => (picked = null)}
+  onresize={() => (picked = null)}
   onclick={(e) => {
+    // a click away from the text and the note puts the note away
+    if (picked && !(e.target as HTMLElement).closest("article.text, .tip")) picked = null;
     if (importMenu && !(e.target as HTMLElement).closest(".menuwrap")) importMenu = false;
   }}
 />
@@ -1395,9 +1429,61 @@
     border-radius: 4px;
     cursor: help;
   }
+  .w {
+    cursor: pointer;
+  }
   .w.on {
     background: var(--accent-soft);
     box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+  /* the word whose note is open */
+  .w.picked {
+    background: var(--accent-soft);
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+  .tip-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .tip-btns:empty {
+    display: none;
+  }
+  .readbtn.on {
+    color: var(--good, #1a8f4c);
+  }
+  /* a story that has been read: its cover fades, with a mark */
+  .cover.read :global(svg) {
+    filter: grayscale(0.7) brightness(0.82);
+  }
+  .cover.read .plate {
+    opacity: 0.72;
+  }
+  .readmark {
+    position: absolute;
+    left: 50%;
+    bottom: 7%;
+    transform: translateX(-50%);
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 9px 3px;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.55);
+    color: #fff;
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .story.read .st-title,
+  .story.read .st-preview {
+    opacity: 0.6;
+  }
+  .readtag {
+    color: var(--good, #1a8f4c);
+    font-weight: 600;
   }
 
   .empty {

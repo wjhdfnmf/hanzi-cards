@@ -121,6 +121,8 @@ pub struct Story {
     pub vocab: String,
     pub position: i64,
     pub bookmarked: bool,
+    /// Marked as read (reading database version 5 on).
+    pub read: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }

@@ -137,7 +137,19 @@ pub fn upgrade_stories(conn: &Connection) -> rusqlite::Result<()> {
          CREATE UNIQUE INDEX IF NOT EXISTS idx_stories_uid ON stories(uid);",
     )?;
     conn.execute_batch(&triggers("story_folders", "folder", &["name", "description", "parent_id", "position"], None))?;
-    conn.execute_batch(&triggers("stories", "story", &["folder_id", "title", "body", "vocab", "position", "bookmarked"], Some(("folder_id", "story_folders"))))
+    story_triggers(conn, false)
+}
+
+/// The triggers on stories. `with_read`: from version 5 of the reading database, marking a
+/// story as read is a change like any other (the trigger that notices changes is made again
+/// with that column in its list).
+pub fn story_triggers(conn: &Connection, with_read: bool) -> rusqlite::Result<()> {
+    let mut content = vec!["folder_id", "title", "body", "vocab", "position", "bookmarked"];
+    if with_read {
+        content.push("was_read");
+        conn.execute_batch("DROP TRIGGER IF EXISTS sync_stories_changed;")?;
+    }
+    conn.execute_batch(&triggers("stories", "story", &content, Some(("folder_id", "story_folders"))))
 }
 
 fn backfill(conn: &Connection, table: &str, kind: &str, created: &str, text: &str) -> rusqlite::Result<()> {
@@ -263,7 +275,7 @@ pub fn export(cards: &Connection, stories: &Connection) -> AppResult<Snapshot> {
         )?,
         stories: rows(
             stories,
-            "SELECT s.uid, f.uid, s.title, s.body, s.vocab, s.position, s.bookmarked, s.created_at, s.updated_at
+            "SELECT s.uid, f.uid, s.title, s.body, s.vocab, s.position, s.bookmarked, s.created_at, s.updated_at, s.was_read
              FROM stories s LEFT JOIN story_folders f ON f.id = s.folder_id ORDER BY s.uid",
             |r| {
                 Ok(Story {
@@ -276,6 +288,7 @@ pub fn export(cards: &Connection, stories: &Connection) -> AppResult<Snapshot> {
                     bookmarked: r.get(6)?,
                     created_at: r.get(7)?,
                     updated_at: r.get(8)?,
+                    read: r.get(9)?,
                 })
             },
         )?,
@@ -424,18 +437,19 @@ pub fn apply_stories(conn: &mut Connection, s: &Snapshot) -> AppResult<()> {
             place.execute(params![f.uid, f.parent])?;
         }
         let mut put = tx.prepare(
-            "INSERT INTO stories (uid, folder_id, title, body, vocab, position, bookmarked, created_at, updated_at)
-             VALUES (?1, (SELECT id FROM story_folders WHERE uid = ?2), ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            "INSERT INTO stories (uid, folder_id, title, body, vocab, position, bookmarked, created_at, updated_at, was_read)
+             VALUES (?1, (SELECT id FROM story_folders WHERE uid = ?2), ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
              ON CONFLICT(uid) DO UPDATE SET folder_id = excluded.folder_id, title = excluded.title, body = excluded.body,
                vocab = excluded.vocab, position = excluded.position, bookmarked = excluded.bookmarked,
-               created_at = excluded.created_at, updated_at = excluded.updated_at
+               created_at = excluded.created_at, updated_at = excluded.updated_at, was_read = excluded.was_read
              WHERE stories.folder_id IS NOT excluded.folder_id OR stories.title IS NOT excluded.title OR stories.body IS NOT excluded.body
                 OR stories.vocab IS NOT excluded.vocab OR stories.position IS NOT excluded.position
-                OR stories.bookmarked IS NOT excluded.bookmarked OR stories.created_at IS NOT excluded.created_at
+                OR stories.bookmarked IS NOT excluded.bookmarked OR stories.was_read IS NOT excluded.was_read
+                OR stories.created_at IS NOT excluded.created_at
                 OR stories.updated_at IS NOT excluded.updated_at",
         )?;
         for st in &s.stories {
-            put.execute(params![st.uid, st.folder, st.title, st.body, st.vocab, st.position, st.bookmarked, st.created_at, st.updated_at])?;
+            put.execute(params![st.uid, st.folder, st.title, st.body, st.vocab, st.position, st.bookmarked, st.created_at, st.updated_at, st.read])?;
         }
         keep(&tx, s.stories.iter().map(|x| &x.uid))?;
         tx.execute("DELETE FROM stories WHERE uid IS NOT NULL AND uid NOT IN (SELECT uid FROM sync_keep)", [])?;
@@ -506,6 +520,11 @@ mod tests {
         let t = count(&s, &format!("SELECT updated_at FROM stories WHERE id = {story}"));
         stories::set_bookmark(&s, story, true).unwrap();
         assert!(count(&s, &format!("SELECT updated_at FROM stories WHERE id = {story}")) > t);
+        // marking it as read is a change too, and travels like one
+        let t = count(&s, &format!("SELECT updated_at FROM stories WHERE id = {story}"));
+        stories::set_read(&s, story, true).unwrap();
+        assert!(count(&s, &format!("SELECT updated_at FROM stories WHERE id = {story}")) > t);
+        assert!(export(&c, &s).unwrap().stories.iter().any(|x| x.read));
         stories::delete_story(&s, loose).unwrap();
         assert_eq!(count(&s, "SELECT COUNT(*) FROM sync_deleted WHERE kind = 'story'"), 1);
     }

@@ -15,6 +15,7 @@
   import { device as layout, ios, trackLevel } from "../lib/device.svelte";
   import Back from "../components/Back.svelte";
   import Icon from "../components/Icon.svelte";
+  import StoryCover, { coverOf, LOOKS, type Look } from "../components/StoryCover.svelte";
   import { SIZE_MIN, SIZE_MAX, LINE_MIN, LINE_MAX, readingFont, clampSize } from "../lib/reading";
   import FontSelect from "../components/FontSelect.svelte";
   import { CUSTOM_THEMES, THEME_GROUPS, isCustomTheme } from "../lib/themes";
@@ -733,8 +734,12 @@
         {t(x.label)}
       </button>
     {/each}
-    <!-- (nothing to see here) -->
-    {#if !ios}<button class="sec door" tabindex="-1" aria-hidden="true" onclick={() => (sync.consoleOpen = true)}>&nbsp;</button>{/if}
+    <!-- keeping devices in step: the console (an iPhone has a page of its own, above) -->
+    {#if !ios}
+      <button class="sec door" title={t("settings.linkHint")} onclick={() => (sync.consoleOpen = true)}>
+        <span class="lamp" class:ok={sync.light === "ok"} class:bad={sync.light === "bad"}></span>{t("settings.link")}
+      </button>
+    {/if}
   </nav>
   <div class="secmain" bind:this={mainEl}>
   <!-- a phone: the way back stays at the top while the section scrolls under it -->
@@ -937,19 +942,34 @@
         onchange={(e) => saveSetting("readingToneColors", e.currentTarget.checked)}
       />
     </label>
-    <label class="row">
+    <div class="row">
       <span>
         {t("settings.readingStyle")}
         <small class="faint block">{t("settings.readingStyleHint")}</small>
       </span>
-      <select value={settings.readingStyle} onchange={(e) => saveSetting("readingStyle", e.currentTarget.value)}>
-        <option value="plain">{t("settings.readingStyle.plain")}</option>
-        <option value="books">{t("settings.readingStyle.books")}</option>
-        <option value="cloth">{t("settings.readingStyle.cloth")}</option>
-        <option value="thread">{t("settings.readingStyle.thread")}</option>
-        <option value="poster">{t("settings.readingStyle.poster")}</option>
-      </select>
-    </label>
+    </div>
+    <div class="looks" role="radiogroup" aria-label={t("settings.readingStyle")}>
+      {#each ["plain", ...LOOKS] as l (l)}
+        {@const cv = l === "plain" ? null : coverOf("月亮", "", l as Look)}
+        <button
+          class="lookpick"
+          class:on={settings.readingStyle === l}
+          role="radio"
+          aria-checked={settings.readingStyle === l}
+          onclick={() => saveSetting("readingStyle", l)}
+        >
+          {#if cv}
+            <span class="lookcover {l}" style="--cv-ink:{cv.ink}">
+              <StoryCover title="月亮" look={l as Look} />
+              <span class="looktitle han">月亮</span>
+            </span>
+          {:else}
+            <span class="lookcover plain"><i></i><i></i><i></i></span>
+          {/if}
+          <span>{t(`settings.readingStyle.${l}` as Parameters<typeof t>[0])}</span>
+        </button>
+      {/each}
+    </div>
   </section>
 
   {/if}
@@ -1455,6 +1475,18 @@
   {/if}
 
   {#if section === "data"}
+  {#if !ios && sync.status?.role === "client"}
+    <h2>{t("settings.link")}</h2>
+    <section class="group card-surface">
+      <label class="row">
+        <span>
+          {t("link.automatic")}
+          <small class="faint block">{t("link.automaticDesktop", { address: sync.status.address })}</small>
+        </span>
+        <input type="checkbox" class="toggle" checked={sync.status.automatic} onchange={(e) => linkAutomatic(e.currentTarget.checked)} />
+      </label>
+    </section>
+  {/if}
   {#snippet dbBlock(kind: DbKind)}
     {@const d = data[kind]}
     <h2>{t(kind === "cards" ? "settings.dataCards" : "settings.dataReading")}</h2>
@@ -2000,11 +2032,132 @@
   .sec:hover {
     background: var(--surface-2);
   }
-  /* the last place in the list, the size of the others, with nothing to show */
+  /* the last place in the list: the console for keeping devices in step */
   .door {
     margin-top: auto;
-    opacity: 0;
-    cursor: default;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    letter-spacing: 0.12em;
+    font-size: 12.5px;
+    color: var(--text-2);
+  }
+  .door .lamp {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-3);
+  }
+  .door .lamp.ok {
+    background: #22b45a;
+  }
+  .door .lamp.bad {
+    background: #e0453a;
+  }
+  /* the look of the Reading page, chosen from pictures of it */
+  .looks {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    gap: 10px;
+    padding: 4px 0 6px;
+  }
+  .lookpick {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 4px;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius);
+    font: inherit;
+    font-size: 12.5px;
+    color: inherit;
+    cursor: pointer;
+    text-align: center;
+  }
+  .lookpick:hover {
+    background: var(--surface-2);
+  }
+  .lookcover {
+    position: relative;
+    width: 72px;
+    height: 96px;
+    border-radius: 3px 8px 8px 3px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.25), 0 6px 12px -6px rgb(0 0 0 / 0.4);
+    display: block;
+  }
+  .lookpick.on .lookcover {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .lookcover.plain {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 10px;
+  }
+  .lookcover.plain i {
+    display: block;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--text-3);
+    opacity: 0.45;
+  }
+  .lookcover.plain i:first-child {
+    width: 62%;
+    height: 7px;
+    background: var(--text);
+    opacity: 0.8;
+  }
+  .lookcover.plain i:last-child {
+    width: 40%;
+  }
+  .looktitle {
+    position: absolute;
+    top: 10%;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 17px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+  }
+  .lookcover.cloth .looktitle {
+    color: #e9cf8b;
+    font-family: "Songti SC", "Noto Serif CJK SC", SimSun, serif;
+    top: 16%;
+  }
+  .lookcover.thread {
+    border-radius: 8px 3px 3px 8px;
+  }
+  .lookcover.thread .looktitle {
+    left: 12%;
+    right: auto;
+    top: 8%;
+    writing-mode: vertical-rl;
+    font-size: 13px;
+    padding: 5px 3px;
+    background: #f7f1e1;
+    color: #221a14;
+    border: 1px solid rgb(0 0 0 / 0.6);
+    text-shadow: none;
+    letter-spacing: 0.1em;
+  }
+  .lookcover.poster .looktitle {
+    text-align: left;
+    left: 14%;
+    font-weight: 800;
+    text-shadow: none;
+    color: var(--cv-ink);
   }
   .sec.on {
     background: var(--surface-3);

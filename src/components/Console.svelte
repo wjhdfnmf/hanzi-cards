@@ -67,6 +67,7 @@
     "  ip                     this computer's local and public addresses",
     "  sync                   send what is new here, take what is new there",
     ...(ios ? [] : ["  online | offline       (server) listen for your devices, or stop"]),
+    "  auto on | off          (client) sync by itself when the app opens and closes",
     "  forget                 undo the setup on this device (your cards stay)",
     "  clear | exit",
   ];
@@ -111,6 +112,7 @@
           if (s.pending) await say("waiting    a device has left changes: type `sync` to take them in", "ok");
         } else {
           await say(`server     ${s.address}`);
+          await say(`automatic  ${s.automatic ? "yes: when the app opens and closes" : "no (type `auto on`)"}`);
         }
         await say(`last sync  ${when(s.lastSync)}${s.generation ? `  (box #${s.generation})` : ""}`);
         return;
@@ -181,6 +183,14 @@
           `  here now   ${r.cards.toLocaleString()} cards · ${r.reviews.toLocaleString()} answers · ${r.stories.toLocaleString()} stories`,
         ]);
         return;
+      }
+      case "auto": {
+        const on = args[0]?.toLowerCase();
+        if (on !== "on" && on !== "off") return say("auto on | off", "err");
+        const s = await api.syncSetAutomatic(on === "on");
+        await refreshStatus();
+        if (s.role !== "client") return say("Only a client syncs by itself: the server is where the others sync to.", "dim");
+        return say(s.automatic ? "● syncing by itself when the app opens and closes" : "○ syncing only when asked", s.automatic ? "ok" : "dim");
       }
       case "online":
       case "offline": {

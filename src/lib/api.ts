@@ -547,6 +547,8 @@ export interface StoryInfo {
   chars: number;
   preview: string;
   bookmarked: boolean;
+  /** Marked as read by the learner. */
+  read: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -560,6 +562,7 @@ export interface Story {
   vocab: string;
   position: number;
   bookmarked: boolean;
+  read: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -708,6 +711,7 @@ export const api = {
   /** Take back the latest answer (only that one) so it can be answered again. */
   undoAnswer: (cardId: number, direction: Direction) => invoke<void>("undo_answer", { cardId, direction }),
   bookmarkStory: (id: number, on: boolean) => invoke<void>("bookmark_story", { id, on }),
+  markStoryRead: (id: number, on: boolean) => invoke<void>("mark_story_read", { id, on }),
   getStats: (filter: StatsFilter) => invoke<Stats>("get_stats", { filter }),
   /** Time spent on the Reading or AI Tutor page, reported a little at a time. */
   logStudyTime: (kind: "reading" | "tutor", seconds: number) => invoke<void>("log_study_time", { kind, seconds }),

@@ -281,6 +281,8 @@ pub struct Runtime {
     pending: Arc<AtomicBool>,
     /// One sync at a time.
     busy: Mutex<()>,
+    /// The window was closed and the app goes when its last sync is done.
+    leaving: AtomicBool,
 }
 
 impl Runtime {
@@ -653,7 +655,43 @@ pub fn sync_on_leaving(app: &AppHandle) {
     });
 }
 
-/// One sync, start to finish (the console, the side bar's button, a phone opening or left).
+/// A computer's window being closed. A client that syncs by itself sends what's new before
+/// the app goes: returns true when it has taken that on (the caller hides the window and
+/// leaves the app running), and the app then exits by itself when the sync is done, or has
+/// failed (a server that can't be reached is given up on within seconds). Opened again
+/// meanwhile, it stays (`stay`).
+#[cfg_attr(mobile, allow(dead_code))]
+pub fn sync_on_closing(app: &AppHandle) -> bool {
+    let Ok(dir) = dir_of(app) else { return false };
+    let config = load_config(&dir);
+    if config.role != "client" || config.manual {
+        return false;
+    }
+    let state = app.state::<AppState>();
+    if state.sync.leaving.swap(true, Ordering::SeqCst) {
+        return true; // (already on its way out)
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        // (a sync already under way is let finish first: the app doesn't go in the middle of one)
+        drop(app.state::<AppState>().sync.busy.lock());
+        if let Err(e) = sync_blocking(&app) {
+            eprintln!("sync on closing: {e}");
+        }
+        if app.state::<AppState>().sync.leaving.load(Ordering::SeqCst) {
+            app.exit(0);
+        }
+    });
+    true
+}
+
+/// The app was opened again while it was on its way out: it stays.
+#[cfg_attr(mobile, allow(dead_code))]
+pub fn stay(app: &AppHandle) {
+    app.state::<AppState>().sync.leaving.store(false, Ordering::SeqCst);
+}
+
+/// One sync, start to finish (the console, the side bar's button, opening, leaving or closing).
 fn sync_blocking(app: &AppHandle) -> AppResult<Report> {
     {
         let dir = dir_of(app)?;

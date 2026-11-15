@@ -41,7 +41,7 @@ short story), after two short study sessions.</sub>
 
 ## Contents
 
-[What it does](#what-it-does) · [Stack](#stack) · [Data safety](#data-safety) · [Security](#security) ·
+[What it does](#what-it-does) · [Keeping devices in step](#keeping-your-devices-in-step-link) · [Stack](#stack) · [Data safety](#data-safety) · [Security](#security) ·
 [How tone checking was built and measured](#how-tone-checking-was-built-and-measured) ·
 [Develop](#develop) · [Layout](#layout) · [Licence](#licence)
 
@@ -94,9 +94,10 @@ short story), after two short study sessions.</sub>
 - **Reading**: stories in nested collections (type them, or import text files or a whole folder), shown as
   a plain list or as book covers (illustrated, cloth & gilt, thread-bound 线装, or poster: Settings › Reading), with
   bookmarks and a full-screen view; **Read aloud** reads a story a sentence at a time and marks the
-  sentence being read (and the word, where the voice reports it), starting from the selection if text is selected; a word that isn't a card yet can be made one from its hover note; export a
+  sentence being read (and the word, where the voice reports it), starting from the selection or from a
+  word you clicked; stories can be marked as read, which shows on their covers; a word that isn't a card yet can be made one from its hover note; export a
   story or a whole collection as plain text files, to keep or to share with other learners (importing
-  them gives the same stories back); hover a word for its pinyin and meaning; choose the typeface (free Chinese fonts can be downloaded), size and
+  them gives the same stories back); click a word for its pinyin and meaning; choose the typeface (free Chinese fonts can be downloaded), size and
   spacing. Stories are kept in a database of their own
 - **Dictionary**: CC-CEDICT (~120k entries), searchable by characters, pinyin (with or without tones) or English; one click adds a word as a card. The card editor auto-fills pinyin and meaning from it
 
@@ -119,6 +120,37 @@ short story), after two short study sessions.</sub>
   the words you forget most. Settings › Your data can start the statistics over (after a backup;
   cards and their due dates stay). Time with a story open or in a tutor conversation is counted with flashcard time (only while the
   window is in front and in use)
+
+### Keeping your devices in step (LINK)
+
+Cards, decks, study progress, statistics and stories can be kept the same on several computers and
+on an iPhone (the iPhone app is built from this code with Xcode; it is not in the App Store). Nothing goes through anyone else's service: one of your own
+devices, or a small server program you run yourself, holds the shared copy.
+
+- **Set-up** is in a console: Settings › **LINK**, at the bottom of the list. On the device that
+  will hold the shared copy type `host`; it shows a pairing code. On each other device type
+  `join <address> <code>`. `ip` lists the host's addresses, `ping` checks the connection, `status` and
+  `help` say the rest.
+- **Syncing** is one step, `sync` in the console or the button that appears above "Collapse" in the
+  side bar: what is new here goes out, what is new elsewhere comes in. The side bar also shows a
+  light for the connection, and on the host a switch to stop or start listening. A device that
+  joined another **syncs by itself** when the app opens and when it closes (Settings › Your data, or
+  `auto off` in the console, turns that off).
+- **When two devices both changed something**, the latest of each is kept: the most recent edit
+  of a card or story, every answer from every device, the schedule from whichever device reviewed a
+  word last, and each device's own reading time. Deleted things stay deleted unless they were edited
+  afterwards. The same deck or story made separately on two devices becomes one.
+- **Safe by construction.** The data is encrypted on the device (XChaCha20-Poly1305) before it
+  leaves, so the host only stores a sealed box; the connection is TLS 1.3 to a certificate pinned by
+  the pairing code; the keys are kept in the system keychain. Before anything from another device is
+  written in, both databases are checked and backed up, and a sync is refused, with a message saying
+  why, if the other side's data is from a newer version of the app (update this device first) or the
+  clocks disagree by more than five minutes.
+- **A server on its own**: `hanzi-sync-server`, for a computer that is always on. Releases carry
+  it for Windows, Linux and macOS (or `cargo build --release` in `sync/`). It never has the key to the
+  data it stores.
+
+The pairing code is a password: anyone who has it can read and change your cards.
 
 ### Your data, language and looks
 
@@ -278,6 +310,14 @@ npm run check          # type-check the front end
 cd src-tauri && cargo test   # Rust unit tests (scheduler, cards, study, stats, dictionary, data safety, input checks…)
 ```
 
+### Checks on every change
+
+`.github/workflows/ci.yml` runs on every push to `main` (and on pull requests): the page's type
+check, the sync crate's tests, the app's tests on Linux, Windows and macOS, and a compile of the app
+for iPhone. It is what lets work on one platform go on without quietly breaking another: a change is
+ready when all of them are green. Code that only one platform has sits behind `#[cfg(...)]` in Rust
+and behind `device` checks in the page, never in a branch of its own for long.
+
 ### GPU (optional, NVIDIA)
 
 With the CUDA Toolkit installed, `scripts/dev-gpu.ps1` runs the app with Whisper on the graphics card
@@ -411,4 +451,4 @@ Hanzi Cards' own code is under the [MIT licence](LICENSE). The data below keeps 
 ## Roadmap ideas
 
 Stroke-order animation and handwriting practice (Make Me a Hanzi data), example sentences (Tatoeba),
-character decomposition, bundled HSK 3.0 word lists, sentence segmentation (`jieba-rs`), sync.
+character decomposition, bundled HSK 3.0 word lists, sentence segmentation (`jieba-rs`).

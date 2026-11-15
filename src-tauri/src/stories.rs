@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 pub const DB_FILE: &str = "stories.db";
 
 /// The version `init` brings a reading database to.
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 5;
 
 const SCHEMA_V1: &str = "
 CREATE TABLE IF NOT EXISTS story_folders (
@@ -86,6 +86,14 @@ fn init(conn: Connection) -> rusqlite::Result<Connection> {
         let tx = conn.unchecked_transaction()?;
         crate::sync_data::upgrade_stories(&tx)?;
         tx.execute_batch("PRAGMA user_version = 4")?;
+        tx.commit()?;
+    }
+    if version < 5 {
+        // v5: a story can be marked as read.
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch("ALTER TABLE stories ADD COLUMN was_read INTEGER NOT NULL DEFAULT 0;")?;
+        crate::sync_data::story_triggers(&tx, true)?;
+        tx.execute_batch("PRAGMA user_version = 5")?;
         tx.commit()?;
     }
     // which version of the app last used it: what an older version is told if it meets it
@@ -168,6 +176,8 @@ pub struct StoryInfo {
     /// Sort order in its collection (then by title).
     pub position: i64,
     pub bookmarked: bool,
+    /// Marked as read by the learner.
+    pub read: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -183,6 +193,7 @@ pub struct Story {
     pub vocab: String,
     pub position: i64,
     pub bookmarked: bool,
+    pub read: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -340,13 +351,14 @@ pub fn list_stories(conn: &Connection, folder: Option<i64>) -> AppResult<Vec<Sto
                 updated_at: r.get(5)?,
                 position: r.get(6)?,
                 bookmarked: r.get(7)?,
+                read: r.get(8)?,
                 chars: 0,
                 preview: String::new(),
             },
             r.get(3)?,
         ))
     };
-    const COLS: &str = "SELECT id, folder_id, title, body, created_at, updated_at, position, bookmarked FROM stories";
+    const COLS: &str = "SELECT id, folder_id, title, body, created_at, updated_at, position, bookmarked, was_read FROM stories";
     let rows: Vec<(StoryInfo, String)> = match folder {
         None => conn.prepare(COLS)?.query_map([], map)?.collect::<Result<_, _>>()?,
         Some(f) => {
@@ -387,9 +399,18 @@ pub fn set_bookmark(conn: &Connection, id: i64, on: bool) -> AppResult<()> {
     Ok(())
 }
 
+/// Mark a story as read, or as not read.
+pub fn set_read(conn: &Connection, id: i64, on: bool) -> AppResult<()> {
+    let n = conn.execute("UPDATE stories SET was_read = ?2 WHERE id = ?1", rusqlite::params![id, on])?;
+    if n == 0 {
+        return Err(AppError::msg("That story doesn't exist"));
+    }
+    Ok(())
+}
+
 pub fn get_story(conn: &Connection, id: i64) -> AppResult<Story> {
     conn.query_row(
-        "SELECT id, folder_id, title, body, created_at, updated_at, vocab, position, bookmarked FROM stories WHERE id = ?1",
+        "SELECT id, folder_id, title, body, created_at, updated_at, vocab, position, bookmarked, was_read FROM stories WHERE id = ?1",
         [id],
         |r| {
             Ok(Story {
@@ -402,6 +423,7 @@ pub fn get_story(conn: &Connection, id: i64) -> AppResult<Story> {
                 vocab: r.get(6)?,
                 position: r.get(7)?,
                 bookmarked: r.get(8)?,
+                read: r.get(9)?,
             })
         },
     )

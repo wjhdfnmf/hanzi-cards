@@ -5,6 +5,10 @@
 //!
 //!     hanzi-sync-server [--dir <folder>] [--port <n>] [--bind <address>] [--new-code]
 //!
+//! Without --dir, the server keeps its files in one fixed place for this user (see `home`),
+//! wherever the program is started from and whichever version of it is run: that folder is
+//! the server's identity, and as long as it is kept the pairing code stays the same.
+//!
 //! The first run makes the server's certificate and prints its code, once. Give that code to
 //! the first device (`join <address> <code>` in the app's console); that device then shows the
 //! full code for the others. `--new-code` throws the old code away and prints a new one.
@@ -43,6 +47,29 @@ fn show_code(identity: &Identity, auth: [u8; 16]) {
     println!("That device then shows the full code for your other devices.\n");
 }
 
+/// Where the server keeps its certificate, the check for its password and the boxes, unless
+/// told otherwise. An upgrade must find what the version before it left, so this never
+/// depends on the folder the program happens to be started in:
+/// - a `hanzi-sync-data` folder in the current folder, if an earlier version made one there
+///   (that was the default before; it is still honoured)
+/// - else Windows: %APPDATA%\hanzi-sync-server; macOS: ~/Library/Application Support/
+///   hanzi-sync-server; elsewhere: $XDG_DATA_HOME or ~/.local/share, /hanzi-sync-server
+fn home() -> PathBuf {
+    let here = PathBuf::from("hanzi-sync-data");
+    if here.join("server.json").exists() {
+        return here;
+    }
+    let var = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty()).map(PathBuf::from);
+    let base = if cfg!(windows) {
+        var("APPDATA")
+    } else if cfg!(target_os = "macos") {
+        var("HOME").map(|h| h.join("Library").join("Application Support"))
+    } else {
+        var("XDG_DATA_HOME").or_else(|| var("HOME").map(|h| h.join(".local").join("share")))
+    };
+    base.map(|b| b.join("hanzi-sync-server")).unwrap_or(here)
+}
+
 fn main() {
     if let Err(e) = run() {
         eprintln!("hanzi-sync-server: {e}");
@@ -51,7 +78,7 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let mut dir = PathBuf::from("hanzi-sync-data");
+    let mut dir = home();
     let mut port = DEFAULT_PORT;
     let mut bind = "0.0.0.0".to_string();
     let mut new_code = false;
@@ -103,6 +130,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let on_put: hanzi_sync::net::OnPut = Arc::new(|generation| println!("box {generation} received"));
     let server = Server::start(&identity, auth_hash, store, format!("{bind}:{port}").parse()?, Some(on_put))?;
     println!("listening on {} (certificate {}…); box {generation}, {size} bytes", server.addr, hex(&identity.fingerprint()[..4]));
+    println!("files in {} (keep this folder: it is the server's identity, and with it the pairing code stays the same)", dir.display());
     println!("Ctrl+C to stop.");
     loop {
         std::thread::park();

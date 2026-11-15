@@ -1275,6 +1275,11 @@ pub fn bookmark_story(state: State<AppState>, id: i64, on: bool) -> AppResult<()
 }
 
 #[tauri::command]
+pub fn mark_story_read(state: State<AppState>, id: i64, on: bool) -> AppResult<()> {
+    stories::set_read(&lock_stories(&state), id, on)
+}
+
+#[tauri::command]
 pub fn story_total(state: State<AppState>) -> AppResult<i64> {
     stories::total(&lock_stories(&state))
 }

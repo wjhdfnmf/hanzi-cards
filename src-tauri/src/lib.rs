@@ -105,6 +105,9 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
         if let Some(window) = app.get_webview_window("main") {
+            // (it may be hidden, finishing a sync after being closed: then it stays open after all)
+            sync::stay(app);
+            let _ = window.show();
             let _ = window.unminimize();
             let _ = window.set_focus();
         }
@@ -122,6 +125,15 @@ pub fn run() {
                     let _ = _window.emit("app-resumed", ());
                 }
                 _ => {}
+            }
+            // A computer: the window closed. A client that syncs by itself sends what's new
+            // first: the window goes at once, the app a moment later (sync.rs, sync_on_closing).
+            #[cfg(desktop)]
+            if let tauri::WindowEvent::CloseRequested { api, .. } = _event {
+                if _window.label() == "main" && sync::sync_on_closing(_window.app_handle()) {
+                    api.prevent_close();
+                    let _ = _window.hide();
+                }
             }
         })
         .setup(|app| {
@@ -249,6 +261,7 @@ pub fn run() {
             commands::kokoro_remove,
             commands::undo_answer,
             commands::bookmark_story,
+            commands::mark_story_read,
             commands::log_study_time,
             commands::reset_statistics,
             commands::reset_progress,
