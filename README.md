@@ -123,6 +123,21 @@ is built with Xcode and put on your own phone ([docs/building-for-iphone.md](doc
   spacing. Stories are kept in a database of their own
 - **Dictionary**: CC-CEDICT (~120k entries), searchable by characters, pinyin (with or without tones) or English; one click adds a word as a card. The card editor auto-fills pinyin and meaning from it
 
+**Getting a MiniMax key (for stories read in a MiniMax voice).** MiniMax is a paid service, used with
+an account and a key of your own:
+
+1. Make an account at <https://platform.minimax.io/>.
+2. Add money to it: *Billing › Balance*. This is pay-as-you-go: speech is charged by the character
+   (the app shows an estimate before anything is made). When this was written the smallest amount
+   that could be added was $25.
+3. Make a key: *API Keys › Create new secret key* (the pay-as-you-go kind, not the subscription key
+   of the M Plan).
+4. In Hanzi Cards: Settings › Audio › *Stories read aloud by MiniMax*, paste the key and press
+   **Check & save**. The key is kept in the system keychain.
+
+A key from `platform.minimax.io` is for MiniMax's international service, which is what the app uses
+unless *MiniMax service and voice ID* in the same place is changed to the mainland China one.
+
 ### AI conversation tutor
 
 - **AI conversation tutor** (optional, needs your own Anthropic API key): a spoken role-play with Claude
