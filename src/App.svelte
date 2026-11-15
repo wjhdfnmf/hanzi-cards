@@ -94,8 +94,17 @@
       if (!sync.status?.role || sync.busy) return;
       const s = await refreshStatus(); // (server: has a device left changes?)
       if (s?.role === "client" && ++n % 3 === 0) ping().catch(() => {});
+      // the server takes in what a device has left as soon as it can (not during a session)
+      if (s?.role === "server" && s.pending) syncOnOpen();
     }, 20_000);
   }
+  // A study session just ended: what was studied goes out (and what is waiting comes in).
+  let wasStudying = false;
+  $effect(() => {
+    const now = sync.studying;
+    if (wasStudying && !now) syncOnOpen();
+    wasStudying = now;
+  });
   async function syncClicked() {
     try {
       showToast(summary(await syncNow()));

@@ -27,7 +27,7 @@ The phone build is the same app, not a copy:
 | Keeping devices the same | server or client | client only (iOS stops a background app listening) |
 | GPU libraries | NVIDIA download | not offered |
 
-Device sync stays where it is on every platform: behind the hidden door in Settings.
+Device sync (LINK) is a page of its own in Settings on the phone, and a console on a computer: see `docs/link.md`.
 
 ## Layout on a phone (narrower than 640 px)
 

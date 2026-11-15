@@ -15,6 +15,7 @@
   import { t } from "../lib/i18n.svelte";
   import { intervalLabel, durationLabel, pct } from "../lib/format";
   import { goto, nav } from "../lib/nav.svelte";
+  import { sync } from "../lib/sync.svelte";
   import { settings, saveSetting } from "../lib/settings.svelte";
   import { playClip, speak, stopClip, stopSpeaking } from "../lib/speech";
   import { voice } from "../lib/voice.svelte";
@@ -35,6 +36,11 @@
   const PREF_KEY = "study-selection";
 
   let phase = $state<Phase>("setup");
+  // (keeping devices in step waits for a session to be over, and its summary left, before it
+  // merges anything in: taking changes in starts this page afresh)
+  $effect(() => {
+    sync.studying = phase !== "setup";
+  });
   // On a phone a session has the whole width: the side bar slides away until it's over.
   $effect(() => {
     if (phase === "setup") showRail();

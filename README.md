@@ -2,7 +2,8 @@
 
 A desktop app for learning Mandarin Chinese (Simplified): flash cards with spaced repetition, spoken
 answers checked on your own computer, graded reading, a dictionary and statistics. Free and open
-source, for Windows, macOS and Linux. Your cards, recordings and study history stay on your computer.
+source, for Windows, macOS and Linux, with an iPhone app built from the same code (not yet in the App
+Store). Your cards, recordings and study history stay on your computer.
 
 ![Studying in the Indigo theme: a card's answer, with each character and its pinyin coloured by tone, and the Wrong / Right buttons](docs/images/study.png)
 
@@ -13,7 +14,7 @@ source, for Windows, macOS and Linux. Your cards, recordings and study history s
 | | File | Notes |
 |---|---|---|
 | Windows 10/11 | `Hanzi.Cards_<version>_x64-setup.exe` | Installs for your account, no administrator prompt. Not code-signed: *More info → Run anyway* |
-| macOS 13+ | `…_aarch64.dmg` (Apple Silicon), `…_x64.dmg` (Intel) | Not signed with an Apple certificate: *Privacy & Security → Open Anyway*. **Not yet tested on a Mac** |
+| macOS 13+ | `…_aarch64.dmg` (Apple Silicon), `…_x64.dmg` (Intel) | Not signed with an Apple certificate: *Privacy & Security → Open Anyway* |
 | Debian, Ubuntu, Mint | `…_amd64.deb` | `sudo apt install ./Hanzi.Cards_<version>_amd64.deb` |
 | Fedora, openSUSE | `…x86_64.rpm` | `sudo dnf install ./Hanzi.Cards-<version>-1.x86_64.rpm` |
 | Arch | [`packaging/arch`](packaging/arch) | `makepkg -si` |
@@ -39,9 +40,30 @@ and when you want them. The AI tutor is optional and needs your own Anthropic AP
 <sub>The screenshots show a new install with what it comes with (the twelve-word starter deck and one
 short story), after two short study sessions.</sub>
 
+## On iPhone
+
+![Hanzi Cards on an iPhone: the Study page, a card's answer, the starter deck, a story with a word's note open, and Statistics](docs/images/iphone/overview.png)
+
+The same app runs on an iPhone, from the same code. **It is not in the App Store yet**: for now it
+is built with Xcode and put on your own phone ([docs/building-for-iphone.md](docs/building-for-iphone.md)).
+
+- **Everything you study with**: decks and cards, the study session with all its directions,
+  Reading with word notes and key vocabulary, the dictionary, statistics, and all sixteen themes,
+  laid out for a phone (a narrow rail for the pages, lists that open into detail screens).
+- **Apple's own speech**: Chinese voices for reading aloud, and spoken answers checked by the
+  phone's speech recognition, on the device.
+- **LINK** (Settings › LINK): pair the phone with your computer and it syncs by itself when the app
+  opens, after a study session and when you leave it, so a session on the train is on the computer
+  when you sit down. A phone is always a client: the shared copy lives on a computer or a server.
+- **Siri**: "Start studying" opens a session.
+- **Not on the phone, for now**: the AI tutor, Whisper and tone checking by pitch, the built-in Kokoro
+  voice, and choosing files and folders for your data (backups and restore are there).
+
+![The iPhone app in six of its themes](docs/images/iphone/themes.png)
+
 ## Contents
 
-[What it does](#what-it-does) · [Keeping devices in step](#keeping-your-devices-in-step-link) · [Stack](#stack) · [Data safety](#data-safety) · [Security](#security) ·
+[On iPhone](#on-iphone) · [What it does](#what-it-does) · [Keeping devices in step](#keeping-your-devices-in-step-link) · [Stack](#stack) · [Data safety](#data-safety) · [Security](#security) ·
 [How tone checking was built and measured](#how-tone-checking-was-built-and-measured) ·
 [Develop](#develop) · [Layout](#layout) · [Licence](#licence)
 
@@ -133,9 +155,10 @@ devices, or a small server program you run yourself, holds the shared copy.
   `help` say the rest.
 - **Syncing** is one step, `sync` in the console or the button that appears above "Collapse" in the
   side bar: what is new here goes out, what is new elsewhere comes in. The side bar also shows a
-  light for the connection, and on the host a switch to stop or start listening. A device that
-  joined another **syncs by itself** when the app opens and when it closes (Settings › Your data, or
-  `auto off` in the console, turns that off).
+  light for the connection, and on the host a switch to stop or start listening. Every device
+  **syncs by itself** when the app opens, when a study session ends and when it closes, and the host
+  also when another device leaves changes, so the host is always up to date (Settings › Your data, or
+  `auto off` in the console, turns that off). Nothing is merged in during a study session.
 - **When two devices both changed something**, the latest of each is kept: the most recent edit
   of a card or story, every answer from every device, the schedule from whichever device reviewed a
   word last, and each device's own reading time. Deleted things stay deleted unless they were edited
@@ -364,7 +387,7 @@ Only the Microsoft Store avoids the warning entirely.
 macOS build › Run workflow, with a release's tag to add them to that release; or
 `gh workflow run macos.yml --ref main -f tag=v<version>`). They are ad-hoc
 signed: on first open, macOS asks for **Open Anyway** in System Settings › Privacy & Security.
-The Mac build has not been tested on a Mac yet; see [docs/building-for-mac.md](docs/building-for-mac.md).
+Version 0.4.1 was tested on a Mac by hand (2026-11-14) and works; see [docs/building-for-mac.md](docs/building-for-mac.md).
 
 ### Linux packages
 

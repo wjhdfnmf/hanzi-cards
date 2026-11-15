@@ -42,7 +42,7 @@ jobs:
             target: x86_64-apple-darwin
             exe: hanzi-sync-server
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
@@ -67,7 +67,7 @@ jobs:
           cp "sync/target/${{ matrix.target }}/release/${{ matrix.exe }}" "out/hanzi-sync-server-${{ matrix.name }}$ext"
           ls -la out
       - name: Keep the program with the run
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hanzi-sync-server-${{ matrix.name }}
           path: out/*

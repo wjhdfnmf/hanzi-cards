@@ -1475,13 +1475,15 @@
   {/if}
 
   {#if section === "data"}
-  {#if !ios && sync.status?.role === "client"}
+  {#if !ios && sync.status?.role}
     <h2>{t("settings.link")}</h2>
     <section class="group card-surface">
       <label class="row">
         <span>
           {t("link.automatic")}
-          <small class="faint block">{t("link.automaticDesktop", { address: sync.status.address })}</small>
+          <small class="faint block"
+            >{sync.status.role === "server" ? t("link.automaticServer") : t("link.automaticDesktop", { address: sync.status.address })}</small
+          >
         </span>
         <input type="checkbox" class="toggle" checked={sync.status.automatic} onchange={(e) => linkAutomatic(e.currentTarget.checked)} />
       </label>

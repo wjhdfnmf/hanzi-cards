@@ -4,8 +4,9 @@ Written 2026-11-12; updated 2026-11-13 after the first builds.
 
 **Where it stands:** the build works. `.github/workflows/macos.yml` builds the app for Apple
 Silicon and Intel on GitHub (about 10 minutes), ad-hoc signed, and the 0.3.1 release has both
-disk images. **Nobody has run the app on a Mac yet**: the test list below is the next step,
-and everything in "What will behave differently" is still a prediction.
+disk images. **Version 0.4.1 was run on a Mac by hand on 2026-11-14 and works.** The test list
+below and "What will behave differently" were written before that, as predictions: they have not
+been gone through item by item against what was seen.
 
 For a release: Actions › macOS build › Run workflow, with the release's tag. (0.3.1 was tagged
 before the macOS settings were in the code, so its images were built with `ref` set to `main`.)

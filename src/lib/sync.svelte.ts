@@ -13,6 +13,8 @@ export const sync = $state({
   /** Goes up when a sync brought something in: the pages reload their data. */
   epoch: 0,
   consoleOpen: false,
+  /** A study session is under way (the Study page says so): nothing is merged in meanwhile. */
+  studying: false,
 });
 
 export async function refreshStatus(): Promise<SyncStatus | null> {
@@ -80,7 +82,7 @@ export async function syncNow(): Promise<SyncReport> {
  *  when something came in. (Leaving is handled without the page: sync.rs, sync_on_leaving.) */
 export async function syncIfAutomatic(): Promise<{ text: string; warn: boolean } | null> {
   const s = await refreshStatus();
-  if (s?.role !== "client" || !s.automatic || sync.busy) return null;
+  if (!s?.role || !s.automatic || sync.busy || sync.studying) return null;
   try {
     const r = await syncNow();
     return any(r.received) ? { text: `In: ${describe(r.received)}.`, warn: false } : null;

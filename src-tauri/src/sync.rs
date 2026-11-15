@@ -210,7 +210,7 @@ pub struct Config {
     pub fingerprint: String,
     pub last_sync: i64,
     pub last_generation: u64,
-    /// client: sync only when asked (otherwise a phone syncs as it opens and as it's left)
+    /// sync only when asked (otherwise a device syncs as the app opens and as it's left or closed)
     pub manual: bool,
 }
 
@@ -426,7 +426,9 @@ fn status_of(runtime: &Runtime, app_data: &Path) -> Status {
         online: runtime.listening(),
         pending: config.role == "server" && runtime.pending.load(Ordering::Relaxed),
         local_address: if config.role == "server" { local_address() } else { None },
-        automatic: config.role == "client" && !config.manual,
+        // (a client with its server; the server with its own shelf, so that what it holds and
+        // what the others fetch are the same)
+        automatic: !config.role.is_empty() && !config.manual,
         role: config.role,
         address: config.address,
         port: config.port,
@@ -644,7 +646,7 @@ pub async fn sync_set_automatic(app: AppHandle, on: bool) -> AppResult<Status> {
 pub fn sync_on_leaving(app: &AppHandle) {
     let Ok(dir) = dir_of(app) else { return };
     let config = load_config(&dir);
-    if config.role != "client" || config.manual {
+    if config.role.is_empty() || config.manual {
         return;
     }
     let app = app.clone();
@@ -664,7 +666,7 @@ pub fn sync_on_leaving(app: &AppHandle) {
 pub fn sync_on_closing(app: &AppHandle) -> bool {
     let Ok(dir) = dir_of(app) else { return false };
     let config = load_config(&dir);
-    if config.role != "client" || config.manual {
+    if config.role.is_empty() || config.manual {
         return false;
     }
     let state = app.state::<AppState>();
