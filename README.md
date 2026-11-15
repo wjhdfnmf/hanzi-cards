@@ -14,7 +14,7 @@ Store). Your cards, recordings and study history stay on your computer.
 | | File | Notes |
 |---|---|---|
 | Windows 10/11 | `Hanzi.Cards_<version>_x64-setup.exe` | Installs for your account, no administrator prompt. Not code-signed: *More info → Run anyway* |
-| macOS 13+ | `…_aarch64.dmg` (Apple Silicon), `…_x64.dmg` (Intel) | Not signed with an Apple certificate: *Privacy & Security → Open Anyway* |
+| macOS 13+ | `…_aarch64.dmg` (Apple Silicon), `…_x64.dmg` (Intel) | Signed and notarized by Apple: opens with a double-click |
 | Debian, Ubuntu, Mint | `…_amd64.deb` | `sudo apt install ./Hanzi.Cards_<version>_amd64.deb` |
 | Fedora, openSUSE | `…x86_64.rpm` | `sudo dnf install ./Hanzi.Cards-<version>-1.x86_64.rpm` |
 | Arch | [`packaging/arch`](packaging/arch) | `makepkg -si` |
@@ -385,8 +385,9 @@ Only the Microsoft Store avoids the warning entirely.
 
 `.github/workflows/macos.yml` builds disk images for Apple Silicon and Intel on GitHub (Actions ›
 macOS build › Run workflow, with a release's tag to add them to that release; or
-`gh workflow run macos.yml --ref main -f tag=v<version>`). They are ad-hoc
-signed: on first open, macOS asks for **Open Anyway** in System Settings › Privacy & Security.
+`gh workflow run macos.yml --ref main -f tag=v<version>`). They are signed with a
+Developer ID certificate and notarized by Apple (the workflow does both when the repository has the
+signing secrets, and builds ad-hoc signed without them), so they open with a double-click.
 Version 0.4.1 was tested on a Mac by hand (2026-11-14) and works; see [docs/building-for-mac.md](docs/building-for-mac.md).
 
 ### Linux packages
