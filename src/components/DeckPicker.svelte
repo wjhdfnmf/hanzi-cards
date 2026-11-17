@@ -4,7 +4,16 @@
   import type { Deck } from "../lib/api";
   import { t } from "../lib/i18n.svelte";
 
-  let { decks, selected = $bindable() }: { decks: Deck[]; selected: number[] } = $props();
+  let {
+    decks,
+    selected = $bindable(),
+    allLabel,
+  }: {
+    decks: Deck[];
+    selected: number[];
+    /** What to say when nothing is ticked (the Study page's words unless given). */
+    allLabel?: string;
+  } = $props();
 
   /** The deck whose subdecks are shown (null = top level). */
   let level = $state<number | null>(null);
@@ -54,7 +63,7 @@
 <div class="picker">
   <div class="summary">
     {#if selected.length === 0}
-      <span class="muted small">{t("picker.studyingAll")}</span>
+      <span class="muted small">{allLabel ?? t("picker.studyingAll")}</span>
     {:else}
       {#each selected as id (id)}
         {@const d = byId.get(id)}

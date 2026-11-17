@@ -25,9 +25,12 @@ pub const TIME_KINDS: [&str; 2] = ["reading", "tutor"];
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatsFilter {
-    /// A deck with its subdecks; none = everything.
+    /// A deck with its subdecks; none = everything. (One deck: `deck_ids` takes several.)
     #[serde(default)]
     pub deck_id: Option<i64>,
+    /// Decks, each with its subdecks; empty (and no `deck_id`) = everything.
+    #[serde(default)]
+    pub deck_ids: Vec<i64>,
     /// The last N days including today; none = all time.
     #[serde(default)]
     pub days: Option<i64>,
@@ -276,21 +279,11 @@ pub fn get_stats(conn: &Connection, filter: &StatsFilter) -> AppResult<Stats> {
     let today = local_day(t, off);
     let days = filter.days.map(|d| d.clamp(1, 3660));
     let direction = filter.direction.as_deref().filter(|d| !d.is_empty());
-    let deck = filter.deck_id;
-    let scoped = deck.is_some() || direction.is_some();
+    // the chosen decks (none = every deck)
+    let chosen: BTreeSet<i64> = filter.deck_ids.iter().copied().chain(filter.deck_id).collect();
+    let scoped = !chosen.is_empty() || direction.is_some();
 
-    // SQL for "this card is in the chosen deck" and "this word is"
-    let sub = decks::subtree_sql("?1");
-    let (card_in, word_in) = match deck {
-        Some(_) => (
-            format!("c.deck_id IN ({sub})"),
-            format!("c.hanzi IN (SELECT hanzi FROM cards WHERE deck_id IN ({sub}))"),
-        ),
-        None => ("?1 IS NULL".to_string(), "?1 IS NULL".to_string()),
-    };
-    let deck_param = || vec![deck.map(Value::Integer).unwrap_or(Value::Null)];
-
-    // ---------- decks: which group (a deck directly inside the chosen one) a card belongs to ----------
+    // ---------- decks: which group (a deck directly inside a chosen one) a card belongs to ----------
     let mut parent: HashMap<i64, Option<i64>> = HashMap::new();
     let mut deck_name: HashMap<i64, String> = HashMap::new();
     {
@@ -302,19 +295,44 @@ pub fn get_stats(conn: &Connection, filter: &StatsFilter) -> AppResult<Stats> {
         }
     }
     let group_of = |mut id: i64| -> Option<i64> {
-        // climb until the parent is the chosen deck (or there is none)
+        // climb until the parent is a chosen deck (or, with none chosen, there is no parent)
         for _ in 0..64 {
-            let p = parent.get(&id).copied().flatten();
-            if p == deck {
-                return Some(id);
+            if chosen.contains(&id) {
+                return Some(id); // a card directly in a chosen deck
             }
-            if deck == Some(id) {
-                return Some(id); // a card directly in the chosen deck
+            match parent.get(&id).copied().flatten() {
+                Some(p) if chosen.contains(&p) => return Some(id),
+                Some(p) => id = p,
+                None => return chosen.is_empty().then_some(id),
             }
-            id = p?;
         }
         None
     };
+
+    // SQL for "this card is in a chosen deck" and "this word is": the chosen decks with all
+    // that is inside them, by their ids (numbers of ours, so they go in the text as they are).
+    // (?1 stays in each, unused: the queries below number their other parameters from 2.)
+    let within = |mut id: i64| {
+        for _ in 0..64 {
+            if chosen.contains(&id) {
+                return true;
+            }
+            match parent.get(&id).copied().flatten() {
+                Some(p) => id = p,
+                None => return false,
+            }
+        }
+        false
+    };
+    let (card_in, word_in) = if chosen.is_empty() {
+        ("?1 IS NULL".to_string(), "?1 IS NULL".to_string())
+    } else {
+        let mut ids: Vec<i64> = parent.keys().copied().filter(|&id| within(id)).collect();
+        ids.sort_unstable();
+        let list = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+        (format!("(?1 IS NULL AND c.deck_id IN ({list}))"), format!("(?1 IS NULL AND c.hanzi IN (SELECT hanzi FROM cards WHERE deck_id IN ({list})))"))
+    };
+    let deck_param = || vec![Value::Null];
 
     // ---------- the words in scope ----------
     struct Word {
@@ -761,5 +779,18 @@ mod tests {
         assert_eq!(s.days.last().unwrap().reading_ms, 120_000);
         let s = get_stats(&conn, &StatsFilter { deck_id: Some(class), ..Default::default() }).unwrap();
         assert_eq!(s.today.reading_ms, 0, "not when a deck is chosen");
+
+        // several decks at once: each with what is inside it, a word counted once
+        // (图书馆 is in both and counts once, with its four answers; 银行 is the other word, with one)
+        let s = get_stats(&conn, &StatsFilter { deck_ids: vec![class, other], ..Default::default() }).unwrap();
+        assert_eq!((s.total_words, s.all_time.reviews), (2, 5));
+        let mut names: Vec<&str> = s.by_deck.iter().map(|d| d.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["Class 9", "Other"]);
+        // a subdeck alone is the same as its one deck; a deck that isn't there is nothing
+        let one = get_stats(&conn, &StatsFilter { deck_ids: vec![nine], ..Default::default() }).unwrap();
+        assert_eq!((one.total_words, one.all_time.reviews), (1, 4));
+        let none = get_stats(&conn, &StatsFilter { deck_ids: vec![987_654], ..Default::default() }).unwrap();
+        assert_eq!((none.total_words, none.all_time.reviews), (0, 0));
     }
 }

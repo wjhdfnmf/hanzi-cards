@@ -47,15 +47,14 @@ targets:
         LSRequiresIPhoneOS: true
         UILaunchStoryboardName: LaunchScreen
         UIRequiredDeviceCapabilities: [arm64, metal]
+        # Upright only: the app does not turn with the phone. (An iPad that doesn't offer
+        # every direction has to say it takes the whole screen.)
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
+        UIRequiresFullScreen: true
         CFBundleShortVersionString: 0.5.1
         CFBundleVersion: "0.5.1"
         NSMicrophoneUsageDescription: Hanzi Cards listens when you say an answer in Chinese, to check your pronunciation. Audio stays on this device.

@@ -120,8 +120,8 @@ export interface DayStat {
 
 /** What the Statistics page is looking at. */
 export interface StatsFilter {
-  /** A deck with its subdecks; null = everything. */
-  deckId: number | null;
+  /** Decks, each with its subdecks; empty = everything. */
+  deckIds: number[];
   /** The last N days including today; null = all time. */
   days: number | null;
   direction: Direction | null;

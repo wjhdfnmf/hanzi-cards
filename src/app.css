@@ -1959,8 +1959,12 @@ button {
   white-space: nowrap;
   transition: background 0.12s, border-color 0.12s;
 }
-.btn:hover {
-  background: var(--surface-2);
+/* (only where there is a pointer to hover with: on a touch screen "hover" stays on the button
+   last tapped, which left Show answer grey until something else was touched) */
+@media (hover: hover) {
+  .btn:hover {
+    background: var(--surface-2);
+  }
 }
 .btn:disabled {
   opacity: 0.5;
@@ -1971,15 +1975,19 @@ button {
   border-color: var(--accent);
   color: var(--accent-text);
 }
-.btn.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+@media (hover: hover) {
+  .btn.primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
 }
 .btn.ghost {
   border-color: transparent;
   background: transparent;
 }
-.btn.ghost:hover {
-  background: var(--surface-2);
+@media (hover: hover) {
+  .btn.ghost:hover {
+    background: var(--surface-2);
+  }
 }
 .btn.danger {
   color: var(--accent);
@@ -2206,14 +2214,20 @@ button.chip.on {
   color: var(--tone-5);
 }
 
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--surface-3);
-  border-radius: 10px;
-  border: 2px solid var(--bg);
+/* The app's own scroll bars, where there is a pointer to use them with. A touch screen keeps
+   the system's (which float over the page and fade): the drawn ones take a strip of the page
+   for themselves, and on an iPhone that strip was left behind, white, when the side bar slid
+   away and the page widened. */
+@media (hover: hover) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--surface-3);
+    border-radius: 10px;
+    border: 2px solid var(--bg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

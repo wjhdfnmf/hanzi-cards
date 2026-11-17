@@ -1084,14 +1084,28 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
+  /* The card and its buttons, in the middle of the room that is left; when a card is taller
+     than that room (a long definition on a phone) the two keep their sizes and the page
+     scrolls, where the card used to be squeezed and its words ran on behind the buttons. */
   .stage {
     flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     gap: 22px;
     padding: 12px 24px 32px;
+  }
+  .stage > :global(:first-child) {
+    margin-top: auto;
+  }
+  .stage > :global(:last-child) {
+    margin-bottom: auto;
+  }
+  .flash,
+  .actions {
+    flex-shrink: 0;
   }
   .flash {
     position: relative;
@@ -1235,8 +1249,10 @@
     background: var(--surface);
     border-bottom-width: 3px;
   }
-  .rate:hover {
-    background: var(--surface-2);
+  @media (hover: hover) {
+    .rate:hover {
+      background: var(--surface-2);
+    }
   }
   .rate.again {
     border-bottom-color: var(--tone-1);
@@ -1262,6 +1278,15 @@
   }
   /* a phone: no keyboard shortcuts; the session's buttons as icons, so the count always fits */
   @media (max-width: 640px) {
+    /* (and no seal in the card's corner: the ink theme's 学, which sat among the words) */
+    :global(:root[data-theme="ink"]) .flash::after {
+      display: none;
+    }
+    .meaning,
+    .notes,
+    .meaning-q {
+      overflow-wrap: anywhere;
+    }
     .key,
     .topbar .lbl {
       display: none;

@@ -170,9 +170,11 @@
   }
 
   // ---------- on a phone: the side bar comes only when it's asked for ----------
-  // Pulling a page down past its top twice in a row shows it (once is only the usual bounce,
-  // and reaching the top shouldn't bring it); scrolling down or tapping anything on the page
-  // hides it again. (Pages that want the whole screen call hideRail.)
+  // Pulling a page down past its top shows it: one pull when the page was resting at its top,
+  // two in a row when it has only just been scrolled up to the top (there the first pull is
+  // the end of that scroll, or the usual bounce, and shouldn't bring the bar). Scrolling down
+  // or tapping anything on the page hides it again. (Pages that want the whole screen call
+  // hideRail.)
   const lastTop = new WeakMap<EventTarget, number>();
   // For a moment after the bar comes or goes, scrolling doesn't move it: the page reflows to
   // the new width, and a flick may still be gliding.
@@ -186,6 +188,7 @@
     const top = e.target.scrollTop;
     const before = lastTop.get(e.target) ?? 0;
     lastTop.set(e.target, top);
+    if (before > 0 && top <= 0) reachedTop = performance.now();
     if (performance.now() < settleUntil) return;
     if (device.level !== null) return; // (a list keeps the bar; an item inside one never has it)
     if (top > before + 10 && top > 40) device.railOpen = false;
@@ -198,9 +201,12 @@
     }
     return null;
   }
-  // A pull: a downward drag that starts with the page at its top. Two within a moment show the bar.
+  // A pull: a downward drag that starts with the page at its top.
   let pullFrom: { x: number; y: number } | null = null;
   let lastPull = 0;
+  /** When a page was last scrolled up to its top (for a moment after, one pull isn't enough). */
+  let reachedTop = 0;
+  const JUST_ARRIVED = 1500;
   function touchStart(e: TouchEvent) {
     const p = e.touches[0];
     const pane = paneOf(e.target);
@@ -211,7 +217,8 @@
     const p = e.touches[0];
     if (p.clientY - pullFrom.y > 70 && Math.abs(p.clientX - pullFrom.x) < 50) {
       const now = performance.now();
-      if (now - lastPull < 2000) {
+      const resting = now - reachedTop > JUST_ARRIVED;
+      if (resting || now - lastPull < 2000) {
         showRail();
         lastPull = 0;
       } else lastPull = now;

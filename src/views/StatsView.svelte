@@ -14,6 +14,7 @@
   import Pinyin from "../components/Pinyin.svelte";
   import Icon from "../components/Icon.svelte";
   import { ios } from "../lib/device.svelte";
+  import DeckPicker from "../components/DeckPicker.svelte";
 
   type Period = 7 | 30 | 90 | 365 | null; // null = all time
   const PERIODS = [
@@ -39,7 +40,26 @@
   let metric = $state<"time" | "reviews" | "new">(
     saved.metric === "reviews" || saved.metric === "new" ? saved.metric : "time",
   );
-  let deckId = $state<number | null>(null);
+  // The decks: those chosen on the Study page each time this page is opened (changing them
+  // here changes nothing there, and is forgotten when the page is left).
+  let deckIds = $state<number[]>(
+    (() => {
+      try {
+        const sel = JSON.parse(localStorage.getItem("study-selection") ?? "null");
+        return Array.isArray(sel?.deckIds) ? sel.deckIds.filter((d: unknown) => typeof d === "number") : [];
+      } catch {
+        return [];
+      }
+    })(),
+  );
+  let pickingDecks = $state(false);
+  let deckBox = $state<HTMLElement>();
+  const deckSummary = $derived.by(() => {
+    if (!deckIds.length) return t("stats.filter.allDecks");
+    const first = decks.find((d) => d.id === deckIds[0]);
+    if (deckIds.length === 1) return first?.name ?? "…";
+    return t("stats.filter.nDecks", { n: deckIds.length });
+  });
   let direction = $state<Direction | null>(null);
   let asTable = $state(false);
   $effect(() => {
@@ -54,8 +74,18 @@
   let stats = $state.raw<Stats | null>(null);
   let loading = $state(true);
   let request = 0;
+  // the deck list closes on a click outside it, or Escape
+  function outside(e: MouseEvent) {
+    // (by the click's path, which still holds a row the list has since redrawn)
+    if (pickingDecks && deckBox && !e.composedPath().includes(deckBox)) pickingDecks = false;
+  }
+  function escape(e: KeyboardEvent) {
+    if (pickingDecks && e.key === "Escape") pickingDecks = false;
+  }
   onMount(async () => {
     decks = await api.listDecks().catch(() => []);
+    // (a deck that is no longer there is not chosen)
+    if (decks.length && deckIds.some((id) => !decks.some((d) => d.id === id))) deckIds = deckIds.filter((id) => decks.some((d) => d.id === id));
   });
   // What is due is counted in the directions chosen on the Study page, so the two pages agree.
   const studying: string[] = (() => {
@@ -67,7 +97,7 @@
     }
   })();
   $effect(() => {
-    const filter = { deckId, days: period, direction: mode === "advanced" ? direction : null, dueDirections: studying };
+    const filter = { deckIds: $state.snapshot(deckIds), days: period, direction: mode === "advanced" ? direction : null, dueDirections: studying };
     const mine = ++request;
     loading = true;
     api
@@ -233,6 +263,8 @@
   const hourLabel = (h: number) => `${String(h).padStart(2, "0")}:00`;
 </script>
 
+<svelte:window onclick={outside} onkeydown={escape} />
+
 <div class="page">
   <div class="page-head">
     <h1>{t("stats.title")}</h1>
@@ -243,13 +275,23 @@
   </div>
 
   <div class="filters">
-    <label>
+    <!-- the decks: a button that says which, opening a list to tick them in, a level at a time -->
+    <div class="deckbox" bind:this={deckBox}>
       <span class="small muted">{t("stats.filter.deck")}</span>
-      <select value={deckId ?? ""} onchange={(e) => (deckId = e.currentTarget.value ? Number(e.currentTarget.value) : null)}>
-        <option value="">{t("stats.filter.allDecks")}</option>
-        {#each decks as d (d.id)}<option value={d.id}>{"  ".repeat(d.depth)}{d.name}</option>{/each}
-      </select>
-    </label>
+      <button class="deckbtn" aria-expanded={pickingDecks} aria-haspopup="dialog" onclick={() => (pickingDecks = !pickingDecks)}>
+        <span class="deckname">{deckSummary}</span>
+        <span class="twisty" class:open={pickingDecks} aria-hidden="true"><Icon name="chevron-right" size={14} /></span>
+      </button>
+      {#if pickingDecks}
+        <div class="deckpop card-surface" role="dialog" aria-label={t("stats.filter.deck")}>
+          <DeckPicker {decks} bind:selected={deckIds} allLabel={t("stats.filter.allDecksHint")} />
+          <div class="deckpop-foot">
+            <button class="btn ghost small" disabled={!deckIds.length} onclick={() => (deckIds = [])}>{t("stats.filter.allDecks")}</button>
+            <button class="btn small" onclick={() => (pickingDecks = false)}>{t("stats.filter.done")}</button>
+          </div>
+        </div>
+      {/if}
+    </div>
     {#if mode === "advanced"}
       <label>
         <span class="small muted">{t("stats.filter.direction")}</span>
@@ -273,7 +315,7 @@
     {@const r = remembered(s.period)}
     <div class="body" class:loading>
       {#if s.allTime.reviews === 0 && totalMs(s.allTime) === 0}
-        <div class="notice">{deckId !== null || (mode === "advanced" && direction) ? t("stats.emptyFilter") : t("stats.empty")}</div>
+        <div class="notice">{deckIds.length || (mode === "advanced" && direction) ? t("stats.emptyFilter") : t("stats.empty")}</div>
       {/if}
 
       {#if takeaways.length}
@@ -558,7 +600,7 @@
                   {#each s.byDeck as d (d.deckId)}
                     <tr>
                       <td>
-                        {#if d.deckId !== deckId}<button class="link" onclick={() => (deckId = d.deckId)} title={t("stats.openDeck")}>{d.name}</button>{:else}{d.name}{/if}
+                        {#if deckIds.length !== 1 || d.deckId !== deckIds[0]}<button class="link" onclick={() => (deckIds = [d.deckId])} title={t("stats.openDeck")}>{d.name}</button>{:else}{d.name}{/if}
                       </td>
                       <td>{fmtNum(d.words)}</td>
                       <td>{pct(share(d.studied, d.words))}</td>
@@ -633,6 +675,58 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
+  }
+  .deckbox {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .deckbtn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 170px;
+    max-width: 280px;
+    height: 36px;
+    padding: 0 10px 0 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    text-align: left;
+  }
+  .deckname {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .deckbtn .twisty {
+    transform: rotate(90deg);
+    color: var(--text-3);
+  }
+  .deckbtn .twisty.open {
+    transform: rotate(-90deg);
+  }
+  .deckpop {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 20;
+    width: min(420px, calc(100vw - 32px));
+    max-height: min(60vh, 520px);
+    overflow-y: auto;
+    padding: 14px;
+    box-shadow: var(--shadow-lg);
+  }
+  .deckpop-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
   }
   .filters select {
     width: auto;
