@@ -39,8 +39,11 @@ this build on any computer.
 
 **For the App Store** (`gen/apple/hanzi-cards_iOS/`): `Info.plist` has the reasons for the
 microphone, speech recognition and local network (LINK) permissions, and
-`ITSAppUsesNonExemptEncryption` = true (LINK encrypts with its own code, not Apple's: answer the
-encryption questions in App Store Connect once). `PrivacyInfo.xcprivacy` is the privacy manifest:
+`ITSAppUsesNonExemptEncryption` = false: LINK encrypts with its own code (standard algorithms:
+TLS 1.3, XChaCha20-Poly1305), but only to keep the learner's own data private between their own
+devices, and encryption isn't what the app is for, so it is exempt. (Saying `true` makes App Store
+Connect refuse the upload unless an export compliance code from approved documents is in the
+plist too: error 90592.) `PrivacyInfo.xcprivacy` is the privacy manifest:
 nothing collected, nothing tracked. The privacy policy and support pages are `PRIVACY.md` and
 `SUPPORT.md` at the top of the repository.
 

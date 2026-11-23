@@ -61,7 +61,9 @@ targets:
         NSMicrophoneUsageDescription: Hanzi Cards listens when you say an answer in Chinese, to check your pronunciation. Audio stays on this device.
         NSSpeechRecognitionUsageDescription: Hanzi Cards uses Apple's speech recognition, on this device, to check the answers you say aloud.
         NSLocalNetworkUsageDescription: Hanzi Cards connects to your own computer or server on this network to keep your cards the same on your devices (LINK). Nothing else on the network is contacted.
-        ITSAppUsesNonExemptEncryption: true
+        # Exempt: LINK's encryption (standard algorithms only) protects the learner's own data
+        # between their own devices; it isn't what the app is for.
+        ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: hanzi-cards_iOS/hanzi-cards_iOS.entitlements
     scheme:

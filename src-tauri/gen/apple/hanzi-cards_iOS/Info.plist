@@ -45,6 +45,6 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Hanzi Cards connects to your own computer or server on this network to keep your cards the same on your devices (LINK). Nothing else on the network is contacted.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
-	<true/>
+	<false/>
 </dict>
 </plist>
