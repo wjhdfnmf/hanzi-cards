@@ -62,6 +62,17 @@ Device sync (LINK) is a page of its own in Settings on the phone, and a console 
 - The page reaches under the notch and home bar (`viewport-fit=cover`) and keeps clear of them
   with the safe-area insets.
 
+## On an iPad
+
+The same app, with the computer's layout: the side bar always shows (icons only when upright on
+an iPad mini, names as well when it's turned on its side), and Settings, Decks and Reading show
+their list beside the item. What is offered is the iPhone's (Apple's voice and speech
+recognition, LINK as a client). The page keeps clear of the status bar and home bar with the
+safe-area insets, and fields are 16 px everywhere on iOS so nothing zooms.
+
+An iPad turns any way up and can sit beside other apps (Split View, Stage Manager); a window
+narrower than 640 px gets the phone layout.
+
 ## Siri and Shortcuts
 
 "Start studying in Hanzi Cards" (and "Study Chinese with Hanzi Cards", "Study my cards in

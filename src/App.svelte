@@ -250,6 +250,7 @@
   class="shell"
   class:compact
   class:phone={device.phone}
+  class:ios
   class:railhidden={!shown}
 >
   <nav class="sidebar" aria-hidden={!shown ? "true" : undefined}>
@@ -587,6 +588,28 @@
   }
   .keep.hidden {
     display: none;
+  }
+
+  /* ---------- an iPad (or any iOS screen wider than a phone): the side bar always shows, as on a
+     computer, kept clear of the status bar, the home bar and the camera's edge ---------- */
+  .shell.ios:not(.phone) {
+    height: 100dvh;
+    grid-template-columns: calc(220px + env(safe-area-inset-left)) minmax(0, 1fr);
+  }
+  .shell.ios.compact:not(.phone) {
+    grid-template-columns: calc(76px + env(safe-area-inset-left)) minmax(0, 1fr);
+  }
+  .ios:not(.phone) .sidebar {
+    padding: calc(env(safe-area-inset-top) + 14px) 12px calc(env(safe-area-inset-bottom) + 14px)
+      calc(env(safe-area-inset-left) + 12px);
+  }
+  .ios:not(.phone) main {
+    margin-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-right: env(safe-area-inset-right);
+  }
+  .ios:not(.phone) main.flush {
+    padding-bottom: 0;
   }
 
   /* ---------- a phone: the icon bar alone, sliding away when the page wants the room ---------- */

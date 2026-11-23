@@ -5,7 +5,7 @@
   <key>NSMicrophoneUsageDescription</key>
   <string>Hanzi Cards listens when you say an answer in Chinese, to check your pronunciation. Audio stays on this device.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
-  <string>Hanzi Cards uses Apple's speech recognition, on this iPhone, to check the answers you say aloud.</string>
+  <string>Hanzi Cards uses Apple's speech recognition, on this device, to check the answers you say aloud.</string>
   <key>NSLocalNetworkUsageDescription</key>
   <string>Hanzi Cards connects to your own computer or server on this network to keep your cards the same on your devices (LINK). Nothing else on the network is contacted.</string>
   <key>ITSAppUsesNonExemptEncryption</key>

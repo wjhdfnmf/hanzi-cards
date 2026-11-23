@@ -2183,6 +2183,30 @@ button.chip.on {
   }
 }
 
+/* every iOS screen, an iPad as well as a phone: no zoom into fields (16 px), the page itself
+   never bounces or zooms, no grey flash on taps, and no keyboard shortcuts to read about */
+html.ios input,
+html.ios textarea,
+html.ios select {
+  font-size: 16px;
+}
+html.ios,
+html.ios body {
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
+}
+html.ios p.keys {
+  display: none;
+}
+html.ios button,
+html.ios a,
+html.ios label,
+html.ios input,
+html.ios select {
+  -webkit-tap-highlight-color: transparent;
+}
+
 .notice {
   padding: 10px 14px;
   border-radius: var(--radius);

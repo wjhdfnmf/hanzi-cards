@@ -47,18 +47,19 @@ targets:
         LSRequiresIPhoneOS: true
         UILaunchStoryboardName: LaunchScreen
         UIRequiredDeviceCapabilities: [arm64, metal]
-        # Upright only: the app does not turn with the phone. (An iPad that doesn't offer
-        # every direction has to say it takes the whole screen.)
+        # An iPhone: upright only, the app does not turn with the phone. An iPad: any way up,
+        # and beside other apps (Split View, Stage Manager); a narrow window gets the phone layout.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
-        UIRequiresFullScreen: true
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         CFBundleShortVersionString: 0.5.1
         CFBundleVersion: "0.5.1"
         NSMicrophoneUsageDescription: Hanzi Cards listens when you say an answer in Chinese, to check your pronunciation. Audio stays on this device.
-        NSSpeechRecognitionUsageDescription: Hanzi Cards uses Apple's speech recognition, on this iPhone, to check the answers you say aloud.
+        NSSpeechRecognitionUsageDescription: Hanzi Cards uses Apple's speech recognition, on this device, to check the answers you say aloud.
         NSLocalNetworkUsageDescription: Hanzi Cards connects to your own computer or server on this network to keep your cards the same on your devices (LINK). Nothing else on the network is contacted.
         ITSAppUsesNonExemptEncryption: true
     entitlements:

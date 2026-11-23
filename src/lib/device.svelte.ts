@@ -11,6 +11,9 @@ export const ios =
   typeof navigator !== "undefined" &&
   (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
 
+// (for the style sheet: what every iOS screen needs, phone or iPad: see `html.ios` in app.css)
+if (ios && typeof document !== "undefined") document.documentElement.classList.add("ios");
+
 export const device = $state({
   phone: phoneQuery?.matches ?? false,
   /** The side bar, on a phone: shown, or slid away to give the page the whole width. */
